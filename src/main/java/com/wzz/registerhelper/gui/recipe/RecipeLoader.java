@@ -4,6 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
+import com.wzz.registerhelper.gui.recipe.component.EnergySlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.FluidSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.GasSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeBuilder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.RegistryAccess;
@@ -60,6 +64,7 @@ public class RecipeLoader {
         public final String originalRecipeTypeId;
         public ResourceLocation recipeId;
         public List<IngredientData> ingredientsData = null;
+        public RecipeComponent outputComponent = null;
 
         public LoadResult(boolean success, String message) {
             this(success, null, null, null, 1, ItemStack.EMPTY, Collections.emptyList(), message, null);
@@ -98,9 +103,8 @@ public class RecipeLoader {
 
     private void patchIngredientDataFromJson(LoadResult result, ResourceLocation recipeId) {
         try {
-            // 全目录递归搜索
             java.io.File jsonFile = findRecipeFile(recipeId);
-            if (jsonFile == null) return; // 不是本mod管理的配方，跳过
+            if (jsonFile == null) return;
 
             com.google.gson.JsonObject json;
             try (java.io.FileReader reader = new java.io.FileReader(jsonFile)) {
@@ -122,9 +126,87 @@ public class RecipeLoader {
                                         : result.ingredients.get(0));
                 dataList = new java.util.ArrayList<>();
                 dataList.add(d);
+            } else if (json.has("input")) {
+                JsonObject inputObj = json.getAsJsonObject("input");
+                com.wzz.registerhelper.gui.recipe.IngredientData d;
+                
+                if (inputObj.has("ingredient")) {
+                    d = ingredientDataFromJson(inputObj.getAsJsonObject("ingredient"),
+                            result.ingredients.isEmpty()
+                                    ? net.minecraft.world.item.ItemStack.EMPTY
+                                    : result.ingredients.get(0));
+                } else {
+                    d = ingredientDataFromJson(inputObj,
+                            result.ingredients.isEmpty()
+                                    ? net.minecraft.world.item.ItemStack.EMPTY
+                                    : result.ingredients.get(0));
+                }
+                
+                dataList = new java.util.ArrayList<>();
+                dataList.add(d);
+            } else if (json.has("itemInput")) {
+                JsonObject inputObj = json.getAsJsonObject("itemInput");
+                com.wzz.registerhelper.gui.recipe.IngredientData d;
+                
+                if (inputObj.has("ingredient")) {
+                    d = ingredientDataFromJson(inputObj.getAsJsonObject("ingredient"),
+                            result.ingredients.isEmpty()
+                                    ? net.minecraft.world.item.ItemStack.EMPTY
+                                    : result.ingredients.get(0));
+                } else {
+                    d = ingredientDataFromJson(inputObj,
+                            result.ingredients.isEmpty()
+                                    ? net.minecraft.world.item.ItemStack.EMPTY
+                                    : result.ingredients.get(0));
+                }
+                
+                dataList = new java.util.ArrayList<>();
+                dataList.add(d);
+            } else if (json.has("mainInput")) {
+                dataList = new java.util.ArrayList<>();
+                
+                JsonObject mainInputObj = json.getAsJsonObject("mainInput");
+                com.wzz.registerhelper.gui.recipe.IngredientData mainD;
+                if (mainInputObj.has("ingredient")) {
+                    mainD = ingredientDataFromJson(mainInputObj.getAsJsonObject("ingredient"),
+                            result.ingredients.isEmpty()
+                                    ? net.minecraft.world.item.ItemStack.EMPTY
+                                    : result.ingredients.get(0));
+                } else {
+                    mainD = ingredientDataFromJson(mainInputObj,
+                            result.ingredients.isEmpty()
+                                    ? net.minecraft.world.item.ItemStack.EMPTY
+                                    : result.ingredients.get(0));
+                }
+                dataList.add(mainD);
+                
+                if (json.has("extraInput")) {
+                    JsonObject extraInputObj = json.getAsJsonObject("extraInput");
+                    com.wzz.registerhelper.gui.recipe.IngredientData extraD;
+                    if (extraInputObj.has("ingredient")) {
+                        extraD = ingredientDataFromJson(extraInputObj.getAsJsonObject("ingredient"),
+                                result.ingredients.size() > 1
+                                        ? result.ingredients.get(1)
+                                        : net.minecraft.world.item.ItemStack.EMPTY);
+                    } else {
+                        extraD = ingredientDataFromJson(extraInputObj,
+                                result.ingredients.size() > 1
+                                        ? result.ingredients.get(1)
+                                        : net.minecraft.world.item.ItemStack.EMPTY);
+                    }
+                    dataList.add(extraD);
+                }
             }
             if (dataList != null && !dataList.isEmpty()) {
                 result.ingredientsData = dataList;
+            }
+            
+            if (json.has("output")) {
+                com.google.gson.JsonElement outputElement = json.get("output");
+                if (outputElement.isJsonPrimitive() && outputElement.getAsJsonPrimitive().isNumber()) {
+                    long energy = outputElement.getAsLong();
+                    result.outputComponent = new EnergySlotComponent(0, 0, "energy_output", 0, energy, 100000000L);
+                }
             }
         } catch (Exception e) {
             LOGGER.warn("[RegisterHelper] patchIngredientDataFromJson 失败: {}", e.getMessage());
@@ -136,13 +218,13 @@ public class RecipeLoader {
      * 匹配规则：namespace 目录下的文件名（去掉 .json 后下划线替换路径分隔符）== recipeId.getPath()
      */
     private java.io.File findRecipeFile(net.minecraft.resources.ResourceLocation recipeId) {
-        // 搜索根目录列表
         java.nio.file.Path[] searchRoots = {
                 FMLPaths.CONFIGDIR.get().resolve("registerhelper/recipes"),
-                FMLPaths.CONFIGDIR.get().resolve("registerhelper/custom_recipes")
+                FMLPaths.CONFIGDIR.get().resolve("registerhelper/custom_recipes"),
+                FMLPaths.CONFIGDIR.get().resolve("registerhelper/recipes/mekanism")
         };
         String targetNamespace = recipeId.getNamespace();
-        String targetPath      = recipeId.getPath(); // e.g. "custom_shaped_chiseled_sandstone"
+        String targetPath      = recipeId.getPath();
 
         for (java.nio.file.Path root : searchRoots) {
             java.io.File rootDir = root.toFile();

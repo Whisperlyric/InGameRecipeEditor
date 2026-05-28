@@ -2,11 +2,17 @@ package com.wzz.registerhelper.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.wzz.registerhelper.gui.recipe.*;
+import com.wzz.registerhelper.gui.recipe.component.ChemicalSlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.ComponentRenderManager;
+import com.wzz.registerhelper.gui.recipe.component.ComponentRenderer;
+import com.wzz.registerhelper.gui.recipe.component.EnergySlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.FluidSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.GasSlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeBuilder;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeTypeConfig;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeTypeConfig.*;
+import com.wzz.registerhelper.gui.recipe.layout.LayoutManager;
 import com.wzz.registerhelper.info.UnifiedRecipeInfo;
 import com.wzz.registerhelper.network.BlacklistClientHelper;
 import com.wzz.registerhelper.recipe.UnifiedRecipeOverrideManager;
@@ -34,6 +40,8 @@ public class RecipeCreatorScreen extends Screen {
 
     private static final int PADDING = 20;
 
+    public boolean switchingToJEI = false;
+
     // 核心组件
     private SlotManager slotManager;
     private FillModeHandler fillModeHandler;
@@ -53,12 +61,11 @@ public class RecipeCreatorScreen extends Screen {
     private ResourceLocation editingRecipeId = null;
 
     // UI控件
-    private Button recipeTypeButton; // 改为普通按钮触发下拉列表
+    private Button recipeTypeButton;
     private CycleButton<String> craftingModeButton;
     private CycleButton<String> cookingTypeButton;
-    private CycleButton<Integer> tierButton; // 更通用的tier按钮
+    private CycleButton<Integer> tierButton;
     private CycleButton<FillMode> fillModeButton;
-    private EditBox resultCountBox;
     private EditBox cookingTimeBox;
     private EditBox cookingExpBox;
     private Button createButton;
@@ -68,6 +75,22 @@ public class RecipeCreatorScreen extends Screen {
     private Button editExistingRecipeButton;
     private ComponentRenderManager componentRenderManager;
     private boolean menuOpen = false;
+    
+    private int selectedSlotIndex = -1;
+    private boolean isResultSlotSelected = false;
+    private FluidSlotComponent selectedFluidSlot = null;
+    private GasSlotComponent selectedGasSlot = null;
+    private ChemicalSlotComponent selectedChemicalSlot = null;
+    private RecipeComponent selectedOutputComponent = null;
+    
+    // 槽位操作按钮（5个）
+    private Button btnChangeAmount;
+    private Button btnSelectFromCreative;
+    private Button btnSelectFromInventory;
+    private Button btnSelectFromJEI;
+    private Button btnAddTagGroup;
+    private Button rotaryModeButton;
+    private String currentRotaryMode = "reversible";
     /** 下拉菜单的屏幕坐标（render 时计算，mouseClicked 时判断） */
     private int menuBtnX, menuBtnY, menuBtnW = 68;
 
@@ -366,13 +389,13 @@ public class RecipeCreatorScreen extends Screen {
             return;
         }
 
+        clearAllSelections();
+
         // 保存数据
         ItemStack currentResult = slotManager != null ? slotManager.getResultItem() : ItemStack.EMPTY;
         List<ItemStack> currentIngredients = slotManager != null ?
                 new ArrayList<>(slotManager.getIngredients()) : new ArrayList<>();
-        String currentResultCount = resultCountBox != null ? resultCountBox.getValue() : "1";
 
-        // 设置新类型
         this.currentRecipeType = newType;
 
         Integer defaultTier = newType.getProperty("tier", Integer.class);
@@ -385,10 +408,9 @@ public class RecipeCreatorScreen extends Screen {
             this.currentCraftingMode = mode;
         }
 
-        // 完全重建界面
         this.clearWidgets();
         this.init();
-        // 恢复数据
+
         if (slotManager != null && !currentResult.isEmpty()) {
             slotManager.setResultItem(currentResult);
 
@@ -400,11 +422,6 @@ public class RecipeCreatorScreen extends Screen {
             }
         }
 
-        if (resultCountBox != null) {
-            resultCountBox.setValue(currentResultCount);
-        }
-
-        // 同步到渲染器
         syncDataToRenderer();
     }
 
@@ -435,6 +452,9 @@ public class RecipeCreatorScreen extends Screen {
                 slotManager::clearSlot
         );
         componentRenderManager.setResultCallback(this::openResultSelector);
+        componentRenderManager.setFluidSlotCallback(this::onFluidSlotClicked);
+        componentRenderManager.setGasSlotCallback(this::onGasSlotClicked);
+        componentRenderManager.setChemicalSlotCallback(this::onChemicalSlotClicked);
 
         // 初始化渲染器
         componentRenderManager.initializeRenderers(components);
@@ -452,19 +472,17 @@ public class RecipeCreatorScreen extends Screen {
      * 应用已加载的配方数据
      */
     private void applyLoadedRecipe(RecipeLoader.LoadResult result) {
-        if (resultCountBox != null) {
-            resultCountBox.setValue(String.valueOf(result.resultItem.getCount()));
-        }
-
-        // 设置材料和结果到 slotManager
         if (slotManager != null) {
-            // 将ItemStack列表转换为IngredientData列表
             if (result.ingredientsData != null && !result.ingredientsData.isEmpty()) {
                 slotManager.setIngredientsData(result.ingredientsData);
             } else {
-                slotManager.setIngredients(result.ingredients);          // 回退
+                slotManager.setIngredients(result.ingredients);
             }
             slotManager.setResultItem(result.resultItem);
+            
+            if (result.outputComponent != null) {
+                slotManager.setOutputComponent(result.outputComponent);
+            }
         }
         syncDataToRenderer();
     }
@@ -658,12 +676,88 @@ public class RecipeCreatorScreen extends Screen {
                         button -> fillModeHandler.openBrushSelector())
                 .bounds(currentX, controlY2, 100, 20)
                 .build());
+        currentX += 110 + controlSpacing;
+
+        Button createCustomTagButton = addRenderableWidget(Button.builder(
+                        Component.literal("创建自定义标签"),
+                        button -> openCustomTagCreator())
+                .bounds(currentX, controlY2, 110, 20)
+                .build());
 
         // 右侧面板
         initializeRightPanel();
+        
+        // 回旋式气液转换器模式切换按钮
+        if (currentRecipeType != null && currentRecipeType.getId().equals("mekanism:rotary_condensentrator")) {
+            String modeName = switch (currentRotaryMode) {
+                case "reversible" -> "可逆模式";
+                case "evaporation" -> "液体蒸发";
+                case "condensation" -> "气体冷凝";
+                default -> "可逆模式";
+            };
+            rotaryModeButton = addRenderableWidget(Button.builder(
+                            Component.literal(modeName),
+                            button -> cycleRotaryMode())
+                    .bounds(leftPos + 15, topPos + 95, 100, 20)
+                    .build());
+        }
 
         // 底部按钮
         initializeBottomButtons();
+        
+        // 槽位操作按钮（5个）
+        initializeSlotOperationButtons();
+    }
+    
+    /**
+     * 初始化槽位操作按钮
+     */
+    private void initializeSlotOperationButtons() {
+        int buttonY = topPos + contentHeight - 60;
+        int buttonWidth = 100;
+        int buttonHeight = 20;
+        int spacing = 10;
+        int startX = leftPos + 20;
+        
+        btnChangeAmount = addRenderableWidget(Button.builder(
+            Component.literal("更改数量"),
+            button -> onChangeAmountClicked()
+        ).bounds(startX, buttonY, buttonWidth, buttonHeight).build());
+        
+        btnSelectFromCreative = addRenderableWidget(Button.builder(
+            Component.literal("创造物品栏"),
+            button -> onSelectFromCreativeClicked()
+        ).bounds(startX + buttonWidth + spacing, buttonY, buttonWidth, buttonHeight).build());
+        
+        btnSelectFromInventory = addRenderableWidget(Button.builder(
+            Component.literal("玩家物品栏"),
+            button -> onSelectFromInventoryClicked()
+        ).bounds(startX + 2 * (buttonWidth + spacing), buttonY, buttonWidth, buttonHeight).build());
+        
+        btnSelectFromJEI = addRenderableWidget(Button.builder(
+            Component.literal("JEI选择"),
+            button -> onSelectFromJEIClicked()
+        ).bounds(startX + 3 * (buttonWidth + spacing), buttonY, buttonWidth, buttonHeight).build());
+        
+        btnAddTagGroup = addRenderableWidget(Button.builder(
+            Component.literal("添加标签组"),
+            button -> onAddTagGroupClicked()
+        ).bounds(startX + 4 * (buttonWidth + spacing), buttonY, buttonWidth, buttonHeight).build());
+        
+        updateSlotOperationButtonsVisibility();
+    }
+    
+    /**
+     * 更新槽位操作按钮的可见性
+     */
+    private void updateSlotOperationButtonsVisibility() {
+        boolean hasSelection = selectedSlotIndex >= 0 || isResultSlotSelected || 
+                               selectedFluidSlot != null || selectedGasSlot != null || selectedChemicalSlot != null;
+        btnChangeAmount.visible = hasSelection;
+        btnSelectFromCreative.visible = hasSelection && (selectedSlotIndex >= 0 || isResultSlotSelected);
+        btnSelectFromInventory.visible = hasSelection && (selectedSlotIndex >= 0 || isResultSlotSelected);
+        btnSelectFromJEI.visible = hasSelection;
+        btnAddTagGroup.visible = hasSelection;
     }
 
     /**
@@ -729,25 +823,17 @@ public class RecipeCreatorScreen extends Screen {
         int rightPanelX = leftPos + contentWidth - 150 + 10;
         int rightPanelStartY = topPos + 130;
 
-        resultCountBox = new EditBox(this.font, rightPanelX + 60, rightPanelStartY + 30, 40, 20,
-                Component.literal("数量"));
-        resultCountBox.setValue("1");
-        resultCountBox.setFilter(text -> text.matches("\\d*") &&
-                (text.isEmpty() || Integer.parseInt(text) <= 64));
-        addRenderableWidget(resultCountBox);
-
-        // 烹饪时间和经验输入框
         String defaultTime = getDefaultTimeForCurrentType();
         String defaultExp = getDefaultExpForCurrentType();
 
-        cookingTimeBox = new EditBox(this.font, rightPanelX + 60, rightPanelStartY + 60, 60, 20,
+        cookingTimeBox = new EditBox(this.font, rightPanelX + 60, rightPanelStartY + 30, 60, 20,
                 Component.literal("烹饪时间"));
         cookingTimeBox.setValue(defaultTime);
         cookingTimeBox.setFilter(text -> text.matches("\\d*") &&
                 (text.isEmpty() || Integer.parseInt(text) <= 32000));
         addRenderableWidget(cookingTimeBox);
 
-        cookingExpBox = new EditBox(this.font, rightPanelX + 60, rightPanelStartY + 90, 60, 20,
+        cookingExpBox = new EditBox(this.font, rightPanelX + 60, rightPanelStartY + 60, 60, 20,
                 Component.literal("烹饪经验"));
         cookingExpBox.setValue(defaultExp);
         cookingExpBox.setFilter(text -> text.matches("\\d*\\.?\\d*"));
@@ -756,7 +842,7 @@ public class RecipeCreatorScreen extends Screen {
         clearAllButton = addRenderableWidget(Button.builder(
                         Component.literal("清空材料"),
                         button -> clearAllIngredients())
-                .bounds(rightPanelX, rightPanelStartY + 150, 80, 20)
+                .bounds(rightPanelX, rightPanelStartY + 120, 80, 20)
                 .build());
 
     }
@@ -908,6 +994,17 @@ public class RecipeCreatorScreen extends Screen {
     /**
      * 打开配方类型选择器
      */
+    private void openCustomTagCreator() {
+        if (minecraft != null) {
+            minecraft.setScreen(new CustomTagCreatorScreen(this, (tagId, itemStacks) -> {
+                if (tagId != null && !itemStacks.isEmpty()) {
+                    CustomTagManager.registerTag(tagId, itemStacks);
+                    displaySuccess("自定义标签已创建: #" + tagId);
+                }
+            }));
+        }
+    }
+
     private void openRecipeTypeSelector() {
         if (minecraft != null) {
             List<RecipeTypeDefinition> availableTypes = DynamicRecipeTypeConfig.getAvailableDisplayRecipeTypes();
@@ -953,6 +1050,33 @@ public class RecipeCreatorScreen extends Screen {
                 calculateDynamicSize();
             }
         }
+    }
+    
+    private void cycleRotaryMode() {
+        clearAllSelections();
+        
+        currentRotaryMode = switch (currentRotaryMode) {
+            case "reversible" -> "evaporation";
+            case "evaporation" -> "condensation";
+            case "condensation" -> "reversible";
+            default -> "reversible";
+        };
+        
+        String modeName = switch (currentRotaryMode) {
+            case "reversible" -> "可逆模式";
+            case "evaporation" -> "液体蒸发";
+            case "condensation" -> "气体冷凝";
+            default -> "可逆模式";
+        };
+        
+        if (rotaryModeButton != null) {
+            rotaryModeButton.setMessage(Component.literal(modeName));
+        }
+        
+        LayoutManager.setRotaryCondensentratorMode(currentRotaryMode);
+        updateSlotManagerRecipeType();
+        calculateDynamicSize();
+        initializeComponentRenderers();
     }
 
     private void onFillModeChanged(CycleButton<FillMode> button, FillMode newMode) {
@@ -1004,6 +1128,36 @@ public class RecipeCreatorScreen extends Screen {
                 }
             }));
         }
+    }
+    
+    private void onFluidSlotClicked(FluidSlotComponent fluidSlot) {
+        clearAllSelections();
+        selectedFluidSlot = fluidSlot;
+        selectedOutputComponent = fluidSlot;
+        updateSlotOperationButtonsVisibility();
+    }
+    
+    private void onGasSlotClicked(GasSlotComponent gasSlot) {
+        clearAllSelections();
+        selectedGasSlot = gasSlot;
+        selectedOutputComponent = gasSlot;
+        updateSlotOperationButtonsVisibility();
+    }
+    
+    private void onChemicalSlotClicked(ChemicalSlotComponent chemicalSlot) {
+        clearAllSelections();
+        selectedChemicalSlot = chemicalSlot;
+        selectedOutputComponent = chemicalSlot;
+        updateSlotOperationButtonsVisibility();
+    }
+    
+    private void clearAllSelections() {
+        selectedSlotIndex = -1;
+        isResultSlotSelected = false;
+        selectedFluidSlot = null;
+        selectedGasSlot = null;
+        selectedChemicalSlot = null;
+        selectedOutputComponent = null;
     }
 
     private void clearAllIngredients() {
@@ -1205,22 +1359,37 @@ public class RecipeCreatorScreen extends Screen {
             displayError("请选择配方类型！");
             return;
         }
-        try {
-            int count = Integer.parseInt(resultCountBox.getValue());
-            if (count <= 0) {
-                displayError("数量必须大于0！");
-                return;
-            }
 
+        RecipeComponent outputComponent = slotManager.getOutputComponent();
+        if (outputComponent != null) {
+            if (outputComponent instanceof EnergySlotComponent energyComp) {
+                if (energyComp.getEnergy() <= 0) {
+                    displayError("请设置能量值！");
+                    return;
+                }
+            } else if (outputComponent instanceof FluidSlotComponent fluidComp) {
+                if (fluidComp.getAmount() <= 0 || fluidComp.getFluidId() == null) {
+                    displayError("请选择流体并设置数量！");
+                    return;
+                }
+            } else if (outputComponent instanceof GasSlotComponent gasComp) {
+                if (gasComp.getAmount() <= 0 || gasComp.getGasId() == null) {
+                    displayError("请选择气体并设置数量！");
+                    return;
+                }
+            }
+        } else {
             ItemStack resultItem = slotManager.getResultItem();
             if (resultItem.isEmpty()) {
                 displayError("请选择结果物品！");
                 return;
             }
+        }
 
-            resultItem = resultItem.copy();
-            resultItem.setCount(count);
+        ItemStack resultItem = slotManager.getResultItem();
+        resultItem = resultItem.isEmpty() ? ItemStack.EMPTY : resultItem.copy();
 
+        try {
             float cookingTime = currentRecipeType.supportsCookingSettings() ?
                     Float.parseFloat(cookingTimeBox.getValue()) : 0;
             float cookingExp = currentRecipeType.supportsCookingSettings() ?
@@ -1229,9 +1398,8 @@ public class RecipeCreatorScreen extends Screen {
             DynamicRecipeBuilder.BuildParams params = getBuildParams(resultItem, cookingTime, cookingExp);
             DynamicRecipeBuilder dynamicBuilder = new DynamicRecipeBuilder(this::displaySuccess, this::displayError);
             dynamicBuilder.buildRecipe(params);
-
         } catch (NumberFormatException e) {
-            displayError("请输入有效的数量、时间或经验值！");
+            displayError("请输入有效的时间或经验值！");
         }
     }
 
@@ -1240,6 +1408,63 @@ public class RecipeCreatorScreen extends Screen {
         if (componentRenderManager != null) {
             componentData = componentRenderManager.getDataManager().getAllData();
         }
+        
+        if (slotManager != null) {
+            for (RecipeComponent component : slotManager.getComponents()) {
+                if (component instanceof FluidSlotComponent fluidComp) {
+                    String id = fluidComp.getId();
+                    String fluidId = fluidComp.getFluidId();
+                    if (fluidId != null && !fluidId.isEmpty()) {
+                        if (id.contains("input")) {
+                            componentData.put("fluidInput", fluidId);
+                            componentData.put("fluidInputAmount", (int) fluidComp.getAmount());
+                        } else if (id.contains("output")) {
+                            componentData.put("fluidOutput", fluidId);
+                            componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
+                        }
+                    }
+                } else if (component instanceof GasSlotComponent gasComp) {
+                    String id = gasComp.getId();
+                    String gasId = gasComp.getGasId();
+                    if (gasId != null && !gasId.isEmpty()) {
+                        if (id.contains("input")) {
+                            componentData.put("gasInput", gasId);
+                            componentData.put("gasInputAmount", (int) gasComp.getAmount());
+                        } else if (id.contains("output")) {
+                            componentData.put("gasOutput", gasId);
+                            componentData.put("gasOutputAmount", (int) gasComp.getAmount());
+                        }
+                    }
+                } else if (component instanceof ChemicalSlotComponent chemicalComp) {
+                    String id = chemicalComp.getId();
+                    String chemicalId = chemicalComp.getChemicalId();
+                    if (chemicalId != null && !chemicalId.isEmpty()) {
+                        if (id.contains("input")) {
+                            componentData.put("inputGas", chemicalId);
+                            componentData.put("inputAmount", (int) chemicalComp.getAmount());
+                            componentData.put("chemicalType", chemicalComp.getChemicalType().getId());
+                        }
+                    }
+                }
+            }
+        }
+        
+        RecipeComponent outputComp = slotManager.getOutputComponent();
+        if (outputComp instanceof FluidSlotComponent fluidComp) {
+            String fluidId = fluidComp.getFluidId();
+            if (fluidId != null && !fluidId.isEmpty()) {
+                componentData.put("fluidOutput", fluidId);
+                componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
+            }
+        } else if (outputComp instanceof GasSlotComponent gasComp) {
+            String gasId = gasComp.getGasId();
+            if (gasId != null && !gasId.isEmpty()) {
+                componentData.put("gasOutput", gasId);
+                componentData.put("gasOutputAmount", (int) gasComp.getAmount());
+            }
+        }
+        
+        componentData.put("rotaryMode", currentRotaryMode);
 
         List<IngredientData> ingredientsData = slotManager.getIngredientsData();
         // NBT控制已改为 per-slot，由各槽位 IngredientData.isIncludeNBT() 决定
@@ -1259,6 +1484,8 @@ public class RecipeCreatorScreen extends Screen {
                 componentData
         );
         buildParams.componentDataManager = componentRenderManager.getDataManager();
+        buildParams.outputComponent = slotManager.getOutputComponent();
+        buildParams.rotaryMode = currentRotaryMode;
         return buildParams;
     }
 
@@ -1309,6 +1536,9 @@ public class RecipeCreatorScreen extends Screen {
         } else {
             renderSlots(guiGraphics, mouseX, mouseY);
         }
+        
+        // 绘制选中框
+        renderSelectionBox(guiGraphics);
 
         if (currentRecipeType != null && currentRecipeType.supportsFillMode()) {
             renderFillModeHint(guiGraphics);
@@ -1340,7 +1570,48 @@ public class RecipeCreatorScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         renderTooltips(guiGraphics, mouseX, mouseY);
     }
-
+    
+    /**
+     * 绘制选中框
+     */
+    private void renderSelectionBox(GuiGraphics guiGraphics) {
+        if (selectedSlotIndex >= 0 && slotManager != null) {
+            List<SlotManager.IngredientSlot> slots = slotManager.getIngredientSlots();
+            if (selectedSlotIndex < slots.size()) {
+                SlotManager.IngredientSlot slot = slots.get(selectedSlotIndex);
+                drawSelectionBox(guiGraphics, slot.x(), slot.y(), 18, 18);
+            }
+        } else if (isResultSlotSelected && slotManager != null) {
+            SlotManager.IngredientSlot resultSlot = slotManager.getResultSlot();
+            if (resultSlot != null) {
+                drawSelectionBox(guiGraphics, resultSlot.x(), resultSlot.y(), 18, 18);
+            }
+        } else if (selectedFluidSlot != null) {
+            drawSelectionBox(guiGraphics, selectedFluidSlot.getX(), selectedFluidSlot.getY(), 16, 58);
+        } else if (selectedGasSlot != null) {
+            drawSelectionBox(guiGraphics, selectedGasSlot.getX(), selectedGasSlot.getY(), 16, 58);
+        } else if (selectedChemicalSlot != null) {
+            drawSelectionBox(guiGraphics, selectedChemicalSlot.getX(), selectedChemicalSlot.getY(), 16, 58);
+        }
+    }
+    
+    /**
+     * 绘制选中框（亮框）
+     */
+    private void drawSelectionBox(GuiGraphics guiGraphics, int x, int y, int width, int height) {
+        int borderWidth = 2;
+        int color = 0xFFFFFF00; // 黄色边框
+        
+        // 上边
+        guiGraphics.fill(x - borderWidth, y - borderWidth, x + width + borderWidth, y, color);
+        // 下边
+        guiGraphics.fill(x - borderWidth, y + height, x + width + borderWidth, y + height + borderWidth, color);
+        // 左边
+        guiGraphics.fill(x - borderWidth, y, x, y + height, color);
+        // 右边
+        guiGraphics.fill(x + width, y, x + width + borderWidth, y + height, color);
+    }
+    
     private void renderLabels(GuiGraphics guiGraphics) {
         int labelStartX = leftPos + 15;
         int labelY1 = topPos + 25;
@@ -1349,6 +1620,9 @@ public class RecipeCreatorScreen extends Screen {
         guiGraphics.drawString(this.font, "§7配方类型:", labelStartX, labelY1, 0xAAAAAA, false);
 
         if (currentRecipeType != null) {
+            String namespaceInfo = "§8" + currentRecipeType.getModId() + "§7:§8" + currentRecipeType.getId();
+            guiGraphics.drawString(this.font, namespaceInfo, labelStartX + 100, labelY1 + 64, 0x666666, false);
+
             String category = currentRecipeType.getProperty("category", String.class);
 
             if ("crafting".equals(category) || "avaritia".equals(category)) {
@@ -1368,28 +1642,33 @@ public class RecipeCreatorScreen extends Screen {
         int rightPanelStartY = topPos + 130;
 
         guiGraphics.drawString(this.font, "§7结果:", rightPanelX, rightPanelStartY - 20, 0xAAAAAA, false);
-        guiGraphics.drawString(this.font, "§7数量:", rightPanelX, rightPanelStartY + 20, 0xAAAAAA, false);
 
         if (currentRecipeType != null && currentRecipeType.supportsCookingSettings()) {
-            guiGraphics.drawString(this.font, "§7时间:", rightPanelX, rightPanelStartY + 50, 0xAAAAAA, false);
-            guiGraphics.drawString(this.font, "§7经验:", rightPanelX, rightPanelStartY + 80, 0xAAAAAA, false);
+            guiGraphics.drawString(this.font, "§7时间:", rightPanelX, rightPanelStartY + 20, 0xAAAAAA, false);
+            guiGraphics.drawString(this.font, "§7经验:", rightPanelX, rightPanelStartY + 50, 0xAAAAAA, false);
         }
 
         // 底部状态信息
         if (isEditingExisting) {
             guiGraphics.drawString(this.font, "§6编辑模式", labelStartX, topPos + contentHeight - 45, 0xFFCC00, false);
         }
-
-        // 显示当前配方类型信息
-        if (currentRecipeType != null) {
-            String typeInfo = "§8" + currentRecipeType.getModId() + "§7:§8" + currentRecipeType.getId();
-            guiGraphics.drawString(this.font, typeInfo, labelStartX + 100, topPos + contentHeight - 52, 0x666666, false);
-        }
     }
 
     private void renderResultSlot(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         if (slotManager == null) return;
-        renderSlot(guiGraphics, slotManager.getResultSlot(), mouseX, mouseY, slotManager.getResultItem());
+        
+        RecipeComponent outputComponent = slotManager.getOutputComponent();
+        if (outputComponent != null && componentRenderManager != null) {
+            ComponentRenderer renderer = componentRenderManager.createRenderer(outputComponent);
+            if (renderer != null) {
+                renderer.render(guiGraphics, this.font, mouseX, mouseY);
+            }
+        } else {
+            SlotManager.IngredientSlot resultSlot = slotManager.getResultSlot();
+            if (resultSlot != null) {
+                renderSlot(guiGraphics, resultSlot, mouseX, mouseY, slotManager.getResultItem());
+            }
+        }
     }
 
     private void renderSlots(GuiGraphics guiGraphics, int mouseX, int mouseY) {
@@ -1402,7 +1681,10 @@ public class RecipeCreatorScreen extends Screen {
         }
 
         // 渲染结果槽位
-        renderSlot(guiGraphics, slotManager.getResultSlot(), mouseX, mouseY, slotManager.getResultItem());
+        SlotManager.IngredientSlot resultSlot = slotManager.getResultSlot();
+        if (resultSlot != null) {
+            renderSlot(guiGraphics, resultSlot, mouseX, mouseY, slotManager.getResultItem());
+        }
     }
 
     private void renderSlot(GuiGraphics guiGraphics, SlotManager.IngredientSlot slot,
@@ -1588,13 +1870,17 @@ public class RecipeCreatorScreen extends Screen {
         }
 
         // 结果槽位工具提示
-        SlotManager.IngredientSlot resultSlot = slotManager.getResultSlot();
-        if (mouseX >= resultSlot.x() && mouseX < resultSlot.x() + 18 &&
-                mouseY >= resultSlot.y() && mouseY < resultSlot.y() + 18) {
-            if (!slotManager.getResultItem().isEmpty()) {
-                guiGraphics.renderTooltip(this.font, slotManager.getResultItem(), mouseX, mouseY);
-            } else {
-                guiGraphics.renderTooltip(this.font, Component.literal("点击选择结果物品"), mouseX, mouseY);
+        RecipeComponent outputComponent = slotManager.getOutputComponent();
+        if (outputComponent == null) {
+            SlotManager.IngredientSlot resultSlot = slotManager.getResultSlot();
+            if (resultSlot != null && 
+                    mouseX >= resultSlot.x() && mouseX < resultSlot.x() + 18 &&
+                    mouseY >= resultSlot.y() && mouseY < resultSlot.y() + 18) {
+                if (!slotManager.getResultItem().isEmpty()) {
+                    guiGraphics.renderTooltip(this.font, slotManager.getResultItem(), mouseX, mouseY);
+                } else {
+                    guiGraphics.renderTooltip(this.font, Component.literal("点击选择结果物品"), mouseX, mouseY);
+                }
             }
         }
     }
@@ -1655,14 +1941,24 @@ public class RecipeCreatorScreen extends Screen {
                         }
                         return true;
                     }
-                    // 左键/右键：正常填充模式处理（左键选材料，右键清空）
-                    fillModeHandler.handleSlotClick(slotManager, i, button == 1);
-                    // 同步到渲染器
-                    if (componentRenderManager != null) {
-                        List<ItemStack> ingredients = slotManager.getIngredients();
-                        if (i < ingredients.size()) {
-                            componentRenderManager.updateSlotItem(i, ingredients.get(i));
+                    // 右键：清空槽位
+                    if (button == 1) {
+                        slotManager.clearSlot(i);
+                        if (componentRenderManager != null) {
+                            List<ItemStack> ingredients = slotManager.getIngredients();
+                            if (i < ingredients.size()) {
+                                componentRenderManager.updateSlotItem(i, ingredients.get(i));
+                            }
                         }
+                        return true;
+                    }
+                    
+                    // 左键：选中槽位（不打开界面）
+                    if (button == 0) {
+                        clearAllSelections();
+                        selectedSlotIndex = i;
+                        updateSlotOperationButtonsVisibility();
+                        return true;
                     }
                     return true;
                 }
@@ -1671,18 +1967,36 @@ public class RecipeCreatorScreen extends Screen {
 
         // 处理结果槽点击
         if (slotManager != null) {
-            SlotManager.IngredientSlot resultSlot = slotManager.getResultSlot();
-            if (mouseX >= resultSlot.x() && mouseX < resultSlot.x() + 18 &&
-                    mouseY >= resultSlot.y() && mouseY < resultSlot.y() + 18) {
-                if (button == 0) {
-                    openResultSelector();
-                } else if (button == 1) {
-                    slotManager.setResultItem(ItemStack.EMPTY);
-                    if (componentRenderManager != null) {
-                        componentRenderManager.updateResultItem(ItemStack.EMPTY);
+            RecipeComponent outputComponent = slotManager.getOutputComponent();
+            
+            if (outputComponent != null) {
+                if (componentRenderManager != null) {
+                    ComponentRenderer renderer = componentRenderManager.createRenderer(outputComponent);
+                    if (renderer != null && renderer.mouseClicked(mouseX, mouseY, button)) {
+                        return true;
                     }
                 }
-                return true;
+            } else {
+                SlotManager.IngredientSlot resultSlot = slotManager.getResultSlot();
+                if (mouseX >= resultSlot.x() && mouseX < resultSlot.x() + 18 &&
+                        mouseY >= resultSlot.y() && mouseY < resultSlot.y() + 18) {
+                    // 右键：清空结果槽
+                    if (button == 1) {
+                        slotManager.setResultItem(ItemStack.EMPTY);
+                        if (componentRenderManager != null) {
+                            componentRenderManager.updateResultItem(ItemStack.EMPTY);
+                        }
+                        return true;
+                    }
+                    // 左键：选中结果槽
+                    if (button == 0) {
+                        clearAllSelections();
+                        isResultSlotSelected = true;
+                        updateSlotOperationButtonsVisibility();
+                        return true;
+                    }
+                    return true;
+                }
             }
         }
 
@@ -1693,6 +2007,300 @@ public class RecipeCreatorScreen extends Screen {
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+    
+    // ── 槽位操作按钮处理 ──────────────────────────────────────────
+    
+    /**
+     * 1. 更改数量
+     */
+    private void onChangeAmountClicked() {
+        if (selectedSlotIndex >= 0) {
+            IngredientData data = slotManager.getIngredientData(selectedSlotIndex);
+            if (data != null && !data.isEmpty()) {
+                int currentAmount = data.getAmount();
+                int minAmount = 1;
+                int maxAmount = 64;
+                
+                if (data.getType() == IngredientData.Type.ITEM && !data.getItemStack().isEmpty()) {
+                    maxAmount = data.getItemStack().getMaxStackSize();
+                }
+                
+                if (minecraft != null) {
+                    minecraft.setScreen(new dev.whisperlyric_fork.gui.NumberAdjustmentScreen(
+                        this,
+                        minAmount,
+                        maxAmount,
+                        currentAmount,
+                        newAmount -> {
+                            data.setAmount(newAmount);
+                            displayInfo("已更改数量为: " + newAmount);
+                        }
+                    ));
+                }
+            } else {
+                displayError("该槽位为空，无法更改数量");
+            }
+        } else if (isResultSlotSelected) {
+            if (slotManager != null) {
+                ItemStack resultStack = slotManager.getResultItem();
+                if (!resultStack.isEmpty()) {
+                    int currentAmount = resultStack.getCount();
+                    int minAmount = 1;
+                    int maxAmount = resultStack.getMaxStackSize();
+                    
+                    if (minecraft != null) {
+                        minecraft.setScreen(new dev.whisperlyric_fork.gui.NumberAdjustmentScreen(
+                            this,
+                            minAmount,
+                            maxAmount,
+                            currentAmount,
+                            newAmount -> {
+                                ItemStack newResult = resultStack.copy();
+                                newResult.setCount(newAmount);
+                                slotManager.setResultItem(newResult);
+                                displayInfo("已更改结果数量为: " + newAmount);
+                            }
+                        ));
+                    }
+                } else {
+                    displayError("结果槽位为空，无法更改数量");
+                }
+            }
+        } else if (selectedFluidSlot != null) {
+            long currentAmount = selectedFluidSlot.getAmount();
+            long maxAmount = selectedFluidSlot.getMaxAmount();
+            if (minecraft != null) {
+                minecraft.setScreen(new dev.whisperlyric_fork.gui.NumberAdjustmentScreen(
+                    this,
+                    0,
+                    (int) Math.min(maxAmount, Integer.MAX_VALUE),
+                    (int) currentAmount,
+                    newAmount -> {
+                        selectedFluidSlot.setAmount(newAmount);
+                        if (componentRenderManager != null && slotManager != null) {
+                            componentRenderManager.initializeRenderers(slotManager.getComponents());
+                        }
+                        displayInfo("已更改流体数量为: " + newAmount + " mB");
+                    }
+                ));
+            }
+        } else if (selectedGasSlot != null) {
+            int currentAmount = selectedGasSlot.getAmount();
+            int maxAmount = 10000;
+            if (minecraft != null) {
+                minecraft.setScreen(new dev.whisperlyric_fork.gui.NumberAdjustmentScreen(
+                    this,
+                    0,
+                    maxAmount,
+                    currentAmount,
+                    newAmount -> {
+                        selectedGasSlot.setAmount(newAmount);
+                        if (componentRenderManager != null && slotManager != null) {
+                            componentRenderManager.initializeRenderers(slotManager.getComponents());
+                        }
+                        displayInfo("已更改气体数量为: " + newAmount);
+                    }
+                ));
+            }
+        } else if (selectedChemicalSlot != null) {
+            long currentAmount = selectedChemicalSlot.getAmount();
+            long maxAmount = selectedChemicalSlot.getMaxAmount();
+            if (minecraft != null) {
+                minecraft.setScreen(new dev.whisperlyric_fork.gui.NumberAdjustmentScreen(
+                    this,
+                    0,
+                    (int) Math.min(maxAmount, Integer.MAX_VALUE),
+                    (int) currentAmount,
+                    newAmount -> {
+                        selectedChemicalSlot.setAmount(newAmount);
+                        if (componentRenderManager != null && slotManager != null) {
+                            componentRenderManager.initializeRenderers(slotManager.getComponents());
+                        }
+                        displayInfo("已更改化学物质数量为: " + newAmount);
+                    }
+                ));
+            }
+        }
+    }
+    
+    /**
+     * 2. 从创造物品栏选择
+     */
+    private void onSelectFromCreativeClicked() {
+        if (minecraft != null) {
+            minecraft.setScreen(new ItemSelectorScreen(
+                this,
+                stack -> {
+                    if (stack != null && !stack.isEmpty()) {
+                        applySelectedItem(stack);
+                    }
+                }
+            ));
+        }
+    }
+    
+    /**
+     * 3. 从玩家物品栏选择
+     */
+    private void onSelectFromInventoryClicked() {
+        if (minecraft != null) {
+            minecraft.setScreen(new dev.whisperlyric_fork.gui.PlayerInventorySelectionScreen(
+                this,
+                result -> {
+                    if (result.value instanceof net.minecraft.world.item.ItemStack stack) {
+                        applySelectedItem(stack);
+                    }
+                }
+            ));
+        }
+    }
+    
+    /**
+     * 4. 从JEI选择
+     */
+    private void onSelectFromJEIClicked() {
+        if (minecraft != null) {
+            dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType slotType = 
+                dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.ITEM;
+            boolean gasOnly = false;
+            
+            if (selectedSlotIndex >= 0) {
+                IngredientData data = slotManager.getIngredientData(selectedSlotIndex);
+                if (data != null) {
+                    if (data.getType() == IngredientData.Type.FLUID) {
+                        slotType = dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.FLUID;
+                    } else if (data.getType() == IngredientData.Type.GAS) {
+                        slotType = dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.GAS;
+                    }
+                }
+            } else if (selectedFluidSlot != null) {
+                slotType = dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.FLUID;
+            } else if (selectedGasSlot != null) {
+                slotType = dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.GAS;
+                gasOnly = selectedGasSlot.isGasOnly();
+            } else if (selectedChemicalSlot != null) {
+                slotType = dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.GAS;
+            }
+            
+            minecraft.setScreen(new dev.whisperlyric_fork.gui.JEISelectionScreen(
+                this,
+                slotType,
+                result -> {
+                    if (selectedFluidSlot != null && result.value instanceof net.minecraftforge.fluids.FluidStack fluidStack) {
+                        selectedFluidSlot.setFluidId(fluidStack.getFluid().builtInRegistryHolder().key().location().toString());
+                        long amount = fluidStack.getAmount();
+                        if (amount <= 0) amount = 1;
+                        selectedFluidSlot.setAmount(amount);
+                        displayInfo("已设置流体: " + fluidStack.getDisplayName().getString() + " (" + amount + "mB)");
+                    } else if (selectedGasSlot != null && result.value instanceof String gasId) {
+                        selectedGasSlot.setGasId(gasId);
+                        int amount = result.amount > 0 ? result.amount : 1;
+                        selectedGasSlot.setAmount(amount);
+                        displayInfo("已设置气体: " + gasId);
+                    } else if (selectedChemicalSlot != null && result.value instanceof String chemicalId) {
+                        selectedChemicalSlot.setChemicalId(chemicalId);
+                        long amount = result.amount > 0 ? result.amount : 1;
+                        selectedChemicalSlot.setAmount(amount);
+                        displayInfo("已设置化学物质: " + chemicalId);
+                    } else {
+                        applySelectedItem(result.value);
+                    }
+                    clearAllSelections();
+                },
+                gasOnly
+            ));
+        }
+    }
+    
+    /**
+     * 5. 添加物品标签组
+     */
+    private void onAddTagGroupClicked() {
+        if (minecraft != null) {
+            minecraft.setScreen(new TagSelectorScreen(
+                this,
+                tagId -> {
+                    if (tagId != null) {
+                        applySelectedTagById(tagId);
+                    }
+                }
+            ));
+        }
+    }
+    
+    private void applySelectedTagById(ResourceLocation tagId) {
+        if (selectedSlotIndex >= 0) {
+            IngredientData data = IngredientData.fromTag(tagId);
+            slotManager.setIngredientData(selectedSlotIndex, data);
+            displayInfo("已设置标签: #" + tagId);
+        } else if (selectedFluidSlot != null) {
+            selectedFluidSlot.setFluidId("#" + tagId);
+            displayInfo("已设置流体标签: #" + tagId);
+        } else if (selectedGasSlot != null) {
+            selectedGasSlot.setGasId("#" + tagId);
+            displayInfo("已设置气体标签: #" + tagId);
+        } else if (selectedChemicalSlot != null) {
+            selectedChemicalSlot.setChemicalId("#" + tagId);
+            displayInfo("已设置化学物质标签: #" + tagId);
+        }
+    }
+    
+    /**
+     * 应用选中的物品
+     */
+    private void applySelectedItem(Object value) {
+        if (value instanceof net.minecraft.world.item.ItemStack stack) {
+            if (selectedSlotIndex >= 0) {
+                slotManager.setIngredient(selectedSlotIndex, stack);
+                if (componentRenderManager != null) {
+                    componentRenderManager.updateSlotItem(selectedSlotIndex, stack);
+                }
+                displayInfo("已设置物品: " + stack.getHoverName().getString());
+            } else if (isResultSlotSelected) {
+                slotManager.setResultItem(stack);
+                if (componentRenderManager != null) {
+                    componentRenderManager.updateResultItem(stack);
+                }
+                displayInfo("已设置结果物品: " + stack.getHoverName().getString());
+            }
+        } else if (value instanceof net.minecraftforge.fluids.FluidStack fluidStack) {
+            if (selectedSlotIndex >= 0) {
+                IngredientData data = IngredientData.fromFluid(fluidStack.getFluid().builtInRegistryHolder().key().location().toString(), fluidStack.getAmount());
+                slotManager.setIngredientData(selectedSlotIndex, data);
+                displayInfo("已设置流体: " + fluidStack.getFluid().builtInRegistryHolder().key().location());
+            }
+        } else if (value instanceof String gasId) {
+            if (selectedSlotIndex >= 0) {
+                IngredientData data = IngredientData.fromGas(gasId, 1000);
+                slotManager.setIngredientData(selectedSlotIndex, data);
+                displayInfo("已设置气体: " + gasId);
+            }
+        }
+    }
+    
+    /**
+     * 应用选中的标签
+     */
+    private void applySelectedTag(net.minecraft.tags.TagKey<?> tag) {
+        if (selectedSlotIndex >= 0) {
+            @SuppressWarnings("unchecked")
+            net.minecraft.tags.TagKey<net.minecraft.world.item.Item> itemTag = (net.minecraft.tags.TagKey<net.minecraft.world.item.Item>) tag;
+            IngredientData data = IngredientData.fromTag(itemTag.location());
+            slotManager.setIngredientData(selectedSlotIndex, data);
+            displayInfo("已设置标签: #" + tag.location());
+        }
+    }
+
+    @Override
+    public void removed() {
+        if (!switchingToJEI) {
+            super.removed();
+        }
+    }
+
+    public void setSwitchingToJEI(boolean value) {
+        this.switchingToJEI = value;
     }
 
     @Override

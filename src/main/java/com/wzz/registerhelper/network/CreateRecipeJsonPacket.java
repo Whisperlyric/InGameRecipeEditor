@@ -117,28 +117,26 @@ public class CreateRecipeJsonPacket {
             String path = recipeId.getPath();
             String baseFileName = generateOptimizedFileName(path, recipeJson);
 
-            // 检查是否是自定义配方类型（酿造台、铁砧等）
             String recipeType = recipeJson.has("type") ? recipeJson.get("type").getAsString() : "";
             boolean isCustomType = isCustomRecipeType(recipeType);
 
             Path baseDir;
             if (isCustomType) {
-                // 自定义配方保存到 custom_recipes 目录
                 String customCategory = getCustomRecipeCategory(recipeType);
                 baseDir = FMLPaths.CONFIGDIR.get()
                         .resolve("registerhelper/custom_recipes")
                         .resolve(customCategory);
+            } else if (recipeType.startsWith("mekanism:")) {
+                baseDir = FMLPaths.CONFIGDIR.get()
+                        .resolve("registerhelper/recipes/mekanism");
             } else {
-                // 普通配方保存到 recipes 目录
                 baseDir = FMLPaths.CONFIGDIR.get()
                         .resolve("registerhelper/recipes")
                         .resolve(namespace);
             }
 
-            // 创建目录
             Files.createDirectories(baseDir);
 
-            // 检查文件是否存在，如果存在则追加数字后缀
             String fileName = baseFileName;
             Path recipePath = baseDir.resolve(fileName + ".json");
             int counter = 1;
@@ -149,7 +147,6 @@ public class CreateRecipeJsonPacket {
                 counter++;
             }
 
-            // 写入JSON文件
             try (FileWriter writer = new FileWriter(recipePath.toFile())) {
                 GSON.toJson(recipeJson, writer);
             }

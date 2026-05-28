@@ -256,6 +256,16 @@ public class RecipeUtil {
                     data.isIncludeNBT(),
                     data.getIgnoreNbtKeys()
             );
+            case FLUID -> {
+                JsonObject json = new JsonObject();
+                json.addProperty("fluid", data.getTagId().toString());
+                yield json;
+            }
+            case GAS -> {
+                JsonObject json = new JsonObject();
+                json.addProperty("gas", data.getTagId().toString());
+                yield json;
+            }
         };
     }
 

@@ -7,6 +7,7 @@ import com.wzz.registerhelper.init.ModIntegrations;
 import com.wzz.registerhelper.init.ModNetwork;
 import com.wzz.registerhelper.init.ProcessorLoader;
 import com.wzz.registerhelper.recipe.CustomRecipeLoader;
+import dev.whisperlyric_fork.gui.ModContainers;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.crafting.CraftingHelper;
@@ -31,6 +32,7 @@ public class RecipeHelper {
             modEventBus.addListener(this::clientSetup);
         }
         MinecraftForge.EVENT_BUS.register(this);
+        ModContainers.CONTAINERS.register(modEventBus);
         ModNetwork.register();
         ModIntegrations.registerAll();
         ModConfig.register();

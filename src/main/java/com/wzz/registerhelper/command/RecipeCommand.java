@@ -32,7 +32,9 @@ public class RecipeCommand {
                                 .then(Commands.literal("single")
                                         .executes(RecipeCommand::exportAllToKubeJSSingle))
                                 .then(Commands.literal("multiple")
-                                        .executes(RecipeCommand::exportAllToKubeJSMultiple)))
+                                        .executes(RecipeCommand::exportAllToKubeJSMultiple))
+                                .then(Commands.literal("bymod")
+                                        .executes(RecipeCommand::exportAllToKubeJSByMod)))
                         .then(Commands.literal("crafttweaker")
                                 .then(Commands.literal("single")
                                         .executes(RecipeCommand::exportAllToCraftTweakerSingle))
@@ -68,7 +70,7 @@ public class RecipeCommand {
         CommandSourceStack source = context.getSource();
         try {
             KubeJsUtils.exportAllJsonRecipesToJS(true);
-            source.sendSuccess(() -> Component.literal("§a成功导出所有配方到 kubejs/server_scripts/registerhelper_recipes.js"), true);
+            source.sendSuccess(() -> Component.literal("§a成功导出所有配方到 kubejs/server_scripts/rh_generated/registerhelper_recipes.js"), true);
             return 1;
         } catch (Exception e) {
             source.sendFailure(Component.literal("§c导出失败: " + e.getMessage()));
@@ -81,7 +83,20 @@ public class RecipeCommand {
         CommandSourceStack source = context.getSource();
         try {
             KubeJsUtils.exportAllJsonRecipesToJS(false);
-            source.sendSuccess(() -> Component.literal("§a成功导出所有配方到 kubejs/server_scripts (按目录分文件)"), true);
+            source.sendSuccess(() -> Component.literal("§a成功导出所有配方到 kubejs/server_scripts/rh_generated (按目录分文件)"), true);
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("§c导出失败: " + e.getMessage()));
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    private static int exportAllToKubeJSByMod(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        try {
+            KubeJsUtils.exportAllJsonRecipesByMod();
+            source.sendSuccess(() -> Component.literal("§a成功导出所有配方到 kubejs/server_scripts/rh_generated (按mod分文件)"), true);
             return 1;
         } catch (Exception e) {
             source.sendFailure(Component.literal("§c导出失败: " + e.getMessage()));
