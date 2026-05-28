@@ -1,5 +1,6 @@
 package com.wzz.registerhelper.recipe;
 
+import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.HashMap;
@@ -17,6 +18,7 @@ public class RecipeRequest {
     public String[] pattern;       // 有形状配方的模式
     public Object[] ingredients;   // 材料列表
     public Map<String, Object> properties = new HashMap<>(); // 额外属性
+    public RecipeComponent outputComponent; // 输出组件（能量槽、流体槽、气体槽）
 
     // 便捷构造方法
     public static RecipeRequest shaped(String modId, String recipeId, ItemStack result, String[] pattern, Object... ingredients) {

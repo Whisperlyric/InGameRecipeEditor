@@ -69,7 +69,7 @@ public class RegisterHelper {
                 new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder(modID + ":" + type, displayName)
                         .modId(modID)
                         .gridSize(gridWidth, gridHeight)
-                        .supportsFillMode(!"mystical_infusion".equals(layoutId))
+                        .supportsFillMode(!"mystical_infusion".equals(layoutId) && !"mekanism".equals(modID))
                         .property("category", modID)
                         .property("mode", type.replace("crafting", ""))
                         .property("layout", layoutId)

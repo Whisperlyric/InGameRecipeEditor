@@ -13,61 +13,56 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/**
- * 组件渲染管理器 - 改进版
- */
 public class ComponentRenderManager {
     private final List<ComponentRenderer> renderers = new ArrayList<>();
     private final List<EditBox> editBoxes = new ArrayList<>();
     private final ComponentDataManager dataManager;
     private Font font;
 
-    // 槽位数据映射
     private final Map<Integer, ItemStack> slotItems = new HashMap<>();
     private ItemStack resultItem = ItemStack.EMPTY;
 
-    // 回调函数
     private Consumer<Integer> onSlotLeftClick;
     private Consumer<Integer> onSlotRightClick;
     private Runnable onResultClick;
+    private Consumer<FluidSlotComponent> onFluidSlotClick;
+    private Consumer<GasSlotComponent> onGasSlotClick;
+    private Consumer<ChemicalSlotComponent> onChemicalSlotClick;
 
     public ComponentRenderManager(Font font) {
         this.font = font;
         this.dataManager = new ComponentDataManager();
     }
 
-    /**
-     * 设置槽位回调
-     */
     public void setSlotCallbacks(Consumer<Integer> onLeftClick, Consumer<Integer> onRightClick) {
         this.onSlotLeftClick = onLeftClick;
         this.onSlotRightClick = onRightClick;
     }
 
-    /**
-     * 设置结果回调
-     */
     public void setResultCallback(Runnable onClick) {
         this.onResultClick = onClick;
     }
+    
+    public void setFluidSlotCallback(Consumer<FluidSlotComponent> onClick) {
+        this.onFluidSlotClick = onClick;
+    }
+    
+    public void setGasSlotCallback(Consumer<GasSlotComponent> onClick) {
+        this.onGasSlotClick = onClick;
+    }
+    
+    public void setChemicalSlotCallback(Consumer<ChemicalSlotComponent> onClick) {
+        this.onChemicalSlotClick = onClick;
+    }
 
-    /**
-     * 更新槽位物品
-     */
     public void updateSlotItem(int index, ItemStack item) {
         slotItems.put(index, item.copy());
     }
 
-    /**
-     * 更新结果物品
-     */
     public void updateResultItem(ItemStack item) {
         this.resultItem = item.copy();
     }
 
-    /**
-     * 初始化组件渲染器
-     */
     public void initializeRenderers(List<RecipeComponent> components) {
         renderers.clear();
         editBoxes.clear();
@@ -85,17 +80,11 @@ public class ComponentRenderManager {
         }
     }
 
-    /**
-     * 获取所有 EditBox（供 Screen 注册）
-     */
     public List<EditBox> getEditBoxes() {
         return new ArrayList<>(editBoxes);
     }
 
-    /**
-     * 创建对应类型的渲染器
-     */
-    private ComponentRenderer createRenderer(RecipeComponent component) {
+    public ComponentRenderer createRenderer(RecipeComponent component) {
         switch (component.getType()) {
             case SLOT:
                 if (component instanceof SlotComponent slotComp) {
@@ -108,6 +97,34 @@ public class ComponentRenderManager {
                             idx -> {
                                 if (onSlotRightClick != null) onSlotRightClick.accept(slotIndex);
                             });
+                }
+
+            case FLUID_SLOT:
+                if (component instanceof FluidSlotComponent fluidComp) {
+                    FluidSlotRenderer renderer = new FluidSlotRenderer(fluidComp, onFluidSlotClick);
+                    renderer.setOutput(fluidComp.getId().contains("output"));
+                    return renderer;
+                }
+                
+            case GAS_SLOT:
+                if (component instanceof GasSlotComponent gasComp) {
+                    GasSlotRenderer renderer = new GasSlotRenderer(gasComp, onGasSlotClick);
+                    renderer.setOutput(gasComp.getId().contains("output"));
+                    return renderer;
+                }
+                
+            case SLURRY_SLOT:
+            case PIGMENT_SLOT:
+            case INFUSE_TYPE_SLOT:
+                if (component instanceof ChemicalSlotComponent chemicalComp) {
+                    ChemicalSlotRenderer renderer = new ChemicalSlotRenderer(chemicalComp, onChemicalSlotClick);
+                    renderer.setOutput(chemicalComp.getId().contains("output"));
+                    return renderer;
+                }
+                
+            case ENERGY_SLOT:
+                if (component instanceof EnergySlotComponent energyComp) {
+                    return new EnergySlotRenderer(energyComp);
                 }
 
             case LABEL:
@@ -127,9 +144,6 @@ public class ComponentRenderManager {
         }
     }
 
-    /**
-     * 渲染所有组件
-     */
     public void renderAll(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         if (this.font == null)
             this.font = Minecraft.getInstance().font;
@@ -138,9 +152,6 @@ public class ComponentRenderManager {
         }
     }
 
-    /**
-     * 处理鼠标点击（只处理槽位，EditBox 由 Screen 自动处理）
-     */
     public boolean handleMouseClick(double mouseX, double mouseY, int button) {
         for (ComponentRenderer renderer : renderers) {
             if (!(renderer instanceof NumberInputRenderer) &&
@@ -153,16 +164,10 @@ public class ComponentRenderManager {
         return false;
     }
 
-    /**
-     * 获取数据管理器
-     */
     public ComponentDataManager getDataManager() {
         return dataManager;
     }
 
-    /**
-     * 清空所有数据
-     */
     public void clear() {
         dataManager.clear();
         slotItems.clear();

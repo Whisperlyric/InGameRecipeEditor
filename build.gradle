@@ -75,6 +75,12 @@ repositories {
             includeGroup "curse.maven"
         }
     }
+    maven {
+        url "https://modmaven.dev/"
+        content {
+            includeGroup "mekanism"
+        }
+    }
     mavenCentral()
 }
 
@@ -88,6 +94,7 @@ dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     implementation fg.deobf("curse.maven:crafttweaker-239197:6914010")
     implementation fg.deobf("curse.maven:jei-238222:7391695")
+    compileOnly fg.deobf("mekanism:Mekanism:${minecraft_version}-10.4.16.80:api")
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -122,4 +129,12 @@ tasks.named('jar', Jar).configure {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+    // options.compilerArgs << '-Xlint:-deprecation' // 忽略deprecation警告
+    options.compilerArgs << '-Xlint:-removal' // 忽略removal警告
 }
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+build.dependsOn sourcesJar

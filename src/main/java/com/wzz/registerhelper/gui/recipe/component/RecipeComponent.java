@@ -38,8 +38,14 @@ public abstract class RecipeComponent {
     
     public enum ComponentType {
         SLOT,           // 物品槽位
+        FLUID_SLOT,     // 流体槽位
+        GAS_SLOT,       // 气体槽位
+        SLURRY_SLOT,    // 污泥槽位
+        PIGMENT_SLOT,   // 颜料槽位
+        INFUSE_TYPE_SLOT, // 灌注类型槽位
+        ENERGY_SLOT,    // 能量槽位
         NUMBER_INPUT,   // 数值输入框
-        STRING_INPUT,     // 文本输入框
-        LABEL          // 文本标签
+        STRING_INPUT,   // 文本输入框
+        LABEL           // 文本标签
     }
 }

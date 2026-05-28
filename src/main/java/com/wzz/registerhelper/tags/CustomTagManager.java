@@ -158,7 +158,7 @@ public class CustomTagManager {
         
         JsonArray valuesArray = new JsonArray();
         for (Item item : items) {
-            String itemId = ForgeRegistries.ITEMS.getKey(item).toString();
+            String itemId = Objects.requireNonNull(ForgeRegistries.ITEMS.getKey(item)).toString();
             valuesArray.add(itemId);
         }
         tagJson.add("values", valuesArray);

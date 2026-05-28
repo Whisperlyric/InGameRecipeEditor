@@ -18,7 +18,9 @@ public class IngredientData {
     public enum Type {
         ITEM("物品"),
         TAG("标签"),
-        CUSTOM_TAG("自定义标签");
+        CUSTOM_TAG("自定义标签"),
+        FLUID("流体"),
+        GAS("气体");
         
         private final String displayName;
         
@@ -93,6 +95,26 @@ public class IngredientData {
         return data;
     }
     
+    /**
+     * 创建流体材料（用于流体槽）
+     */
+    public static IngredientData fromFluid(String fluidId, int amount) {
+        IngredientData data = new IngredientData(Type.ITEM);
+        data.itemStack = ItemStack.EMPTY;
+        data.tagId = new ResourceLocation(fluidId);
+        return data;
+    }
+    
+    /**
+     * 创建气体材料（用于气体槽）
+     */
+    public static IngredientData fromGas(String gasId, int amount) {
+        IngredientData data = new IngredientData(Type.ITEM);
+        data.itemStack = ItemStack.EMPTY;
+        data.tagId = new ResourceLocation(gasId);
+        return data;
+    }
+    
     // === Getters ===
     
     public Type getType() {
@@ -111,11 +133,32 @@ public class IngredientData {
         return new ArrayList<>(customTagItems);
     }
     
+    /**
+     * 获取数量
+     */
+    public int getAmount() {
+        if (type == Type.ITEM && itemStack != null) {
+            return itemStack.getCount();
+        }
+        return 1;
+    }
+    
+    /**
+     * 设置数量
+     */
+    public void setAmount(int amount) {
+        if (type == Type.ITEM && itemStack != null && !itemStack.isEmpty()) {
+            itemStack.setCount(Math.max(1, Math.min(64, amount)));
+        }
+    }
+    
     public boolean isEmpty() {
         return switch (type) {
             case ITEM -> itemStack == null || itemStack.isEmpty();
             case TAG -> tagId == null;
             case CUSTOM_TAG -> tagId == null || customTagItems.isEmpty();
+            case FLUID -> tagId == null;
+            case GAS -> tagId == null;
         };
     }
     
@@ -128,6 +171,8 @@ public class IngredientData {
             case ITEM -> getItemStack();
             case TAG -> getFirstTagItem();
             case CUSTOM_TAG -> customTagItems.isEmpty() ? ItemStack.EMPTY : customTagItems.get(0);
+            case FLUID -> ItemStack.EMPTY;
+            case GAS -> ItemStack.EMPTY;
         };
     }
     
@@ -172,6 +217,8 @@ public class IngredientData {
             }
             case TAG -> tagId != null ? "§6#" + tagId : "未知标签";
             case CUSTOM_TAG -> tagId != null ? "§b自定义#" + tagId : "未知自定义标签";
+            case FLUID -> tagId != null ? "§3流体: " + tagId : "未知流体";
+            case GAS -> tagId != null ? "§c气体: " + tagId : "未知气体";
         };
     }
     
@@ -191,6 +238,8 @@ public class IngredientData {
             }
             case TAG -> tagId != null ? "#" + tagId : null;
             case CUSTOM_TAG -> tagId != null ? "#" + tagId : null;
+            case FLUID -> tagId != null ? tagId : null;
+            case GAS -> tagId != null ? tagId : null;
         };
     }
     
@@ -333,6 +382,8 @@ public class IngredientData {
             case ITEM -> fromItem(getItemStack());
             case TAG -> fromTag(tagId);
             case CUSTOM_TAG -> fromCustomTag(tagId, customTagItems);
+            case FLUID -> fromFluid(tagId != null ? tagId.toString() : "", 1000);
+            case GAS -> fromGas(tagId != null ? tagId.toString() : "", 1000);
         };
         result.includeNBT = this.includeNBT;
         result.ignoreNbtKeys = new ArrayList<>(this.ignoreNbtKeys);

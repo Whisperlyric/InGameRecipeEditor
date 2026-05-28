@@ -5,6 +5,10 @@ import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
 import com.wzz.registerhelper.gui.recipe.IngredientData;
 import com.wzz.registerhelper.gui.recipe.component.ComponentDataManager;
+import com.wzz.registerhelper.gui.recipe.component.EnergySlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.FluidSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.GasSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
 import com.wzz.registerhelper.init.ModNetwork;
 import com.wzz.registerhelper.network.CreateRecipeJsonPacket;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeTypeConfig.*;
@@ -47,7 +51,7 @@ public class DynamicRecipeBuilder {
         public final String cookingType;
         public final int customTier;
         public final ItemStack resultItem;
-        public final List<ItemStack> ingredients; // 保留用于兼容
+        public final List<ItemStack> ingredients;
         public final List<IngredientData> ingredientsData;
         public final float cookingTime;
         public final float cookingExp;
@@ -55,6 +59,8 @@ public class DynamicRecipeBuilder {
         public final boolean isEditing;
         public final Map<String, Object> extraProperties;
         public ComponentDataManager componentDataManager;
+        public RecipeComponent outputComponent;
+        public String rotaryMode;
 
         public BuildParams(RecipeTypeDefinition recipeType, String craftingMode, String cookingType,
                            int customTier, ItemStack resultItem, List<ItemStack> ingredients,
@@ -73,6 +79,7 @@ public class DynamicRecipeBuilder {
             this.editingRecipeId = editingRecipeId;
             this.isEditing = isEditing;
             this.extraProperties = extraProperties != null ? new HashMap<>(extraProperties) : new HashMap<>();
+            this.rotaryMode = "reversible";
         }
     }
 
@@ -356,7 +363,8 @@ public class DynamicRecipeBuilder {
         request.recipeType = params.recipeType.getId();
         request.recipeId = recipeId;
         request.result = params.resultItem;
-        request.resultCount = params.resultItem.getCount();
+        request.resultCount = params.resultItem.isEmpty() ? 1 : params.resultItem.getCount();
+        request.outputComponent = params.outputComponent;
         ModRecipeProcessor processor = params.recipeType.getProcessor();
         boolean isShaped = processor.isShapedRecipe(params.recipeType.getId());
         if (isShaped) {
@@ -397,6 +405,25 @@ public class DynamicRecipeBuilder {
         if (params.componentDataManager != null) {
             extractComponentData(params.extraProperties, request);
         }
+        
+        if (params.outputComponent instanceof EnergySlotComponent energyComp) {
+            request.withProperty("energy", energyComp.getEnergy());
+        } else if (params.outputComponent instanceof FluidSlotComponent fluidComp) {
+            if (fluidComp.getFluidId() != null) {
+                request.withProperty("fluidOutput", fluidComp.getFluidId());
+            }
+            request.withProperty("fluidOutputAmount", fluidComp.getAmount());
+        } else if (params.outputComponent instanceof GasSlotComponent gasComp) {
+            if (gasComp.getGasId() != null) {
+                request.withProperty("gasOutput", gasComp.getGasId());
+            }
+            request.withProperty("gasOutputAmount", gasComp.getAmount());
+        }
+        
+        if (params.rotaryMode != null) {
+            request.withProperty("rotaryMode", params.rotaryMode);
+        }
+        
         return request;
     }
 
@@ -527,11 +554,11 @@ public class DynamicRecipeBuilder {
      * 将单个IngredientData转换为配方对象
      */
     private Object convertIngredientDataToObject(IngredientData data) {
-        // 直接返回 IngredientData 本身，由 RecipeUtil.createIngredientJson 处理
-        //   TAG / CUSTOM_TAG 仍然走字符串路径（RecipeUtil 已支持 "#xxx" 格式）
         return switch (data.getType()) {
             case TAG, CUSTOM_TAG -> "#" + data.getTagId().toString();
-            case ITEM        -> data;
+            case ITEM -> data;
+            case FLUID -> data.getTagId().toString();
+            case GAS -> data.getTagId().toString();
         };
     }
 
@@ -544,12 +571,13 @@ public class DynamicRecipeBuilder {
                 ItemStack stack = data.getItemStack();
                 String key = ForgeRegistries.ITEMS.getKey(stack.getItem()).toString();
                 if (stack.hasTag() && !stack.getTag().isEmpty()) {
-                    // 使用NBT的字符串表示，确保内容相同的NBT得到相同的key
                     key += "_nbt_" + stack.getTag().toString();
                 }
                 yield key;
             }
             case TAG, CUSTOM_TAG -> "#" + data.getTagId().toString();
+            case FLUID -> "fluid:" + data.getTagId().toString();
+            case GAS -> "gas:" + data.getTagId().toString();
         };
     }
 
@@ -612,35 +640,106 @@ public class DynamicRecipeBuilder {
             return false;
         }
 
-        if (params.resultItem.isEmpty()) {
-            showError("请选择结果物品！");
-            return false;
+        if (params.outputComponent != null) {
+            if (params.outputComponent instanceof EnergySlotComponent energyComp) {
+                if (energyComp.getEnergy() <= 0) {
+                    showError("请设置能量值！");
+                    return false;
+                }
+            } else if (params.outputComponent instanceof FluidSlotComponent fluidComp) {
+                if (fluidComp.getAmount() <= 0 || fluidComp.getFluidId() == null) {
+                    showError("请选择流体并设置数量！");
+                    return false;
+                }
+            } else if (params.outputComponent instanceof GasSlotComponent gasComp) {
+                if (gasComp.getAmount() <= 0 || gasComp.getGasId() == null) {
+                    showError("请选择气体并设置数量！");
+                    return false;
+                }
+            }
+        } else {
+            if (params.resultItem.isEmpty()) {
+                showError("请选择结果物品！");
+                return false;
+            }
+
+            if (params.resultItem.getCount() <= 0) {
+                showError("数量必须大于0！");
+                return false;
+            }
         }
 
-        if (params.resultItem.getCount() <= 0) {
-            showError("数量必须大于0！");
-            return false;
+        String recipeTypeId = params.recipeType.getId();
+        boolean isRotaryCondensentrator = "mekanism:rotary_condensentrator".equals(recipeTypeId);
+        boolean isCrystallizing = "mekanism:crystallizing".equals(recipeTypeId);
+        
+        if (isRotaryCondensentrator || isCrystallizing) {
+            boolean hasChemicalInput = false;
+            
+            if (params.extraProperties != null) {
+                if (isRotaryCondensentrator) {
+                    String rotaryMode = (String) params.extraProperties.getOrDefault("rotaryMode", "reversible");
+                    switch (rotaryMode) {
+                        case "reversible" -> {
+                            String fluidInput = (String) params.extraProperties.get("fluidInput");
+                            Object fluidAmountObj = params.extraProperties.get("fluidInputAmount");
+                            int fluidAmount = fluidAmountObj instanceof Number ? ((Number) fluidAmountObj).intValue() : 0;
+                            String gasOutput = (String) params.extraProperties.get("gasOutput");
+                            Object gasOutputAmountObj = params.extraProperties.get("gasOutputAmount");
+                            int gasOutputAmount = gasOutputAmountObj instanceof Number ? ((Number) gasOutputAmountObj).intValue() : 0;
+                            if (fluidInput != null && !fluidInput.isEmpty() && fluidAmount > 0 &&
+                                gasOutput != null && !gasOutput.isEmpty() && gasOutputAmount > 0) {
+                                hasChemicalInput = true;
+                            }
+                        }
+                        case "evaporation" -> {
+                            String fluidInput = (String) params.extraProperties.get("fluidInput");
+                            Object fluidAmountObj = params.extraProperties.get("fluidInputAmount");
+                            int fluidAmount = fluidAmountObj instanceof Number ? ((Number) fluidAmountObj).intValue() : 0;
+                            if (fluidInput != null && !fluidInput.isEmpty() && fluidAmount > 0) {
+                                hasChemicalInput = true;
+                            }
+                        }
+                        case "condensation" -> {
+                            String gasInput = (String) params.extraProperties.get("gasInput");
+                            Object gasAmountObj = params.extraProperties.get("gasInputAmount");
+                            int gasAmount = gasAmountObj instanceof Number ? ((Number) gasAmountObj).intValue() : 0;
+                            if (gasInput != null && !gasInput.isEmpty() && gasAmount > 0) {
+                                hasChemicalInput = true;
+                            }
+                        }
+                    }
+                } else if (isCrystallizing) {
+                    String inputGas = (String) params.extraProperties.get("inputGas");
+                    Object inputAmountObj = params.extraProperties.get("inputAmount");
+                    int inputAmount = inputAmountObj instanceof Number ? ((Number) inputAmountObj).intValue() : 0;
+                    if (inputGas != null && !inputGas.isEmpty() && inputAmount > 0) {
+                        hasChemicalInput = true;
+                    }
+                }
+            }
+            
+            if (!hasChemicalInput) {
+                showError("请设置化学物质输入！");
+                return false;
+            }
+        } else {
+            boolean hasIngredients = false;
+
+            if (params.ingredientsData != null && !params.ingredientsData.isEmpty()) {
+                hasIngredients = params.ingredientsData.stream()
+                        .anyMatch(data -> !data.isEmpty());
+            } else if (params.ingredients != null && !params.ingredients.isEmpty()) {
+                hasIngredients = params.ingredients.stream()
+                        .anyMatch(item -> !item.isEmpty());
+            }
+
+            if (!hasIngredients) {
+                showError("请至少添加一个材料！");
+                return false;
+            }
         }
 
-        // 检查是否有有效的材料（支持IngredientData）
-        boolean hasIngredients = false;
-
-        // 优先检查 ingredientsData
-        if (params.ingredientsData != null && !params.ingredientsData.isEmpty()) {
-            hasIngredients = params.ingredientsData.stream()
-                    .anyMatch(data -> !data.isEmpty());
-        } else if (params.ingredients != null && !params.ingredients.isEmpty()) {
-            // 兼容旧版本：检查 ingredients
-            hasIngredients = params.ingredients.stream()
-                    .anyMatch(item -> !item.isEmpty());
-        }
-
-        if (!hasIngredients) {
-            showError("请至少添加一个材料！");
-            return false;
-        }
-
-        // 检查mod是否已加载
         ModRecipeProcessor processor = params.recipeType.getProcessor();
         if (processor != null && !processor.isModLoaded()) {
             showError("所需的mod未加载: " + params.recipeType.getModId());

@@ -26,11 +26,18 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RecipeBlacklistManager {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final String BLACKLIST_FILE = FMLPaths.CONFIGDIR.get()
-            .resolve("registerhelper/recipe_blacklist.json").toAbsolutePath().normalize().toString();
+    private static String BLACKLIST_FILE = null;
 
     private static final Set<ResourceLocation> blacklistedRecipes = ConcurrentHashMap.newKeySet();
     private static boolean initialized = false;
+    
+    private static String getBlacklistFile() {
+        if (BLACKLIST_FILE == null) {
+            BLACKLIST_FILE = FMLPaths.CONFIGDIR.get()
+                .resolve("registerhelper/recipe_blacklist.json").toAbsolutePath().normalize().toString();
+        }
+        return BLACKLIST_FILE;
+    }
 
     /**
      * 初始化黑名单管理器
@@ -196,10 +203,10 @@ public class RecipeBlacklistManager {
      * 从文件加载黑名单
      */
     private static void loadBlacklist() {
-        File blacklistFile = new File(BLACKLIST_FILE);
+        File blacklistFile = new File(getBlacklistFile());
 
         if (!blacklistFile.exists()) {
-            LOGGER.debug("黑名单文件不存在，创建空黑名单: {}", BLACKLIST_FILE);
+            LOGGER.debug("黑名单文件不存在，创建空黑名单: {}", getBlacklistFile());
             blacklistedRecipes.clear();
             saveBlacklist(); // 创建空文件
             return;
@@ -224,7 +231,7 @@ public class RecipeBlacklistManager {
             LOGGER.debug("从文件加载了 {} 个黑名单配方", blacklistedRecipes.size());
 
         } catch (Exception e) {
-            LOGGER.error("加载黑名单文件失败: " + BLACKLIST_FILE, e);
+            LOGGER.error("加载黑名单文件失败: " + getBlacklistFile(), e);
             blacklistedRecipes.clear(); // 出错时清空，避免使用损坏的数据
         }
     }
@@ -234,10 +241,9 @@ public class RecipeBlacklistManager {
      */
     private static void saveBlacklist() {
         try {
-            File blacklistFile = new File(BLACKLIST_FILE);
+            File blacklistFile = new File(getBlacklistFile());
             blacklistFile.getParentFile().mkdirs();
 
-            // 转换为字符串集合
             Set<String> recipeStrings = new HashSet<>();
             for (ResourceLocation recipeId : blacklistedRecipes) {
                 recipeStrings.add(recipeId.toString());
@@ -247,10 +253,10 @@ public class RecipeBlacklistManager {
                 GSON.toJson(recipeStrings, writer);
             }
 
-            LOGGER.debug("黑名单已保存到文件: {} (配方数量: {})", BLACKLIST_FILE, blacklistedRecipes.size());
+            LOGGER.debug("黑名单已保存到文件: {} (配方数量: {})", getBlacklistFile(), blacklistedRecipes.size());
 
         } catch (Exception e) {
-            LOGGER.error("保存黑名单文件失败: " + BLACKLIST_FILE, e);
+            LOGGER.error("保存黑名单文件失败: " + getBlacklistFile(), e);
         }
     }
 

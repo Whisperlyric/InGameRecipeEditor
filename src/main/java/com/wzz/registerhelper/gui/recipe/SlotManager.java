@@ -1,5 +1,9 @@
 package com.wzz.registerhelper.gui.recipe;
 
+import com.wzz.registerhelper.gui.recipe.component.ChemicalSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.EnergySlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.FluidSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.GasSlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
 import com.wzz.registerhelper.gui.recipe.component.SlotComponent;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeBuilder;
@@ -11,22 +15,20 @@ import net.minecraft.world.item.ItemStack;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeTypeConfig.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-/**
- * 槽位管理器 - 支持动态配方类型和IngredientData
- */
 public class SlotManager {
-    /** 默认槽位间距，可通过 setSlotSpacing 动态缩小以适应小屏幕 */
     private int slotSpacing = 20;
-    /** 槽位间距的硬性下限，低于此值物品图标将无法辨认 */
     public static final int MIN_SLOT_SPACING = 13;
     public static final int DEFAULT_SLOT_SPACING = 20;
 
     private List<RecipeComponent> components = new ArrayList<>();
     private final List<IngredientSlot> ingredientSlots = new ArrayList<>();
-    private final List<IngredientData> ingredients = new ArrayList<>(); // 改用IngredientData
+    private final List<IngredientData> ingredients = new ArrayList<>();
     private IngredientSlot resultSlot;
+    private RecipeComponent outputComponent;
     private ItemStack resultItem = ItemStack.EMPTY;
 
     private RecipeTypeDefinition currentRecipeType;
@@ -45,10 +47,6 @@ public class SlotManager {
         initializeSlots();
     }
 
-    /**
-     * 动态设置槽位间距（用于大格子在小屏幕上自适应缩放）。
-     * 必须在 setRecipeType / updateCoordinates 之前调用才能生效。
-     */
     public void setSlotSpacing(int spacing) {
         this.slotSpacing = Math.max(MIN_SLOT_SPACING, Math.min(DEFAULT_SLOT_SPACING, spacing));
     }
@@ -98,7 +96,73 @@ public class SlotManager {
             updateCustomSlotPositions();
         }
 
-        resultSlot = new IngredientSlot(rightPanelX + 20, baseY + 130, -1);
+        initializeOutputSlot();
+    }
+
+    private void initializeOutputSlot() {
+        String outputType = currentRecipeType.getProperty("outputType", String.class);
+        int outputX = rightPanelX + 20;
+        int outputY = baseY + 110;
+        
+        String layoutId = currentRecipeType.getProperty("layout", String.class);
+        if (layoutId != null) {
+            RecipeLayout layout = LayoutManager.getLayout(layoutId);
+            if (layout instanceof dev.whisperlyric_fork.mekanism.layout.RotaryCondensentratorLayout rotaryLayout) {
+                outputType = rotaryLayout.getOutputType();
+                outputY += rotaryLayout.getOutputYOffset();
+            }
+        }
+        
+        if (outputType == null) {
+            resultSlot = new IngredientSlot(outputX, outputY, -1);
+            outputComponent = null;
+            return;
+        }
+        
+        switch (outputType) {
+            case "energy" -> {
+                long oldEnergy = 0;
+                if (outputComponent instanceof EnergySlotComponent oldEnergyComp) {
+                    oldEnergy = oldEnergyComp.getEnergy();
+                }
+                outputComponent = new EnergySlotComponent(outputX, outputY, "energy_output", 0, oldEnergy, 100000000L);
+                resultSlot = null;
+            }
+            case "fluid" -> {
+                String oldFluidId = null;
+                long oldAmount = 0;
+                if (outputComponent instanceof FluidSlotComponent oldFluidComp) {
+                    oldFluidId = oldFluidComp.getFluidId();
+                    oldAmount = oldFluidComp.getAmount();
+                }
+                FluidSlotComponent newFluidComp = new FluidSlotComponent(outputX, outputY, "fluid_output", 0);
+                if (oldFluidId != null) {
+                    newFluidComp.setFluidId(oldFluidId);
+                }
+                newFluidComp.setAmount(oldAmount);
+                outputComponent = newFluidComp;
+                resultSlot = null;
+            }
+            case "gas" -> {
+                String oldGasId = null;
+                int oldAmount = 0;
+                if (outputComponent instanceof GasSlotComponent oldGasComp) {
+                    oldGasId = oldGasComp.getGasId();
+                    oldAmount = oldGasComp.getAmount();
+                }
+                GasSlotComponent newGasComp = new GasSlotComponent(outputX, outputY, "gas_output", 0);
+                if (oldGasId != null) {
+                    newGasComp.setGasId(oldGasId);
+                }
+                newGasComp.setAmount(oldAmount);
+                outputComponent = newGasComp;
+                resultSlot = null;
+            }
+            default -> {
+                resultSlot = new IngredientSlot(outputX, outputY, -1);
+                outputComponent = null;
+            }
+        }
     }
 
     private void updateCraftingSlotPositions() {
@@ -168,6 +232,23 @@ public class SlotManager {
             return;
         }
 
+        Map<String, Object> oldInputData = new HashMap<>();
+        for (RecipeComponent comp : components) {
+            if (comp instanceof FluidSlotComponent fluidComp) {
+                if (!fluidComp.getId().contains("output")) {
+                    oldInputData.put(fluidComp.getId(), new Object[]{fluidComp.getFluidId(), fluidComp.getAmount()});
+                }
+            } else if (comp instanceof GasSlotComponent gasComp) {
+                if (!gasComp.getId().contains("output")) {
+                    oldInputData.put(gasComp.getId(), new Object[]{gasComp.getGasId(), gasComp.getAmount()});
+                }
+            } else if (comp instanceof ChemicalSlotComponent chemicalComp) {
+                if (!chemicalComp.getId().contains("output")) {
+                    oldInputData.put(chemicalComp.getId(), new Object[]{chemicalComp.getChemicalId(), chemicalComp.getAmount()});
+                }
+            }
+        }
+
         components.clear();
         ingredientSlots.clear();
         ingredients.clear();
@@ -183,7 +264,53 @@ public class SlotManager {
                 ));
                 ingredients.add(IngredientData.empty());
             }
+            
+            if (component instanceof FluidSlotComponent fluidComp) {
+                if (!fluidComp.getId().contains("output")) {
+                    Object[] data = (Object[]) oldInputData.get(fluidComp.getId());
+                    if (data != null) {
+                        String oldFluidId = (String) data[0];
+                        long oldAmount = (Long) data[1];
+                        if (oldFluidId != null && !oldFluidId.isEmpty()) {
+                            fluidComp.setFluidId(oldFluidId);
+                            fluidComp.setAmount(oldAmount);
+                            ModLogger.getLogger().info("Restored input fluid slot {}: fluidId={}, amount={}",
+                                fluidComp.getId(), oldFluidId, oldAmount);
+                        }
+                    }
+                }
+            } else if (component instanceof GasSlotComponent gasComp) {
+                if (!gasComp.getId().contains("output")) {
+                    Object[] data = (Object[]) oldInputData.get(gasComp.getId());
+                    if (data != null) {
+                        String oldGasId = (String) data[0];
+                        int oldAmount = (Integer) data[1];
+                        if (oldGasId != null && !oldGasId.isEmpty()) {
+                            gasComp.setGasId(oldGasId);
+                            gasComp.setAmount(oldAmount);
+                            ModLogger.getLogger().info("Restored input gas slot {}: gasId={}, amount={}",
+                                gasComp.getId(), oldGasId, oldAmount);
+                        }
+                    }
+                }
+            } else if (component instanceof ChemicalSlotComponent chemicalComp) {
+                if (!chemicalComp.getId().contains("output")) {
+                    Object[] data = (Object[]) oldInputData.get(chemicalComp.getId());
+                    if (data != null) {
+                        String oldChemicalId = (String) data[0];
+                        long oldAmount = (Long) data[1];
+                        if (oldChemicalId != null && !oldChemicalId.isEmpty()) {
+                            chemicalComp.setChemicalId(oldChemicalId);
+                            chemicalComp.setAmount(oldAmount);
+                            ModLogger.getLogger().info("Restored input chemical slot {}: chemicalId={}, amount={}",
+                                chemicalComp.getId(), oldChemicalId, oldAmount);
+                        }
+                    }
+                }
+            }
         }
+        
+        initializeOutputSlot();
     }
 
     public int getBaseX() {
@@ -352,6 +479,32 @@ public class SlotManager {
     public void clearAllIngredients() {
         ingredients.replaceAll(ignored -> IngredientData.empty());
         resultItem = ItemStack.EMPTY;
+        
+        for (RecipeComponent component : components) {
+            if (component instanceof FluidSlotComponent fluidComp) {
+                fluidComp.setFluidId(null);
+                fluidComp.setAmount(0);
+            } else if (component instanceof GasSlotComponent gasComp) {
+                gasComp.setGasId(null);
+                gasComp.setAmount(0);
+            } else if (component instanceof ChemicalSlotComponent chemicalComp) {
+                chemicalComp.setChemicalId(null);
+                chemicalComp.setAmount(0);
+            }
+        }
+        
+        if (outputComponent instanceof EnergySlotComponent energyComp) {
+            energyComp.setEnergy(0);
+        } else if (outputComponent instanceof FluidSlotComponent fluidComp) {
+            fluidComp.setFluidId(null);
+            fluidComp.setAmount(0);
+        } else if (outputComponent instanceof GasSlotComponent gasComp) {
+            gasComp.setGasId(null);
+            gasComp.setAmount(0);
+        } else if (outputComponent instanceof ChemicalSlotComponent chemicalComp) {
+            chemicalComp.setChemicalId(null);
+            chemicalComp.setAmount(0);
+        }
     }
 
     /**
@@ -426,9 +579,14 @@ public class SlotManager {
     public ItemStack getResultItem() { return resultItem; }
     public RecipeTypeDefinition getCurrentRecipeType() { return currentRecipeType; }
     public int getCustomTier() { return customTier; }
+    public RecipeComponent getOutputComponent() { return outputComponent; }
 
     // Setters
     public void setResultItem(ItemStack resultItem) {
         this.resultItem = resultItem.copy();
+    }
+    
+    public void setOutputComponent(RecipeComponent outputComponent) {
+        this.outputComponent = outputComponent;
     }
 }

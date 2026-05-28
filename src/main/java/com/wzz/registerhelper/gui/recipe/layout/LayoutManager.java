@@ -13,17 +13,15 @@ import com.wzz.registerhelper.gui.recipe.layout.integration.farmersdelight.Cutti
 import com.wzz.registerhelper.gui.recipe.layout.integration.immersive_engineering.ArcFurnaceLayout;
 import com.wzz.registerhelper.gui.recipe.layout.integration.mysticalagriculture.InfusionLayout;
 import com.wzz.registerhelper.gui.recipe.layout.integration.mysticalagriculture.ReprocessorLayout;
+import dev.whisperlyric_fork.mekanism.layout.ChemicalCrystallizerLayout;
+import dev.whisperlyric_fork.mekanism.layout.RotaryCondensentratorLayout;
 
 import java.util.*;
 
-/**
- * 布局管理器
- */
 public class LayoutManager {
     private static final Map<String, RecipeLayout> layouts = new HashMap<>();
     
     static {
-        // 基础矩形布局
         registerLayout("rectangular_3x3", new RectangularLayout(3, 3));
         registerLayout("rectangular_9x9", new RectangularLayout(9, 9));
         registerLayout("rectangular_4x1", new RectangularLayout(4, 1));
@@ -33,13 +31,11 @@ public class LayoutManager {
         registerLayout("rectangular_11x11", new RectangularLayout(11, 11));
         registerLayout("rectangular_7x7", new RectangularLayout(7, 7));
 
-        // Minecraft 内置布局
         registerLayout("minecraft_brewing", new MinecraftBrewingLayout());
         registerLayout("stonecutting", new StonecuttingLayout());
         registerLayout("smithing", new SmithingLayout());
         registerLayout("anvil", new AnvilLayout());
 
-        // Mod 集成布局
         registerLayout("runic_altar", new RunicAltarLayout());
         registerLayout("arc_furnace", new ArcFurnaceLayout());
         registerLayout("infusion", new InfusionLayout());
@@ -55,31 +51,46 @@ public class LayoutManager {
         registerLayout("path_transmuter", new PathTransmuter());
     }
     
-    /**
-     * 注册布局
-     */
     public static void registerLayout(String id, RecipeLayout layout) {
         layouts.put(id, layout);
     }
 
-    /**
-     * 获取布局
-     */
     public static RecipeLayout getLayout(String id) {
         return layouts.get(id);
     }
     
-    /**
-     * 获取所有布局ID
-     */
     public static Set<String> getAllLayoutIds() {
         return layouts.keySet();
     }
     
-    /**
-     * 获取所有布局
-     */
     public static List<RecipeLayout> getAllLayouts() {
         return new ArrayList<>(layouts.values());
+    }
+    
+    public static void setRotaryCondensentratorMode(String mode) {
+        RecipeLayout layout = layouts.get("mekanism_rotary_condensentrator");
+        if (layout instanceof RotaryCondensentratorLayout rotaryLayout) {
+            RotaryCondensentratorLayout.Mode layoutMode = switch (mode) {
+                case "reversible" -> RotaryCondensentratorLayout.Mode.REVERSIBLE;
+                case "evaporation" -> RotaryCondensentratorLayout.Mode.EVAPORATION;
+                case "condensation" -> RotaryCondensentratorLayout.Mode.CONDENSATION;
+                default -> RotaryCondensentratorLayout.Mode.REVERSIBLE;
+            };
+            rotaryLayout.setMode(layoutMode);
+        }
+    }
+    
+    public static void setChemicalCrystallizerInputType(String inputType) {
+        RecipeLayout layout = layouts.get("mekanism_chemical_crystallizer");
+        if (layout instanceof ChemicalCrystallizerLayout crystallizerLayout) {
+            ChemicalCrystallizerLayout.InputType type = switch (inputType.toLowerCase()) {
+                case "gas" -> ChemicalCrystallizerLayout.InputType.GAS;
+                case "infuse_type", "infuse" -> ChemicalCrystallizerLayout.InputType.INFUSE_TYPE;
+                case "pigment" -> ChemicalCrystallizerLayout.InputType.PIGMENT;
+                case "slurry" -> ChemicalCrystallizerLayout.InputType.SLURRY;
+                default -> ChemicalCrystallizerLayout.InputType.GAS;
+            };
+            crystallizerLayout.setInputType(type);
+        }
     }
 }

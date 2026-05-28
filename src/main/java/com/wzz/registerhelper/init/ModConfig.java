@@ -35,6 +35,7 @@ public class ModConfig {
         public final ForgeConfigSpec.BooleanValue enablePerSlotNBT;
         public final ForgeConfigSpec.BooleanValue enableDebugLogging;
         public final ForgeConfigSpec.BooleanValue defaultIncludeNBT;
+        public final ForgeConfigSpec.BooleanValue autoGenerateRecipeId;
 
         public CommonConfig(ForgeConfigSpec.Builder builder) {
             builder.push("nbt_matching");
@@ -60,6 +61,20 @@ public class ModConfig {
                             "When enabled: color bar shown at slot bottom, middle-click to toggle per slot",
                             "When disabled: all slots follow defaultIncludeNBT, no color bar shown")
                     .define("enablePerSlotNBT", true);
+
+            builder.pop();
+
+            builder.push("kubejs_export");
+
+            autoGenerateRecipeId = builder
+                    .comment("自动为导出的KubeJS配方生成ID",
+                            "当启用时，会为每个配方自动生成ID，格式为: recipehelper/modid/recipe_type/output_id",
+                            "当禁用时，不生成配方ID，使用KubeJS默认行为",
+                            "",
+                            "Auto-generate recipe IDs for exported KubeJS recipes",
+                            "When enabled, generates ID for each recipe: recipehelper/modid/recipe_type/output_id",
+                            "When disabled, no recipe ID is generated, uses KubeJS default behavior")
+                    .define("autoGenerateRecipeId", false);
 
             builder.pop();
 
@@ -97,5 +112,12 @@ public class ModConfig {
      */
     public static boolean getDefaultIncludeNBT() {
         return COMMON.defaultIncludeNBT.get();
+    }
+
+    /**
+     * 检查是否启用了自动生成配方ID
+     */
+    public static boolean isAutoGenerateRecipeIdEnabled() {
+        return COMMON.autoGenerateRecipeId.get();
     }
 }
