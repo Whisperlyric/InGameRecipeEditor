@@ -14,11 +14,12 @@ public class RecipeRequest {
     public String recipeType;      // 配方类型
     public String recipeId;        // 配方ID
     public ItemStack result;       // 结果物品
-    public int resultCount = 1;    // 结果数量
+    public int resultCount = 1;    // 结果数量 ?这对吗
     public String[] pattern;       // 有形状配方的模式
     public Object[] ingredients;   // 材料列表
     public Map<String, Object> properties = new HashMap<>(); // 额外属性
     public RecipeComponent outputComponent; // 输出组件（能量槽、流体槽、气体槽）
+    public Map<Integer, ItemStack> outputSlotItems = new HashMap<>(); // 输出槽物品数据
 
     // 便捷构造方法
     public static RecipeRequest shaped(String modId, String recipeId, ItemStack result, String[] pattern, Object... ingredients) {

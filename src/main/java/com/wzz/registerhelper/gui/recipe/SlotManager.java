@@ -29,7 +29,9 @@ public class SlotManager {
     private final List<IngredientData> ingredients = new ArrayList<>();
     private IngredientSlot resultSlot;
     private RecipeComponent outputComponent;
+    private List<RecipeComponent> outputComponents = new ArrayList<>();
     private ItemStack resultItem = ItemStack.EMPTY;
+    private Map<Integer, ItemStack> outputSlotItems = new HashMap<>();
 
     private RecipeTypeDefinition currentRecipeType;
     private int customTier = 1;
@@ -107,11 +109,62 @@ public class SlotManager {
         String layoutId = currentRecipeType.getProperty("layout", String.class);
         if (layoutId != null) {
             RecipeLayout layout = LayoutManager.getLayout(layoutId);
-            if (layout instanceof dev.whisperlyric_fork.mekanism.layout.RotaryCondensentratorLayout rotaryLayout) {
-                outputType = rotaryLayout.getOutputType();
-                outputY += rotaryLayout.getOutputYOffset();
+            if (layout != null) {
+                outputY += layout.getOutputYOffset();
+                
+                List<RecipeComponent> layoutOutputs = layout.generateOutputComponents(outputX, outputY);
+                if (layoutOutputs != null && !layoutOutputs.isEmpty()) {
+                    for (int i = 0; i < layoutOutputs.size(); i++) {
+                        RecipeComponent newComp = layoutOutputs.get(i);
+                        if (i < outputComponents.size()) {
+                            RecipeComponent oldComp = outputComponents.get(i);
+                            
+                            if (newComp instanceof GasSlotComponent newGas && oldComp instanceof GasSlotComponent oldGas) {
+                                if (oldGas.getGasId() != null && !oldGas.getGasId().isEmpty()) {
+                                    newGas.setGasId(oldGas.getGasId());
+                                }
+                                if (oldGas.getAmount() > 0) {
+                                    newGas.setAmount(oldGas.getAmount());
+                                }
+                            } else if (newComp instanceof ChemicalSlotComponent newChem && oldComp instanceof ChemicalSlotComponent oldChem) {
+                                if (oldChem.getChemicalId() != null && !oldChem.getChemicalId().isEmpty()) {
+                                    newChem.setChemicalId(oldChem.getChemicalId());
+                                }
+                                if (oldChem.getAmount() > 0) {
+                                    newChem.setAmount(oldChem.getAmount());
+                                }
+                            } else if (newComp instanceof FluidSlotComponent newFluid && oldComp instanceof FluidSlotComponent oldFluid) {
+                                if (oldFluid.getFluidId() != null && !oldFluid.getFluidId().isEmpty()) {
+                                    newFluid.setFluidId(oldFluid.getFluidId());
+                                }
+                                if (oldFluid.getAmount() > 0) {
+                                    newFluid.setAmount(oldFluid.getAmount());
+                                }
+                            } else if (newComp instanceof SlotComponent newSlot && oldComp instanceof SlotComponent oldSlot) {
+                                int slotIndex = newSlot.getSlotIndex();
+                                ItemStack oldItem = outputSlotItems.get(slotIndex);
+                                if (oldItem != null && !oldItem.isEmpty()) {
+                                    outputSlotItems.put(newSlot.getSlotIndex(), oldItem.copy());
+                                }
+                            }
+                        }
+                    }
+                    
+                    outputComponents.clear();
+                    outputComponents.addAll(layoutOutputs);
+                    outputComponent = outputComponents.get(0);
+                    resultSlot = null;
+                    return;
+                }
+                
+                String layoutOutputType = layout.getOutputType();
+                if (layoutOutputType != null) {
+                    outputType = layoutOutputType;
+                }
             }
         }
+        
+        outputComponents.clear();
         
         if (outputType == null) {
             resultSlot = new IngredientSlot(outputX, outputY, -1);
@@ -158,10 +211,59 @@ public class SlotManager {
                 outputComponent = newGasComp;
                 resultSlot = null;
             }
+            case "chemical" -> {
+                String oldChemicalId = null;
+                long oldAmount = 0;
+                if (outputComponent instanceof ChemicalSlotComponent oldChemicalComp) {
+                    oldChemicalId = oldChemicalComp.getChemicalId();
+                    oldAmount = oldChemicalComp.getAmount();
+                }
+                ChemicalSlotComponent newChemicalComp = new ChemicalSlotComponent(outputX, outputY, "chemical_output", 0, ChemicalSlotComponent.ChemicalType.GAS);
+                if (oldChemicalId != null) {
+                    newChemicalComp.setChemicalId(oldChemicalId);
+                }
+                newChemicalComp.setAmount(oldAmount);
+                outputComponent = newChemicalComp;
+                resultSlot = null;
+            }
+            case "slurry" -> {
+                String oldSlurryId = null;
+                long oldAmount = 0;
+                if (outputComponent instanceof ChemicalSlotComponent oldSlurryComp) {
+                    oldSlurryId = oldSlurryComp.getChemicalId();
+                    oldAmount = oldSlurryComp.getAmount();
+                }
+                ChemicalSlotComponent newSlurryComp = new ChemicalSlotComponent(outputX, outputY, "slurry_output", 0, ChemicalSlotComponent.ChemicalType.SLURRY);
+                if (oldSlurryId != null) {
+                    newSlurryComp.setChemicalId(oldSlurryId);
+                }
+                newSlurryComp.setAmount(oldAmount);
+                outputComponent = newSlurryComp;
+                resultSlot = null;
+            }
+            case "pigment" -> {
+                String oldPigmentId = null;
+                long oldAmount = 0;
+                if (outputComponent instanceof ChemicalSlotComponent oldPigmentComp) {
+                    oldPigmentId = oldPigmentComp.getChemicalId();
+                    oldAmount = oldPigmentComp.getAmount();
+                }
+                ChemicalSlotComponent newPigmentComp = new ChemicalSlotComponent(outputX, outputY, "pigment_output", 0, ChemicalSlotComponent.ChemicalType.PIGMENT);
+                if (oldPigmentId != null) {
+                    newPigmentComp.setChemicalId(oldPigmentId);
+                }
+                newPigmentComp.setAmount(oldAmount);
+                outputComponent = newPigmentComp;
+                resultSlot = null;
+            }
             default -> {
                 resultSlot = new IngredientSlot(outputX, outputY, -1);
                 outputComponent = null;
             }
+        }
+        
+        if (outputComponent != null) {
+            outputComponents.add(outputComponent);
         }
     }
 
@@ -393,6 +495,18 @@ public class SlotManager {
     }
     
     /**
+     * 根据 SlotComponent 的 slotIndex 找到对应的 ingredients 列表索引
+     */
+    public int findIngredientListIndex(int componentSlotIndex) {
+        for (int i = 0; i < ingredientSlots.size(); i++) {
+            if (ingredientSlots.get(i).index() == componentSlotIndex) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    
+    /**
      * 获取材料数据（新方法）
      */
     public IngredientData getIngredientData(int slotIndex) {
@@ -580,7 +694,19 @@ public class SlotManager {
     public RecipeTypeDefinition getCurrentRecipeType() { return currentRecipeType; }
     public int getCustomTier() { return customTier; }
     public RecipeComponent getOutputComponent() { return outputComponent; }
-
+    
+    public List<RecipeComponent> getOutputComponents() { return outputComponents; }
+    
+    public Map<Integer, ItemStack> getOutputSlotItems() { return outputSlotItems; }
+    
+    public void setOutputSlotItem(int slotIndex, ItemStack item) {
+        outputSlotItems.put(slotIndex, item.copy());
+    }
+    
+    public ItemStack getOutputSlotItem(int slotIndex) {
+        return outputSlotItems.getOrDefault(slotIndex, ItemStack.EMPTY);
+    }
+    
     // Setters
     public void setResultItem(ItemStack resultItem) {
         this.resultItem = resultItem.copy();

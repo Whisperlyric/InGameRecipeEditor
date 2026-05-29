@@ -19,10 +19,33 @@ public class EnergyConversionLayout implements RecipeLayout {
         components.add(new SlotComponent(
             baseX, baseY,
             "input",
-            0
+            0, "", true
         ));
         
         return components;
+    }
+    
+    @Override
+    public List<RecipeComponent> generateOutputComponents(int outputX, int outputY) {
+        List<RecipeComponent> outputs = new ArrayList<>();
+        
+        outputs.add(new EnergySlotComponent(
+            outputX, outputY + 40,
+            "energy_output",
+            1,
+            0,
+            1000000
+        ));
+        
+        return outputs;
+    }
+    
+    public String getOutputType() {
+        return "energy";
+    }
+    
+    public int getOutputYOffset() {
+        return 20;
     }
     
     @Override

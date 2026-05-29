@@ -148,7 +148,8 @@ public class IngredientData {
      */
     public void setAmount(int amount) {
         if (type == Type.ITEM && itemStack != null && !itemStack.isEmpty()) {
-            itemStack.setCount(Math.max(1, Math.min(64, amount)));
+            int maxStackSize = itemStack.getMaxStackSize();
+            itemStack.setCount(Math.max(1, Math.min(maxStackSize, amount)));
         }
     }
     

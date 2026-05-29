@@ -38,26 +38,32 @@ public class SlotRenderer implements ComponentRenderer {
         int x = component.getX();
         int y = component.getY();
         
-        // 检查鼠标悬停
         boolean isMouseOver = mouseX >= x && mouseX < x + 18 &&
                              mouseY >= y && mouseY < y + 18;
         
-        // 绘制背景
+        if (component.hasLabel()) {
+            String label = component.getLabel();
+            int labelWidth = font.width(label);
+            int labelX = x + 9 - labelWidth / 2;
+            int labelY = y - 10;
+            guiGraphics.drawString(font, label, labelX, labelY, 0xFFFFFF, true);
+        }
+        
         int bgColor = isMouseOver ? 0x80FFFFFF : 0xFF373737;
         guiGraphics.fill(x, y, x + 18, y + 18, bgColor);
         
-        // 边框
         guiGraphics.fill(x - 1, y - 1, x + 19, y, 0xFF000000);
         guiGraphics.fill(x - 1, y + 18, x + 19, y + 19, 0xFF000000);
         guiGraphics.fill(x - 1, y, x, y + 18, 0xFF000000);
         guiGraphics.fill(x + 18, y, x + 19, y + 18, 0xFF000000);
         
-        // 渲染物品
         ItemStack item = itemSupplier.get();
         if (!item.isEmpty()) {
-            RenderSystem.enableDepthTest();
             guiGraphics.renderItem(item, x + 1, y + 1);
-            RenderSystem.disableDepthTest();
+            
+            if (component.isBulkSlot() && item.getCount() > 1) {
+                guiGraphics.renderItemDecorations(font, item, x + 1, y + 1, null);
+            }
         }
     }
     

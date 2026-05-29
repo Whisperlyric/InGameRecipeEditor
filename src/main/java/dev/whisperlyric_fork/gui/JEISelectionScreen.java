@@ -101,8 +101,16 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
             title = "从JEI拖入物品";
         } else if (slotType == SlotSelectionScreen.SlotType.FLUID) {
             title = "从JEI拖入流体";
+        } else if (slotType == SlotSelectionScreen.SlotType.GAS) {
+            title = "选择气体(GasOnly)";
+        } else if (slotType == SlotSelectionScreen.SlotType.SLURRY) {
+            title = "选择浆液(SlurryOnly)";
+        } else if (slotType == SlotSelectionScreen.SlotType.PIGMENT) {
+            title = "选择颜料(PigmentOnly)";
+        } else if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) {
+            title = "选择灌注类型(InfuseTypeOnly)";
         } else {
-            title = "选择气体";
+            title = "选择化学品";
         }
         
         guiGraphics.drawCenteredString(
@@ -277,9 +285,10 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
                 amount = fluidStack.getAmount();
                 if (amount <= 0) amount = 1;
             } else if (selectedValue instanceof String gasId) {
-                if (gasOnly && !isPureGasId(gasId)) {
+                String expectedType = getExpectedChemicalType();
+                if (expectedType != null && gasOnly && !isPureGasId(gasId)) {
                     net.minecraft.client.Minecraft.getInstance().player.displayClientMessage(
-                        net.minecraft.network.chat.Component.literal("§c错误: 此槽位只接受气体类型，不接受浆液/颜料/灌注类型"),
+                        net.minecraft.network.chat.Component.literal("§c错误: 此槽位只接受" + expectedType + "类型"),
                         false
                     );
                     return;
@@ -321,7 +330,13 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
                     }
                     return isFluidStack;
                 } else if (slotType == SlotSelectionScreen.SlotType.GAS) {
-                    return isMekanismChemicalStack(ingredient);
+                    return isMekanismChemicalStack(ingredient, "GasStack");
+                } else if (slotType == SlotSelectionScreen.SlotType.SLURRY) {
+                    return isMekanismChemicalStack(ingredient, "SlurryStack");
+                } else if (slotType == SlotSelectionScreen.SlotType.PIGMENT) {
+                    return isMekanismChemicalStack(ingredient, "PigmentStack");
+                } else if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) {
+                    return isMekanismChemicalStack(ingredient, "InfusionStack");
                 }
                 return false;
             }
@@ -336,11 +351,12 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
                         copy.setAmount(1000);
                     }
                     selectedValue = copy;
-                } else if (isMekanismChemicalStack(ingredient)) {
+                } else if (isMekanismChemicalStack(ingredient, null)) {
                     String chemicalId = extractChemicalId(ingredient);
-                    if (gasOnly && !isPureGasId(chemicalId)) {
+                    String expectedType = getExpectedChemicalType();
+                    if (expectedType != null && !isCorrectChemicalType(ingredient, expectedType)) {
                         net.minecraft.client.Minecraft.getInstance().player.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal("§c错误: 此槽位只接受气体(Gas)类型，不接受浆液/颜料/灌注类型"),
+                            net.minecraft.network.chat.Component.literal("§c错误: 此槽位只接受" + expectedType + "类型"),
                             false
                         );
                         return;
@@ -385,21 +401,42 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
         return null;
     }
     
-    private boolean isMekanismChemicalStack(Object ingredient) {
+    private boolean isMekanismChemicalStack(Object ingredient, String expectedType) {
         if (ingredient == null) return false;
         String className = ingredient.getClass().getName();
         
-        if (gasOnly) {
-            return className.contains("GasStack") && 
-                   !className.contains("SlurryStack") && 
-                   !className.contains("PigmentStack") && 
-                   !className.contains("InfusionStack");
+        if (expectedType != null) {
+            return className.contains(expectedType);
         }
         
         return className.contains("GasStack") || 
                className.contains("SlurryStack") || 
                className.contains("PigmentStack") || 
                className.contains("InfusionStack");
+    }
+    
+    private String getExpectedChemicalType() {
+        if (slotType == SlotSelectionScreen.SlotType.GAS) return "气体(Gas)";
+        if (slotType == SlotSelectionScreen.SlotType.SLURRY) return "浆液(Slurry)";
+        if (slotType == SlotSelectionScreen.SlotType.PIGMENT) return "颜料(Pigment)";
+        if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) return "灌注类型(InfuseType)";
+        return null;
+    }
+    
+    private boolean isCorrectChemicalType(Object ingredient, String expectedType) {
+        if (ingredient == null) return false;
+        String className = ingredient.getClass().getName();
+        
+        if (slotType == SlotSelectionScreen.SlotType.GAS) {
+            return className.contains("GasStack");
+        } else if (slotType == SlotSelectionScreen.SlotType.SLURRY) {
+            return className.contains("SlurryStack");
+        } else if (slotType == SlotSelectionScreen.SlotType.PIGMENT) {
+            return className.contains("PigmentStack");
+        } else if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) {
+            return className.contains("InfusionStack");
+        }
+        return false;
     }
     
     private String extractChemicalId(Object chemicalStack) {

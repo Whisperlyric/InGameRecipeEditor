@@ -39,6 +39,32 @@ public interface RecipeLayout {
         return LayoutType.GRID;
     }
     
+    /**
+     * 获取输出类型（用于创建输出槽位）
+     * @return 输出类型：item, fluid, gas, energy, chemical, slurry, pigment, mixed等，null表示默认物品输出
+     */
+    default String getOutputType() {
+        return null;
+    }
+    
+    /**
+     * 获取输出槽位的Y轴偏移量
+     * @return Y轴偏移量
+     */
+    default int getOutputYOffset() {
+        return 0;
+    }
+    
+    /**
+     * 生成输出组件列表（用于多输出槽的情况）
+     * @param outputX 输出区域的基础X坐标
+     * @param outputY 输出区域的基础Y坐标
+     * @return 输出组件列表，如果返回null或空列表则使用getOutputType()创建默认输出槽
+     */
+    default List<RecipeComponent> generateOutputComponents(int outputX, int outputY) {
+        return null;
+    }
+    
     enum LayoutType {
         GRID,       // 纯网格布局（只有槽位）
         MIXED,      // 混合布局（槽位+其他组件）

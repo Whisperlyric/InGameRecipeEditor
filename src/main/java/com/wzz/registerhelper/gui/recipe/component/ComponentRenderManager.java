@@ -25,6 +25,8 @@ public class ComponentRenderManager {
     private Consumer<Integer> onSlotLeftClick;
     private Consumer<Integer> onSlotRightClick;
     private Runnable onResultClick;
+    private Consumer<Integer> onOutputSlotLeftClick;
+    private Consumer<Integer> onOutputSlotRightClick;
     private Consumer<FluidSlotComponent> onFluidSlotClick;
     private Consumer<GasSlotComponent> onGasSlotClick;
     private Consumer<ChemicalSlotComponent> onChemicalSlotClick;
@@ -37,6 +39,11 @@ public class ComponentRenderManager {
     public void setSlotCallbacks(Consumer<Integer> onLeftClick, Consumer<Integer> onRightClick) {
         this.onSlotLeftClick = onLeftClick;
         this.onSlotRightClick = onRightClick;
+    }
+
+    public void setOutputSlotCallbacks(Consumer<Integer> onLeftClick, Consumer<Integer> onRightClick) {
+        this.onOutputSlotLeftClick = onLeftClick;
+        this.onOutputSlotRightClick = onRightClick;
     }
 
     public void setResultCallback(Runnable onClick) {
@@ -89,14 +96,30 @@ public class ComponentRenderManager {
             case SLOT:
                 if (component instanceof SlotComponent slotComp) {
                     int slotIndex = slotComp.getSlotIndex();
-                    return new SlotRenderer(slotComp,
-                            () -> slotItems.getOrDefault(slotIndex, ItemStack.EMPTY),
-                            idx -> {
-                                if (onSlotLeftClick != null) onSlotLeftClick.accept(slotIndex);
-                            },
-                            idx -> {
-                                if (onSlotRightClick != null) onSlotRightClick.accept(slotIndex);
-                            });
+                    String slotId = slotComp.getId().toLowerCase();
+                    boolean isOutputSlot = slotId.contains("output") || 
+                                          slotId.contains("main_output") || 
+                                          slotId.contains("secondary_output");
+                    
+                    if (isOutputSlot) {
+                        return new SlotRenderer(slotComp,
+                                () -> slotItems.getOrDefault(slotIndex, ItemStack.EMPTY),
+                                idx -> {
+                                    if (onOutputSlotLeftClick != null) onOutputSlotLeftClick.accept(slotIndex);
+                                },
+                                idx -> {
+                                    if (onOutputSlotRightClick != null) onOutputSlotRightClick.accept(slotIndex);
+                                });
+                    } else {
+                        return new SlotRenderer(slotComp,
+                                () -> slotItems.getOrDefault(slotIndex, ItemStack.EMPTY),
+                                idx -> {
+                                    if (onSlotLeftClick != null) onSlotLeftClick.accept(slotIndex);
+                                },
+                                idx -> {
+                                    if (onSlotRightClick != null) onSlotRightClick.accept(slotIndex);
+                                });
+                    }
                 }
 
             case FLUID_SLOT:

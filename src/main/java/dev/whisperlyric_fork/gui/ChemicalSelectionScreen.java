@@ -140,7 +140,9 @@ public class ChemicalSelectionScreen extends Screen {
     private SlotSelectionScreen.SlotType convertSlotType() {
         return switch (chemicalType) {
             case GAS -> SlotSelectionScreen.SlotType.GAS;
-            case SLURRY, PIGMENT, INFUSE_TYPE -> SlotSelectionScreen.SlotType.GAS;
+            case SLURRY -> SlotSelectionScreen.SlotType.SLURRY;
+            case PIGMENT -> SlotSelectionScreen.SlotType.PIGMENT;
+            case INFUSE_TYPE -> SlotSelectionScreen.SlotType.INFUSE_TYPE;
         };
     }
     

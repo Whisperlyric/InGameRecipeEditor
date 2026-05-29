@@ -12,7 +12,7 @@ import java.util.List;
 public class RotaryCondensentratorLayout implements RecipeLayout {
     public enum Mode {
         REVERSIBLE("可逆模式"),
-        EVAPORATION("液体蒸发"),
+        DECONDENSATION("液体蒸发"),
         CONDENSATION("气体冷凝");
         
         private final String displayName;
@@ -27,7 +27,7 @@ public class RotaryCondensentratorLayout implements RecipeLayout {
     }
     
     private Mode currentMode = Mode.REVERSIBLE;
-    private static final int SPACING = 22;
+    private static final int SPACING = 28;
     
     public void setMode(Mode mode) {
         this.currentMode = mode;
@@ -53,7 +53,7 @@ public class RotaryCondensentratorLayout implements RecipeLayout {
                 ));
             }
             
-            case EVAPORATION -> {
+            case DECONDENSATION -> {
                 components.add(new FluidSlotComponent(
                     baseX, baseY,
                     "fluid_input",
@@ -81,13 +81,13 @@ public class RotaryCondensentratorLayout implements RecipeLayout {
     
     public int getOutputSlotIndex() {
         return switch (currentMode) {
-            case REVERSIBLE, EVAPORATION, CONDENSATION -> 1;
+            case REVERSIBLE, DECONDENSATION, CONDENSATION -> 1;
         };
     }
     
     public String getOutputType() {
         return switch (currentMode) {
-            case REVERSIBLE, EVAPORATION -> "gas";
+            case REVERSIBLE, DECONDENSATION -> "gas";
             case CONDENSATION -> "fluid";
         };
     }

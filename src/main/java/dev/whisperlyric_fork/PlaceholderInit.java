@@ -66,7 +66,16 @@ public class PlaceholderInit {
         ITEMS.register(modEventBus);
         CREATIVE_MODE_TABS.register(modEventBus);
         
-        MekanismIntegration.init();
-        CreateIntegration.init();
+        try {
+            MekanismIntegration.init();
+        } catch (Throwable e) {
+            System.err.println("Failed to initialize Mekanism integration: " + e.getMessage());
+        }
+        
+        try {
+            CreateIntegration.init();
+        } catch (Throwable e) {
+            System.err.println("Failed to initialize Create integration: " + e.getMessage());
+        }
     }
 }

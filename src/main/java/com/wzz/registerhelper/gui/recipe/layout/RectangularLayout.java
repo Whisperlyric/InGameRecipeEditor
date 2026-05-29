@@ -41,7 +41,7 @@ public class RectangularLayout implements RecipeLayout {
                 components.add(new SlotComponent(
                     pixelX, pixelY,
                     "slot_" + index,
-                    index
+                    index, "", true
                 ));
             }
         }

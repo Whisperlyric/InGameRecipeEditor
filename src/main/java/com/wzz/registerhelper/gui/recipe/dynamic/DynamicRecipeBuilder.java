@@ -61,6 +61,7 @@ public class DynamicRecipeBuilder {
         public ComponentDataManager componentDataManager;
         public RecipeComponent outputComponent;
         public String rotaryMode;
+        public Map<Integer, ItemStack> outputSlotItems;
 
         public BuildParams(RecipeTypeDefinition recipeType, String craftingMode, String cookingType,
                            int customTier, ItemStack resultItem, List<ItemStack> ingredients,
@@ -365,6 +366,9 @@ public class DynamicRecipeBuilder {
         request.result = params.resultItem;
         request.resultCount = params.resultItem.isEmpty() ? 1 : params.resultItem.getCount();
         request.outputComponent = params.outputComponent;
+        if (params.outputSlotItems != null) {
+            request.outputSlotItems = new HashMap<>(params.outputSlotItems);
+        }
         ModRecipeProcessor processor = params.recipeType.getProcessor();
         boolean isShaped = processor.isShapedRecipe(params.recipeType.getId());
         if (isShaped) {
@@ -670,14 +674,14 @@ public class DynamicRecipeBuilder {
         }
 
         String recipeTypeId = params.recipeType.getId();
-        boolean isRotaryCondensentrator = "mekanism:rotary_condensentrator".equals(recipeTypeId);
+        boolean isRotary = "mekanism:rotary".equals(recipeTypeId);
         boolean isCrystallizing = "mekanism:crystallizing".equals(recipeTypeId);
         
-        if (isRotaryCondensentrator || isCrystallizing) {
+        if (isRotary || isCrystallizing) {
             boolean hasChemicalInput = false;
             
             if (params.extraProperties != null) {
-                if (isRotaryCondensentrator) {
+                if (isRotary) {
                     String rotaryMode = (String) params.extraProperties.getOrDefault("rotaryMode", "reversible");
                     switch (rotaryMode) {
                         case "reversible" -> {
@@ -692,7 +696,7 @@ public class DynamicRecipeBuilder {
                                 hasChemicalInput = true;
                             }
                         }
-                        case "evaporation" -> {
+                        case "decondensation" -> {
                             String fluidInput = (String) params.extraProperties.get("fluidInput");
                             Object fluidAmountObj = params.extraProperties.get("fluidInputAmount");
                             int fluidAmount = fluidAmountObj instanceof Number ? ((Number) fluidAmountObj).intValue() : 0;

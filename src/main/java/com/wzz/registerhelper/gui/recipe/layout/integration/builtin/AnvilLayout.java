@@ -15,12 +15,12 @@ public class AnvilLayout implements RecipeLayout {
         components.add(new SlotComponent(
             baseX + 88, baseY + 88,
             "input1",
-            0
+            0, "", true
         ));
         components.add(new SlotComponent(
             baseX + 154, baseY + 88,
             "input2",
-            1
+            1, "", true
         ));
         
         return components;

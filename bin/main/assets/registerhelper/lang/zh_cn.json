@@ -1,0 +1,18 @@
+{
+  "registerhelper.jei.brewing": "自定义酿造台",
+  "registerhelper.jei.brewing.steps": "步数: %s",
+  "registerhelper.jei.anvil": "自定义铁砧",
+  "registerhelper.jei.anvil.cost": "附魔花费: %d",
+  "registerhelper.jei.anvil.material": "消耗 %d 个材料",
+  "itemGroup.registerhelper.placeholder_items": "占位物品",
+  "item.registerhelper.placeholder_0": "占位物品 0",
+  "item.registerhelper.placeholder_1": "占位物品 1",
+  "item.registerhelper.placeholder_2": "占位物品 2",
+  "item.registerhelper.placeholder_3": "占位物品 3",
+  "item.registerhelper.placeholder_4": "占位物品 4",
+  "item.registerhelper.placeholder_5": "占位物品 5",
+  "item.registerhelper.placeholder_6": "占位物品 6",
+  "item.registerhelper.placeholder_7": "占位物品 7",
+  "item.registerhelper.placeholder_8": "占位物品 8",
+  "item.registerhelper.placeholder_9": "占位物品 9"
+}

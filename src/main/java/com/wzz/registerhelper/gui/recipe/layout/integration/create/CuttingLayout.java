@@ -15,7 +15,7 @@ public class CuttingLayout implements RecipeLayout {
         components.add(new SlotComponent(
                 baseX + 66, baseY + 66,
                 "create_cutting",
-                0
+                0, "", true
         ));
         components.add(new NumberInputComponent(
                 baseX + 198, baseY + 132,

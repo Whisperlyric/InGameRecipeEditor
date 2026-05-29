@@ -78,7 +78,7 @@ public class ChemicalCrystallizerLayout implements RecipeLayout {
     
     @Override
     public String getLayoutName() {
-        return "Chemical Crystallizer (化学结晶器) - " + currentInputType.getDisplayName();
+        return "Chemical Crystallizer (化学结晶器)" + currentInputType.getDisplayName();
     }
     
     @Override

@@ -1,0 +1,18 @@
+{
+  "registerhelper.jei.brewing": "Custom Brewing",
+  "registerhelper.jei.anvil": "Custom Anvil",
+  "registerhelper.jei.anvil.cost": "Cost: %d Levels",
+  "registerhelper.jei.anvil.material": "Consumes %d materials",
+  "registerhelper.jei.brewing.steps": "Steps: %s",
+  "itemGroup.registerhelper.placeholder_items": "Placeholder Items",
+  "item.registerhelper.placeholder_0": "Placeholder Item 0",
+  "item.registerhelper.placeholder_1": "Placeholder Item 1",
+  "item.registerhelper.placeholder_2": "Placeholder Item 2",
+  "item.registerhelper.placeholder_3": "Placeholder Item 3",
+  "item.registerhelper.placeholder_4": "Placeholder Item 4",
+  "item.registerhelper.placeholder_5": "Placeholder Item 5",
+  "item.registerhelper.placeholder_6": "Placeholder Item 6",
+  "item.registerhelper.placeholder_7": "Placeholder Item 7",
+  "item.registerhelper.placeholder_8": "Placeholder Item 8",
+  "item.registerhelper.placeholder_9": "Placeholder Item 9"
+}

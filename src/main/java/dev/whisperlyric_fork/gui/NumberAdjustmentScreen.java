@@ -24,6 +24,12 @@ public class NumberAdjustmentScreen extends Screen {
     private Button btnMin;
     private Button btnMax;
     
+    private int sliderX;
+    private int sliderY;
+    private int sliderWidth = 200;
+    private int sliderHeight = 20;
+    private boolean isDraggingSlider = false;
+    
     public NumberAdjustmentScreen(Screen parent, int minValue, int maxValue, int currentValue, Consumer<Integer> callback) {
         this(parent, (long)minValue, (long)maxValue, (long)currentValue, value -> callback.accept(value.intValue()), false);
     }
@@ -44,6 +50,9 @@ public class NumberAdjustmentScreen extends Screen {
         
         int centerX = this.width / 2;
         int centerY = this.height / 2;
+        
+        sliderX = centerX - sliderWidth / 2;
+        sliderY = centerY - 45;
         
         valueInput = new EditBox(
             Minecraft.getInstance().font,
@@ -87,7 +96,12 @@ public class NumberAdjustmentScreen extends Screen {
         
         btnCancel = Button.builder(
             Component.literal("取消"),
-            button -> Minecraft.getInstance().setScreen(parent)
+            button -> {
+                if (parent instanceof com.wzz.registerhelper.gui.RecipeCreatorScreen recipeCreator) {
+                    recipeCreator.clearAllSelections();
+                }
+                Minecraft.getInstance().setScreen(parent);
+            }
         ).bounds(centerX + 10, centerY + 40, 50, 20).build();
         
         addRenderableWidget(btnMin);
@@ -105,7 +119,7 @@ public class NumberAdjustmentScreen extends Screen {
             Minecraft.getInstance().font,
             Component.literal(title),
             this.width / 2,
-            this.height / 2 - 60,
+            this.height / 2 - 70,
             0xFFFFFF
         );
         
@@ -114,9 +128,11 @@ public class NumberAdjustmentScreen extends Screen {
             Minecraft.getInstance().font,
             Component.literal(range),
             this.width / 2,
-            this.height / 2 - 45,
+            this.height / 2 - 55,
             0xAAAAAA
         );
+        
+        renderSlider(guiGraphics, mouseX, mouseY);
         
         if (isEnergyMode) {
             try {
@@ -138,15 +154,79 @@ public class NumberAdjustmentScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
     
+    private void renderSlider(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        guiGraphics.fill(sliderX, sliderY, sliderX + sliderWidth, sliderY + sliderHeight, 0xFF555555);
+        guiGraphics.fill(sliderX + 1, sliderY + 1, sliderX + sliderWidth - 1, sliderY + sliderHeight - 1, 0xFF000000);
+        
+        double ratio = (double)(currentValue - minValue) / (double)(maxValue - minValue);
+        int handleX = sliderX + (int)(ratio * (sliderWidth - 8));
+        int handleY = sliderY + 2;
+        
+        boolean isHovering = mouseX >= handleX && mouseX < handleX + 8 && 
+                            mouseY >= handleY && mouseY < handleY + sliderHeight - 4;
+        
+        int handleColor = isHovering || isDraggingSlider ? 0xFFAAAAAA : 0xFF888888;
+        guiGraphics.fill(handleX, handleY, handleX + 8, handleY + sliderHeight - 4, handleColor);
+    }
+    
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            if (mouseX >= sliderX && mouseX < sliderX + sliderWidth &&
+                mouseY >= sliderY && mouseY < sliderY + sliderHeight) {
+                isDraggingSlider = true;
+                updateValueFromSlider(mouseX);
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+    
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (isDraggingSlider) {
+            updateValueFromSlider(mouseX);
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+    
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && isDraggingSlider) {
+            isDraggingSlider = false;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+    
+    private void updateValueFromSlider(double mouseX) {
+        double ratio = Math.max(0.0, Math.min(1.0, (mouseX - sliderX) / sliderWidth));
+        currentValue = minValue + (long)(ratio * (maxValue - minValue));
+        currentValue = Math.max(minValue, Math.min(maxValue, currentValue));
+        valueInput.setValue(String.valueOf(currentValue));
+    }
+    
     private void confirmValue() {
         try {
             long value = Long.parseLong(valueInput.getValue());
             value = Math.max(minValue, Math.min(maxValue, value));
             callback.accept(value);
+            if (parent instanceof com.wzz.registerhelper.gui.RecipeCreatorScreen recipeCreator) {
+                recipeCreator.clearAllSelections();
+            }
             Minecraft.getInstance().setScreen(parent);
         } catch (NumberFormatException e) {
             valueInput.setValue(String.valueOf(currentValue));
         }
+    }
+    
+    @Override
+    public void onClose() {
+        if (parent instanceof com.wzz.registerhelper.gui.RecipeCreatorScreen recipeCreator) {
+            recipeCreator.clearAllSelections();
+        }
+        minecraft.setScreen(parent);
     }
     
     @Override

@@ -33,7 +33,10 @@ public class SlotSelectionScreen extends Screen {
     public enum SlotType {
         ITEM,
         FLUID,
-        GAS
+        GAS,
+        SLURRY,
+        PIGMENT,
+        INFUSE_TYPE
     }
     
     public static class SlotSelectionResult {

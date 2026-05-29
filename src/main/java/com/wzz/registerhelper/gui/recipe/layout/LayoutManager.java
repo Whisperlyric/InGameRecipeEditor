@@ -72,7 +72,7 @@ public class LayoutManager {
         if (layout instanceof RotaryCondensentratorLayout rotaryLayout) {
             RotaryCondensentratorLayout.Mode layoutMode = switch (mode) {
                 case "reversible" -> RotaryCondensentratorLayout.Mode.REVERSIBLE;
-                case "evaporation" -> RotaryCondensentratorLayout.Mode.EVAPORATION;
+                case "decondensation" -> RotaryCondensentratorLayout.Mode.DECONDENSATION;
                 case "condensation" -> RotaryCondensentratorLayout.Mode.CONDENSATION;
                 default -> RotaryCondensentratorLayout.Mode.REVERSIBLE;
             };

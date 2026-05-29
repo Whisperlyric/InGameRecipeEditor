@@ -31,7 +31,7 @@ public class StonecuttingLayout implements RecipeLayout {
             baseX + slotSpacing, 
             baseY + slotSpacing, 
             "input",
-            0
+            0, "", true
         ));
         
         return components;
