@@ -55,7 +55,7 @@ public class SpecialPropertiesEditScreen extends Screen {
     private void initializeProperties() {
         switch (machineType) {
             case "mekanism:sawing" -> {
-                properties.add(new PropertyDefinition("secondaryChance", "副产物概率", 0.0, 1.0, 1.0, false));
+                properties.add(new PropertyDefinition("secondaryChance", "副产物概率", 0.00, 1.00, 1.00, false));
             }
             case "mekanism:separating" -> {
                 properties.add(new PropertyDefinition("energyMultiplier", "耗电倍率", 0.0, 1000.0, 1.0, false));
@@ -171,9 +171,10 @@ public class SpecialPropertiesEditScreen extends Screen {
             PropertyDefinition prop = properties.get(i);
             int rowY = startY + i * 30;
             
-            String rangeText = String.format("[%s - %s]", 
-                prop.isInteger ? String.valueOf((long)prop.minValue) : String.valueOf(prop.minValue),
-                prop.isInteger ? String.valueOf((long)prop.maxValue) : String.valueOf(prop.maxValue));
+            String minDisplay = prop.isInteger ? String.valueOf((long)prop.minValue) : String.valueOf(prop.minValue);
+            String maxDisplay = formatMaxValue(prop.maxValue);
+            
+            String rangeText = String.format("%s - %s", minDisplay, maxDisplay);
             
             String labelText = prop.displayName + " " + rangeText;
             
@@ -193,5 +194,15 @@ public class SpecialPropertiesEditScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+    
+    private String formatMaxValue(double maxValue) {
+        if (maxValue == Integer.MAX_VALUE) {
+            return "2^31-1";
+        } else if (maxValue == Long.MAX_VALUE) {
+            return "2^63-1";
+        } else {
+            return String.valueOf((long)maxValue);
+        }
     }
 }
