@@ -91,149 +91,31 @@ public class MekanismIntegration {
     private static void registerRecipeTypes() {
         MekanismProcessor processor = new MekanismProcessor();
         
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:crushing", "通用机械:粉碎机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "crushing")
-                .property("layout", "mekanism_crushing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:enriching", "通用机械:富集仓")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "enriching")
-                .property("layout", "mekanism_enriching")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:smelting", "通用机械:电力熔炼炉")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "smelting")
-                .property("layout", "mekanism_smelting")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:combining", "通用机械:融合机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "combining")
-                .property("layout", "mekanism_combining")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:compressing", "通用机械:锇压缩机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "compressing")
-                .property("layout", "mekanism_compressing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:purifying", "通用机械:提纯仓")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "purifying")
-                .property("layout", "mekanism_purifying")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:injecting", "通用机械:化学压射室")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "injecting")
-                .property("layout", "mekanism_injecting")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:metallurgic_infusing", "通用机械:冶金灌注机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "metallurgic_infusing")
-                .property("layout", "mekanism_metallurgic_infusing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:sawing", "通用机械:精密锯木机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "sawing")
-                .property("layout", "mekanism_sawing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:chemical_infusing", "通用机械:化学灌注器")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "chemical_infusing")
-                .property("layout", "mekanism_chemical_infusing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:crystallizing", "通用机械:化学结晶器")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "crystallizing")
-                .property("layout", "mekanism_chemical_crystallizer")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:dissolution", "通用机械:化学溶解室")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "dissolution")
-                .property("layout", "mekanism_dissolution")
-                .processor(processor)
-                .build()
-        );
+        registerSimpleRecipeType(processor, "crushing", "粉碎机", "mekanism_crushing");
+        registerSimpleRecipeType(processor, "enriching", "富集仓", "mekanism_enriching");
+        registerSimpleRecipeType(processor, "smelting", "电力熔炼炉", "mekanism_smelting");
+        registerSimpleRecipeType(processor, "combining", "融合机", "mekanism_combining");
+        registerSimpleRecipeType(processor, "compressing", "锇压缩机", "mekanism_compressing");
+        registerSimpleRecipeType(processor, "purifying", "提纯仓", "mekanism_purifying");
+        registerSimpleRecipeType(processor, "injecting", "化学压射室", "mekanism_injecting");
+        registerSimpleRecipeType(processor, "metallurgic_infusing", "冶金灌注机", "mekanism_metallurgic_infusing");
+        registerSimpleRecipeType(processor, "sawing", "精密锯木机", "mekanism_sawing");
+        registerSimpleRecipeType(processor, "chemical_infusing", "化学灌注器", "mekanism_chemical_infusing");
+        registerSimpleRecipeType(processor, "crystallizing", "化学结晶器", "mekanism_chemical_crystallizer");
+        registerSimpleRecipeType(processor, "dissolution", "化学溶解室", "mekanism_dissolution");
+        registerSimpleRecipeType(processor, "evaporating", "热力蒸馏塔", "mekanism_evaporating");
+        registerSimpleRecipeType(processor, "nucleosynthesizing", "反质子核合成器", "mekanism_nucleosynthesizing");
+        registerSimpleRecipeType(processor, "centrifuging", "同位素离心机", "mekanism_centrifuging");
+        registerSimpleRecipeType(processor, "activating", "太阳能中子活化器", "mekanism_activating");
+        registerSimpleRecipeType(processor, "oxidizing", "化学氧化机", "mekanism_chemical_oxidizer");
+        registerSimpleRecipeType(processor, "separating", "电解分离器", "mekanism_electrolytic_separator");
+        registerSimpleRecipeType(processor, "washing", "化学清洗机", "mekanism_washing");
+        registerSimpleRecipeType(processor, "reaction", "加压反应室", "mekanism_reaction");
+        registerSimpleRecipeType(processor, "painting", "上色机", "mekanism_painting");
+        registerSimpleRecipeType(processor, "pigment_mixing", "颜料混合器", "mekanism_pigment_mixing");
+        registerSimpleRecipeType(processor, "pigment_extracting", "颜料提取器", "mekanism_pigment_extracting");
+        registerSimpleRecipeType(processor, "gas_conversion", "物品到气体", "mekanism_gas_conversion", 1, 1);
+        registerSimpleRecipeType(processor, "infusion_conversion", "物品到灌注类型", "mekanism_infusion_conversion", 1, 1);
         
         DynamicRecipeTypeConfig.registerRecipeType(
             new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:energy_conversion", "通用机械:物品到能量")
@@ -248,161 +130,23 @@ public class MekanismIntegration {
                 .build()
         );
         
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:evaporating", "通用机械:热力蒸馏塔")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "evaporating")
-                .property("layout", "mekanism_evaporating")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:nucleosynthesizing", "通用机械:反质子核合成器")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "antiprotonic_nucleosynthesizer")
-                .property("layout", "mekanism_nucleosynthesizing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:centrifuging", "通用机械:同位素离心机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "centrifuging")
-                .property("layout", "mekanism_centrifuging")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:activating", "通用机械:太阳能中子活化器")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "activating")
-                .property("layout", "mekanism_activating")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:oxidizing", "通用机械:化学氧化机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "chemical_oxidizer")
-                .property("layout", "mekanism_chemical_oxidizer")
-                .processor(processor)
-                .build()
-        );
-        
         RegisterHelper.registerRecipeTypeWithLayout("mekanism", "rotary",
                 "通用机械:回旋式气液转换器", processor, "mekanism_rotary_condensentrator");
-        
+    }
+    
+    private static void registerSimpleRecipeType(MekanismProcessor processor, String type, String displayName, String layoutId) {
+        registerSimpleRecipeType(processor, type, displayName, layoutId, 3, 3);
+    }
+    
+    private static void registerSimpleRecipeType(MekanismProcessor processor, String type, String displayName, String layoutId, int gridWidth, int gridHeight) {
         DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:separating", "通用机械:电解分离器")
+            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:" + type, "通用机械:" + displayName)
                 .modId("mekanism")
-                .gridSize(3, 3)
+                .gridSize(gridWidth, gridHeight)
                 .supportsFillMode(false)
                 .property("category", "mekanism")
-                .property("mode", "separating")
-                .property("layout", "mekanism_electrolytic_separator")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:washing", "通用机械:化学清洗机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "washing")
-                .property("layout", "mekanism_washing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:reaction", "通用机械:加压反应室")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "reaction")
-                .property("layout", "mekanism_reaction")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:painting", "通用机械:上色机")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "painting")
-                .property("layout", "mekanism_painting")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:pigment_mixing", "通用机械:颜料混合器")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "pigment_mixing")
-                .property("layout", "mekanism_pigment_mixing")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:pigment_extracting", "通用机械:颜料提取器")
-                .modId("mekanism")
-                .gridSize(3, 3)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "pigment_extracting")
-                .property("layout", "mekanism_pigment_extracting")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:gas_conversion", "通用机械:物品到气体")
-                .modId("mekanism")
-                .gridSize(1, 1)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "gas_conversion")
-                .property("layout", "mekanism_gas_conversion")
-                .processor(processor)
-                .build()
-        );
-        
-        DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:infusion_conversion", "通用机械:物品到灌注类型")
-                .modId("mekanism")
-                .gridSize(1, 1)
-                .supportsFillMode(false)
-                .property("category", "mekanism")
-                .property("mode", "infusion_conversion")
-                .property("layout", "mekanism_infusion_conversion")
+                .property("mode", type)
+                .property("layout", layoutId)
                 .processor(processor)
                 .build()
         );
