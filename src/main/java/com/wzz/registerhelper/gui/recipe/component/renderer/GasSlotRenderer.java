@@ -61,7 +61,10 @@ public class GasSlotRenderer implements ComponentRenderer {
         
         String gasId = component.getGasId();
         int amount = component.getAmount();
-        int maxAmount = 10000;
+        int maxAmount = component.getMaxAmount();
+        int displayDivisor = component.getDisplayDivisor();
+        int displayAmount = component.getDisplayAmount();
+        int displayMaxAmount = maxAmount / displayDivisor;
         
         if (gasId != null && !gasId.isEmpty()) {
             try {
@@ -79,7 +82,7 @@ public class GasSlotRenderer implements ComponentRenderer {
                     }
                 }
                 
-                String amountText = formatAmount(amount);
+                String amountText = displayDivisor > 1 ? String.valueOf(displayAmount) : formatAmount(amount);
                 int textWidth = font.width(amountText);
                 if (textWidth < width - 4) {
                     guiGraphics.drawString(font, amountText, x + width / 2 - textWidth / 2, y + height / 2 - 4, 0xFFFFFF, true);
@@ -91,7 +94,7 @@ public class GasSlotRenderer implements ComponentRenderer {
         }
         
         if (isMouseOver) {
-            renderTooltip(guiGraphics, font, mouseX, mouseY, gasId, amount, maxAmount);
+            renderTooltip(guiGraphics, font, mouseX, mouseY, gasId, amount, maxAmount, displayDivisor);
         }
     }
     
@@ -308,8 +311,11 @@ public class GasSlotRenderer implements ComponentRenderer {
         }
     }
     
-    private void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String gasId, int amount, int maxAmount) {
+    private void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String gasId, int amount, int maxAmount, int displayDivisor) {
         java.util.List<Component> tooltip = new java.util.ArrayList<>();
+        
+        int displayAmount = amount / displayDivisor;
+        int displayMaxAmount = maxAmount / displayDivisor;
         
         if (gasId == null || gasId.isEmpty()) {
             tooltip.add(Component.literal("§7空槽位"));
@@ -319,8 +325,13 @@ public class GasSlotRenderer implements ComponentRenderer {
             tooltip.add(Component.literal("§6" + gasName));
             tooltip.add(Component.literal("§7" + gasId));
             tooltip.add(Component.empty());
-            tooltip.add(Component.literal("§f存储量: §e" + formatAmountDetailed(amount)));
-            tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
+            if (displayDivisor > 1) {
+                tooltip.add(Component.literal("§f数量: §e" + displayAmount + " (×" + displayDivisor + " mB)"));
+                tooltip.add(Component.literal("§f最大: §e" + displayMaxAmount + " (×" + displayDivisor + " mB)"));
+            } else {
+                tooltip.add(Component.literal("§f存储量: §e" + formatAmountDetailed(amount)));
+                tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
+            }
             tooltip.add(Component.literal("§f填充度: §b" + String.format("%.1f%%", (double) amount / maxAmount * 100)));
         }
         

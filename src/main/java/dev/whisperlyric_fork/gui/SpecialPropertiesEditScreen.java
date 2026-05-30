@@ -64,6 +64,9 @@ public class SpecialPropertiesEditScreen extends Screen {
                 properties.add(new PropertyDefinition("duration", "配方耗时", 1, Integer.MAX_VALUE, 100, true));
                 properties.add(new PropertyDefinition("energyRequired", "配方耗能", 0, Long.MAX_VALUE, 100000, true));
             }
+            case "mekanism:nucleosynthesizing" -> {
+                properties.add(new PropertyDefinition("duration", "配方耗时", 1, Integer.MAX_VALUE, 500, true));
+            }
         }
     }
     

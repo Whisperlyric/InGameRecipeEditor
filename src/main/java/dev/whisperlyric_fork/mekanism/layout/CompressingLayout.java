@@ -29,7 +29,9 @@ public class CompressingLayout implements RecipeLayout {
             1,
             "",
             0,
-            true
+            9000,
+            true,
+            200
         ));
         
         return components;

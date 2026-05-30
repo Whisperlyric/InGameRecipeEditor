@@ -37,7 +37,7 @@ public class InfusionConversionLayout implements RecipeLayout {
             ChemicalSlotComponent.ChemicalType.INFUSE_TYPE,
             "",
             0,
-            10000
+            9000
         ));
         
         return outputs;

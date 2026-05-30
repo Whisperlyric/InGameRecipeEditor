@@ -394,11 +394,6 @@ public class RecipeCreatorScreen extends Screen {
         
         specialProperties.clear();
 
-        // 保存数据
-        ItemStack currentResult = slotManager != null ? slotManager.getResultItem() : ItemStack.EMPTY;
-        List<ItemStack> currentIngredients = slotManager != null ?
-                new ArrayList<>(slotManager.getIngredients()) : new ArrayList<>();
-
         this.currentRecipeType = newType;
 
         Integer defaultTier = newType.getProperty("tier", Integer.class);
@@ -414,16 +409,7 @@ public class RecipeCreatorScreen extends Screen {
         this.clearWidgets();
         this.init();
 
-        if (slotManager != null && !currentResult.isEmpty()) {
-            slotManager.setResultItem(currentResult);
-
-            int newSlotCount = slotManager.getIngredientSlots().size();
-            for (int i = 0; i < Math.min(currentIngredients.size(), newSlotCount); i++) {
-                if (!currentIngredients.get(i).isEmpty()) {
-                    slotManager.setIngredient(i, currentIngredients.get(i));
-                }
-            }
-        }
+        clearAllIngredients();
 
         syncDataToRenderer();
     }
@@ -1216,6 +1202,9 @@ public class RecipeCreatorScreen extends Screen {
     }
     
     private void clearOutputSlot(int slotIndex) {
+        if (slotManager != null) {
+            slotManager.setOutputSlotItem(slotIndex, ItemStack.EMPTY);
+        }
         if (componentRenderManager != null) {
             componentRenderManager.updateSlotItem(slotIndex, ItemStack.EMPTY);
         }
@@ -1526,7 +1515,7 @@ public class RecipeCreatorScreen extends Screen {
         
         for (RecipeComponent component : components) {
             if (component instanceof FluidSlotComponent fluidComp) {
-                if (!isPressurizedReaction || !fluidComp.getId().contains("input")) {
+                if (fluidComp.getId().contains("input")) {
                     if (fluidComp.getAmount() <= 0 || fluidComp.getFluidId() == null || fluidComp.getFluidId().isEmpty()) {
                         displayError("请选择流体输入并设置数量！");
                         return;
@@ -1621,6 +1610,11 @@ public class RecipeCreatorScreen extends Screen {
                         displayError("请选择气体并设置数量！");
                         return;
                     }
+                } else if (outputComponent instanceof ChemicalSlotComponent chemicalComp) {
+                    if (chemicalComp.getAmount() <= 0 || chemicalComp.getChemicalId() == null || chemicalComp.getChemicalId().isEmpty()) {
+                        displayError("请选择化学物质并设置数量！");
+                        return;
+                    }
                 }
             } else {
                 ItemStack resultItem = slotManager.getResultItem();
@@ -1663,6 +1657,8 @@ public class RecipeCreatorScreen extends Screen {
                         if (id.contains("input")) {
                             componentData.put("fluidInput", fluidId);
                             componentData.put("fluidInputAmount", (int) fluidComp.getAmount());
+                            componentData.put("fluid", fluidId);
+                            componentData.put("fluidAmount", (int) fluidComp.getAmount());
                         } else if (id.contains("output")) {
                             componentData.put("fluidOutput", fluidId);
                             componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
@@ -1672,22 +1668,65 @@ public class RecipeCreatorScreen extends Screen {
                     String id = gasComp.getId();
                     String gasId = gasComp.getGasId();
                     if (gasId != null && !gasId.isEmpty()) {
-                        if (id.contains("input")) {
+                        if (id.equals("gas_input")) {
                             componentData.put("gasInput", gasId);
                             componentData.put("gasInputAmount", (int) gasComp.getAmount());
-                        } else if (id.contains("output")) {
+                            componentData.put("gas", gasId);
+                            componentData.put("gasAmount", (int) gasComp.getAmount());
+                        } else if (id.equals("gas_output")) {
                             componentData.put("gasOutput", gasId);
                             componentData.put("gasOutputAmount", (int) gasComp.getAmount());
+                        } else if (id.equals("left_gas_output")) {
+                            componentData.put("leftGas", gasId);
+                            componentData.put("leftGasAmount", (int) gasComp.getAmount());
+                        } else if (id.equals("right_gas_output")) {
+                            componentData.put("rightGas", gasId);
+                            componentData.put("rightGasAmount", (int) gasComp.getAmount());
+                        } else if (id.equals("left_gas_input")) {
+                            componentData.put("leftGas", gasId);
+                            componentData.put("leftAmount", (int) gasComp.getAmount());
+                        } else if (id.equals("right_gas_input")) {
+                            componentData.put("rightGas", gasId);
+                            componentData.put("rightAmount", (int) gasComp.getAmount());
+                        } else if (id.contains("input")) {
+                            componentData.put("gas", gasId);
+                            componentData.put("gasAmount", (int) gasComp.getAmount());
                         }
                     }
                 } else if (component instanceof ChemicalSlotComponent chemicalComp) {
                     String id = chemicalComp.getId();
                     String chemicalId = chemicalComp.getChemicalId();
                     if (chemicalId != null && !chemicalId.isEmpty()) {
+                        ChemicalSlotComponent.ChemicalType type = chemicalComp.getChemicalType();
                         if (id.contains("input")) {
-                            componentData.put("inputGas", chemicalId);
-                            componentData.put("inputAmount", (int) chemicalComp.getAmount());
-                            componentData.put("chemicalType", chemicalComp.getChemicalType().getId());
+                            if (type == ChemicalSlotComponent.ChemicalType.PIGMENT) {
+                                if (id.contains("left")) {
+                                    componentData.put("leftPigment", chemicalId);
+                                    componentData.put("leftAmount", (int) chemicalComp.getAmount());
+                                } else if (id.contains("right")) {
+                                    componentData.put("rightPigment", chemicalId);
+                                    componentData.put("rightAmount", (int) chemicalComp.getAmount());
+                                } else {
+                                    componentData.put("pigment", chemicalId);
+                                    componentData.put("pigmentAmount", (int) chemicalComp.getAmount());
+                                }
+                            } else if (type == ChemicalSlotComponent.ChemicalType.INFUSE_TYPE) {
+                                componentData.put("infuseType", chemicalId);
+                                componentData.put("infuseAmount", (int) chemicalComp.getAmount());
+                            } else {
+                                componentData.put("inputGas", chemicalId);
+                                componentData.put("inputAmount", (int) chemicalComp.getAmount());
+                                componentData.put("chemicalType", type.getId());
+                            }
+                        } else if (id.contains("output")) {
+                            if (type == ChemicalSlotComponent.ChemicalType.PIGMENT) {
+                                componentData.put("outputPigment", chemicalId);
+                                componentData.put("outputAmount", (int) chemicalComp.getAmount());
+                            } else {
+                                componentData.put("chemicalOutput", chemicalId);
+                                componentData.put("chemicalOutputAmount", (int) chemicalComp.getAmount());
+                                componentData.put("chemicalType", type.getId());
+                            }
                         }
                     }
                 }
@@ -1707,6 +1746,13 @@ public class RecipeCreatorScreen extends Screen {
                 componentData.put("gasOutput", gasId);
                 componentData.put("gasOutputAmount", (int) gasComp.getAmount());
             }
+        } else if (outputComp instanceof ChemicalSlotComponent chemicalComp) {
+            String chemicalId = chemicalComp.getChemicalId();
+            if (chemicalId != null && !chemicalId.isEmpty()) {
+                componentData.put("chemicalOutput", chemicalId);
+                componentData.put("chemicalOutputAmount", (int) chemicalComp.getAmount());
+                componentData.put("chemicalType", chemicalComp.getChemicalType().getId());
+            }
         }
         
         List<RecipeComponent> outputComps = slotManager.getOutputComponents();
@@ -1719,10 +1765,25 @@ public class RecipeCreatorScreen extends Screen {
                     ItemStack item = slotManager.getOutputSlotItem(slotComp.getSlotIndex());
                     outputItems.add(item);
                     outputProbabilities.add(slotComp.getProbability());
+                } else if (comp instanceof FluidSlotComponent fluidComp) {
+                    String fluidId = fluidComp.getFluidId();
+                    if (fluidId != null && !fluidId.isEmpty()) {
+                        if (fluidComp.getId().contains("output")) {
+                            componentData.put("fluidOutput", fluidId);
+                            componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
+                        }
+                    }
                 } else if (comp instanceof GasSlotComponent gasComp) {
                     String gasId = gasComp.getGasId();
                     if (gasId != null && !gasId.isEmpty()) {
-                        if (gasComp.getId().contains("output")) {
+                        String compId = gasComp.getId();
+                        if (compId.equals("left_gas_output")) {
+                            componentData.put("leftGas", gasId);
+                            componentData.put("leftGasAmount", (int) gasComp.getAmount());
+                        } else if (compId.equals("right_gas_output")) {
+                            componentData.put("rightGas", gasId);
+                            componentData.put("rightGasAmount", (int) gasComp.getAmount());
+                        } else if (compId.contains("output")) {
                             componentData.put("gasOutput", gasId);
                             componentData.put("gasOutputAmount", (int) gasComp.getAmount());
                         }
@@ -1731,9 +1792,15 @@ public class RecipeCreatorScreen extends Screen {
                     String chemicalId = chemicalComp.getChemicalId();
                     if (chemicalId != null && !chemicalId.isEmpty()) {
                         if (chemicalComp.getId().contains("output")) {
-                            componentData.put("chemicalOutput", chemicalId);
-                            componentData.put("chemicalOutputAmount", (int) chemicalComp.getAmount());
-                            componentData.put("chemicalType", chemicalComp.getChemicalType().getId());
+                            ChemicalSlotComponent.ChemicalType type = chemicalComp.getChemicalType();
+                            if (type == ChemicalSlotComponent.ChemicalType.PIGMENT) {
+                                componentData.put("outputPigment", chemicalId);
+                                componentData.put("outputAmount", (int) chemicalComp.getAmount());
+                            } else {
+                                componentData.put("chemicalOutput", chemicalId);
+                                componentData.put("chemicalOutputAmount", (int) chemicalComp.getAmount());
+                                componentData.put("chemicalType", type.getId());
+                            }
                         }
                     }
                 }
@@ -2429,21 +2496,23 @@ public class RecipeCreatorScreen extends Screen {
                 ));
             }
         } else if (selectedGasSlot != null) {
-            int currentAmount = selectedGasSlot.getAmount();
-            int maxAmount = 10000;
+            int displayDivisor = selectedGasSlot.getDisplayDivisor();
+            int currentDisplayAmount = selectedGasSlot.getDisplayAmount();
+            int maxDisplayAmount = selectedGasSlot.getMaxAmount() / displayDivisor;
             if (minecraft != null) {
                 minecraft.setScreen(new dev.whisperlyric_fork.gui.NumberAdjustmentScreen(
                     this,
-                    0,
-                    maxAmount,
-                    currentAmount,
-                    newAmount -> {
-                        selectedGasSlot.setAmount(newAmount);
+                    displayDivisor > 1 ? 1 : 0,
+                    maxDisplayAmount,
+                    currentDisplayAmount,
+                    newDisplayAmount -> {
+                        int actualAmount = newDisplayAmount * displayDivisor;
+                        selectedGasSlot.setAmount(actualAmount);
                         if (componentRenderManager != null && slotManager != null) {
                             componentRenderManager.initializeRenderers(slotManager.getComponents());
                         }
-                        displayInfo("已更改气体数量为: " + newAmount);
-                    }
+                    },
+                    displayDivisor
                 ));
             }
         } else if (selectedChemicalSlot != null) {
@@ -2545,6 +2614,8 @@ public class RecipeCreatorScreen extends Screen {
             return "mekanism:separating";
         } else if (typeId.equals("mekanism:reaction")) {
             return "mekanism:reaction";
+        } else if (typeId.equals("mekanism:nucleosynthesizing")) {
+            return "mekanism:nucleosynthesizing";
         }
         return null;
     }
@@ -2565,8 +2636,10 @@ public class RecipeCreatorScreen extends Screen {
                 if (!specialProperties.containsKey("duration")) {
                     specialProperties.put("duration", 100L);
                 }
-                if (!specialProperties.containsKey("energyRequired")) {
-                    specialProperties.put("energyRequired", 100000L);
+            }
+            case "mekanism:nucleosynthesizing" -> {
+                if (!specialProperties.containsKey("duration")) {
+                    specialProperties.put("duration", 500L);
                 }
             }
         }
@@ -2818,5 +2891,13 @@ public class RecipeCreatorScreen extends Screen {
         if (minecraft != null && minecraft.player != null) {
             minecraft.player.sendSystemMessage(Component.literal("§e" + message));
         }
+    }
+    
+    public ComponentRenderManager getComponentRenderManager() {
+        return componentRenderManager;
+    }
+    
+    public SlotManager getSlotManager() {
+        return slotManager;
     }
 }

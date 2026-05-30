@@ -249,7 +249,7 @@ public class MekanismIntegration {
         );
         
         DynamicRecipeTypeConfig.registerRecipeType(
-            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:evaporating", "通用机械:蒸馏塔")
+            new DynamicRecipeTypeConfig.RecipeTypeDefinition.Builder("mekanism:evaporating", "通用机械:热力蒸馏塔")
                 .modId("mekanism")
                 .gridSize(3, 3)
                 .supportsFillMode(false)

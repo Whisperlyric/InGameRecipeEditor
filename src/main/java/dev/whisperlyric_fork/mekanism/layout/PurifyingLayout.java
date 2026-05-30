@@ -29,7 +29,9 @@ public class PurifyingLayout implements RecipeLayout {
             1,
             "",
             0,
-            true
+            1800,
+            true,
+            200
         ));
         
         return components;

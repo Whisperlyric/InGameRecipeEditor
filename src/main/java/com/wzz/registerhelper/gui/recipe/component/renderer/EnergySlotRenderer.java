@@ -72,7 +72,9 @@ public class EnergySlotRenderer implements ComponentRenderer {
             0L,
             component.getMaxEnergy(),
             component.getEnergy(),
-            energy -> component.setEnergy(energy),
+            energy -> {
+                component.setEnergy(energy);
+            },
             true
         ));
     }

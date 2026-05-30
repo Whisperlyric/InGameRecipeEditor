@@ -1,6 +1,7 @@
 package dev.whisperlyric_fork.mekanism.layout;
 
 import com.wzz.registerhelper.gui.recipe.component.SlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.ChemicalSlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
 import com.wzz.registerhelper.gui.recipe.layout.RecipeLayout;
 
@@ -23,8 +24,21 @@ public class PigmentExtractingLayout implements RecipeLayout {
         return components;
     }
     
-    public int getOutputSlotIndex() {
-        return 1;
+    @Override
+    public List<RecipeComponent> generateOutputComponents(int outputX, int outputY) {
+        List<RecipeComponent> outputs = new ArrayList<>();
+        
+        outputs.add(new ChemicalSlotComponent(
+            outputX, outputY,
+            "pigment_output",
+            1,
+            ChemicalSlotComponent.ChemicalType.PIGMENT,
+            "",
+            0,
+            10000
+        ));
+        
+        return outputs;
     }
     
     public String getOutputType() {
