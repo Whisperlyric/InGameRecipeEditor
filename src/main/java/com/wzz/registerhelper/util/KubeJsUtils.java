@@ -453,20 +453,30 @@ public class KubeJsUtils {
     
     private static String formatIngredient(JsonObject ingredient) {
         if (ingredient.has("ingredient")) {
-            return formatIngredient(ingredient.getAsJsonObject("ingredient"));
+            JsonObject inner = ingredient.getAsJsonObject("ingredient");
+            int amount = ingredient.has("amount") ? ingredient.get("amount").getAsInt() : 1;
+            String innerFormat = formatIngredientObject(inner);
+            if (amount > 1) {
+                return "{ amount: " + amount + ", ingredient: " + innerFormat + " }";
+            }
+            return "{ ingredient: " + innerFormat + " }";
         } else if (ingredient.has("tag")) {
-            return "'#" + ingredient.get("tag").getAsString() + "'";
+            return "{ ingredient: { tag: '" + ingredient.get("tag").getAsString() + "' } }";
         } else if (ingredient.has("item")) {
             String item = ingredient.get("item").getAsString();
-            int count = ingredient.has("count") ? ingredient.get("count").getAsInt() : 1;
-            StringBuilder ing = new StringBuilder("'");
-            if (count > 1) {
-                ing.append(count).append("x ");
-            }
-            ing.append(item).append("'");
-            return ing.toString();
+            return "{ ingredient: { item: '" + item + "' } }";
         }
-        return "'minecraft:air'";
+        return "{ ingredient: { item: 'minecraft:air' } }";
+    }
+    
+    private static String formatIngredientObject(JsonObject ingredient) {
+        if (ingredient.has("tag")) {
+            return "{ tag: '" + ingredient.get("tag").getAsString() + "' }";
+        } else if (ingredient.has("item")) {
+            String item = ingredient.get("item").getAsString();
+            return "{ item: '" + item + "' }";
+        }
+        return "{ item: 'minecraft:air' }";
     }
     
     private static String formatChemicalObject(JsonObject obj) {
@@ -867,10 +877,10 @@ public class KubeJsUtils {
         script.append("        ").append(formatOutput(recipeJson.getAsJsonObject("output")));
         script.append(",\n        ");
         script.append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
-        if (recipeJson.has("gasInput")) {
-            JsonObject gasInput = recipeJson.getAsJsonObject("gasInput");
-            script.append(", { gas: '").append(gasInput.get("gas").getAsString()).append("'");
-            script.append(", amount: ").append(gasInput.get("amount").getAsInt()).append(" }");
+        if (recipeJson.has("chemicalInput")) {
+            JsonObject chemicalInput = recipeJson.getAsJsonObject("chemicalInput");
+            script.append(", { gas: '").append(chemicalInput.get("gas").getAsString()).append("'");
+            script.append(", amount: ").append(chemicalInput.get("amount").getAsInt()).append(" }");
         }
         script.append("\n    )");
         return script.toString();
@@ -882,10 +892,10 @@ public class KubeJsUtils {
         script.append("        ").append(formatOutput(recipeJson.getAsJsonObject("output")));
         script.append(",\n        ");
         script.append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
-        if (recipeJson.has("gasInput")) {
-            JsonObject gasInput = recipeJson.getAsJsonObject("gasInput");
-            script.append(", { gas: '").append(gasInput.get("gas").getAsString()).append("'");
-            script.append(", amount: ").append(gasInput.get("amount").getAsInt()).append(" }");
+        if (recipeJson.has("chemicalInput")) {
+            JsonObject chemicalInput = recipeJson.getAsJsonObject("chemicalInput");
+            script.append(", { gas: '").append(chemicalInput.get("gas").getAsString()).append("'");
+            script.append(", amount: ").append(chemicalInput.get("amount").getAsInt()).append(" }");
         }
         script.append("\n    )");
         return script.toString();
@@ -897,10 +907,10 @@ public class KubeJsUtils {
         script.append("        ").append(formatOutput(recipeJson.getAsJsonObject("output")));
         script.append(",\n        ");
         script.append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
-        if (recipeJson.has("gasInput")) {
-            JsonObject gasInput = recipeJson.getAsJsonObject("gasInput");
-            script.append(", { gas: '").append(gasInput.get("gas").getAsString()).append("'");
-            script.append(", amount: ").append(gasInput.get("amount").getAsInt()).append(" }");
+        if (recipeJson.has("chemicalInput")) {
+            JsonObject chemicalInput = recipeJson.getAsJsonObject("chemicalInput");
+            script.append(", { gas: '").append(chemicalInput.get("gas").getAsString()).append("'");
+            script.append(", amount: ").append(chemicalInput.get("amount").getAsInt()).append(" }");
         }
         script.append("\n    )");
         return script.toString();
@@ -1023,7 +1033,10 @@ public class KubeJsUtils {
             script.append("        leftGasOutput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("leftGasOutput"))).append(",\n");
         }
         if (recipeJson.has("rightGasOutput")) {
-            script.append("        rightGasOutput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("rightGasOutput"))).append("\n");
+            script.append("        rightGasOutput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("rightGasOutput"))).append(",\n");
+        }
+        if (recipeJson.has("energyMultiplier")) {
+            script.append("        energyMultiplier: ").append(recipeJson.get("energyMultiplier").getAsDouble()).append("\n");
         }
         script.append("    })");
         return script.toString();
@@ -1137,7 +1150,7 @@ public class KubeJsUtils {
     private static String convertMekanismCombiningToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
         script.append("    event.recipes.mekanism.combining(\n");
-        script.append("        ").append(formatOutput(recipeJson.getAsJsonObject("mainOutput")));
+        script.append("        ").append(formatOutput(recipeJson.getAsJsonObject("output")));
         script.append(",\n        ");
         script.append(formatIngredient(recipeJson.getAsJsonObject("mainInput")));
         script.append(",\n        ");
@@ -1152,10 +1165,10 @@ public class KubeJsUtils {
         script.append("        ").append(formatOutput(recipeJson.getAsJsonObject("output")));
         script.append(",\n        ");
         script.append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
-        if (recipeJson.has("infusionInput")) {
-            JsonObject infusionInput = recipeJson.getAsJsonObject("infusionInput");
-            script.append(", { infuse_type: '").append(infusionInput.get("infuse_type").getAsString()).append("'");
-            script.append(", amount: ").append(infusionInput.get("amount").getAsInt()).append(" }");
+        if (recipeJson.has("chemicalInput")) {
+            JsonObject chemicalInput = recipeJson.getAsJsonObject("chemicalInput");
+            script.append(", { infuse_type: '").append(chemicalInput.get("infuse_type").getAsString()).append("'");
+            script.append(", amount: ").append(chemicalInput.get("amount").getAsInt()).append(" }");
         }
         script.append("\n    )");
         return script.toString();
@@ -1236,21 +1249,29 @@ public class KubeJsUtils {
     
     private static String convertMekanismDissolutionToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.recipes.mekanism.dissolution(\n");
-        if (recipeJson.has("output")) {
-            JsonObject output = recipeJson.getAsJsonObject("output");
-            script.append("        { gas: '").append(output.get("gas").getAsString()).append("'");
-            script.append(", amount: ").append(output.get("amount").getAsInt()).append(" }");
-        }
-        script.append(",\n        ");
+        script.append("    event.custom({\n");
+        script.append("        type: 'mekanism:dissolution',\n");
         if (recipeJson.has("gasInput")) {
             JsonObject gasInput = recipeJson.getAsJsonObject("gasInput");
-            script.append("{ gas: '").append(gasInput.get("gas").getAsString()).append("'");
-            script.append(", amount: ").append(gasInput.get("amount").getAsInt()).append(" }");
+            script.append("        gasInput: { gas: '").append(gasInput.get("gas").getAsString()).append("'");
+            script.append(", amount: ").append(gasInput.get("amount").getAsInt()).append(" },\n");
         }
-        script.append(",\n        ");
-        script.append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
-        script.append("\n    )");
+        if (recipeJson.has("itemInput")) {
+            script.append("        itemInput: ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput"))).append(",\n");
+        }
+        if (recipeJson.has("output")) {
+            JsonObject output = recipeJson.getAsJsonObject("output");
+            script.append("        output: { ");
+            if (output.has("chemicalType")) {
+                script.append("chemicalType: '").append(output.get("chemicalType").getAsString()).append("', ");
+            }
+            String chemicalType = output.has("chemicalType") ? output.get("chemicalType").getAsString() : "slurry";
+            if (output.has(chemicalType)) {
+                script.append(chemicalType).append(": '").append(output.get(chemicalType).getAsString()).append("', ");
+            }
+            script.append("amount: ").append(output.get("amount").getAsInt()).append(" }\n");
+        }
+        script.append("    })");
         return script.toString();
     }
     
