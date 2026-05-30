@@ -23,7 +23,7 @@ public class CombiningLayout implements RecipeLayout {
         ));
         
         components.add(new SlotComponent(
-            baseX + SPACING, baseY,
+            baseX, baseY + SPACING,
             "extra_input",
             1, "", true
         ));

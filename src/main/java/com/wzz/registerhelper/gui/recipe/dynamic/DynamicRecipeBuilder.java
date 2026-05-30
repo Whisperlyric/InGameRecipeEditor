@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
 import com.wzz.registerhelper.gui.recipe.IngredientData;
 import com.wzz.registerhelper.gui.recipe.component.ComponentDataManager;
+import com.wzz.registerhelper.gui.recipe.component.ChemicalSlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.EnergySlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.FluidSlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.GasSlotComponent;
@@ -660,6 +661,11 @@ public class DynamicRecipeBuilder {
                     showError("请选择气体并设置数量！");
                     return false;
                 }
+            } else if (params.outputComponent instanceof ChemicalSlotComponent chemicalComp) {
+                if (chemicalComp.getAmount() <= 0 || chemicalComp.getChemicalId() == null) {
+                    showError("请选择化学物质并设置数量！");
+                    return false;
+                }
             }
         } else {
             if (params.resultItem.isEmpty()) {
@@ -676,8 +682,18 @@ public class DynamicRecipeBuilder {
         String recipeTypeId = params.recipeType.getId();
         boolean isRotary = "mekanism:rotary".equals(recipeTypeId);
         boolean isCrystallizing = "mekanism:crystallizing".equals(recipeTypeId);
+        boolean isWashing = "mekanism:washing".equals(recipeTypeId);
+        boolean isDissolution = "mekanism:dissolution".equals(recipeTypeId);
+        boolean isChemicalInfusing = "mekanism:chemical_infusing".equals(recipeTypeId);
+        boolean isCentrifuging = "mekanism:centrifuging".equals(recipeTypeId);
+        boolean isActivating = "mekanism:activating".equals(recipeTypeId);
+        boolean isSeparating = "mekanism:separating".equals(recipeTypeId);
+        boolean isEvaporating = "mekanism:evaporating".equals(recipeTypeId);
+        boolean isPigmentExtracting = "mekanism:pigment_extracting".equals(recipeTypeId);
+        boolean isPigmentMixing = "mekanism:pigment_mixing".equals(recipeTypeId);
         
-        if (isRotary || isCrystallizing) {
+        if (isRotary || isCrystallizing || isWashing || isChemicalInfusing || isCentrifuging || isActivating || 
+            isSeparating || isEvaporating || isPigmentExtracting || isPigmentMixing) {
             boolean hasChemicalInput = false;
             
             if (params.extraProperties != null) {
@@ -720,6 +736,62 @@ public class DynamicRecipeBuilder {
                     if (inputGas != null && !inputGas.isEmpty() && inputAmount > 0) {
                         hasChemicalInput = true;
                     }
+                } else if (isWashing) {
+                    String fluidInput = (String) params.extraProperties.get("fluidInput");
+                    Object fluidAmountObj = params.extraProperties.get("fluidInputAmount");
+                    int fluidAmount = fluidAmountObj instanceof Number ? ((Number) fluidAmountObj).intValue() : 0;
+                    String slurryInput = (String) params.extraProperties.get("inputGas");
+                    Object slurryAmountObj = params.extraProperties.get("inputAmount");
+                    int slurryAmount = slurryAmountObj instanceof Number ? ((Number) slurryAmountObj).intValue() : 0;
+                    if (fluidInput != null && !fluidInput.isEmpty() && fluidAmount > 0 &&
+                        slurryInput != null && !slurryInput.isEmpty() && slurryAmount > 0) {
+                        hasChemicalInput = true;
+                    }
+                } else if (isChemicalInfusing) {
+                    String leftGas = (String) params.extraProperties.get("leftGas");
+                    Object leftAmountObj = params.extraProperties.get("leftAmount");
+                    int leftAmount = leftAmountObj instanceof Number ? ((Number) leftAmountObj).intValue() : 0;
+                    String rightGas = (String) params.extraProperties.get("rightGas");
+                    Object rightAmountObj = params.extraProperties.get("rightAmount");
+                    int rightAmount = rightAmountObj instanceof Number ? ((Number) rightAmountObj).intValue() : 0;
+                    if (leftGas != null && !leftGas.isEmpty() && leftAmount > 0 &&
+                        rightGas != null && !rightGas.isEmpty() && rightAmount > 0) {
+                        hasChemicalInput = true;
+                    }
+                } else if (isCentrifuging || isActivating) {
+                    String gasInput = (String) params.extraProperties.get("gasInput");
+                    Object gasAmountObj = params.extraProperties.get("gasInputAmount");
+                    int gasAmount = gasAmountObj instanceof Number ? ((Number) gasAmountObj).intValue() : 0;
+                    if (gasInput != null && !gasInput.isEmpty() && gasAmount > 0) {
+                        hasChemicalInput = true;
+                    }
+                } else if (isSeparating) {
+                    String fluid = (String) params.extraProperties.get("fluid");
+                    Object fluidAmountObj = params.extraProperties.get("fluidAmount");
+                    int fluidAmount = fluidAmountObj instanceof Number ? ((Number) fluidAmountObj).intValue() : 0;
+                    if (fluid != null && !fluid.isEmpty() && fluidAmount > 0) {
+                        hasChemicalInput = true;
+                    }
+                } else if (isEvaporating) {
+                    String fluidInput = (String) params.extraProperties.get("fluidInput");
+                    Object fluidAmountObj = params.extraProperties.get("fluidInputAmount");
+                    int fluidAmount = fluidAmountObj instanceof Number ? ((Number) fluidAmountObj).intValue() : 0;
+                    if (fluidInput != null && !fluidInput.isEmpty() && fluidAmount > 0) {
+                        hasChemicalInput = true;
+                    }
+                } else if (isPigmentExtracting) {
+                    hasChemicalInput = true;
+                } else if (isPigmentMixing) {
+                    String leftPigment = (String) params.extraProperties.get("leftPigment");
+                    Object leftAmountObj = params.extraProperties.get("leftAmount");
+                    int leftAmount = leftAmountObj instanceof Number ? ((Number) leftAmountObj).intValue() : 0;
+                    String rightPigment = (String) params.extraProperties.get("rightPigment");
+                    Object rightAmountObj = params.extraProperties.get("rightAmount");
+                    int rightAmount = rightAmountObj instanceof Number ? ((Number) rightAmountObj).intValue() : 0;
+                    if (leftPigment != null && !leftPigment.isEmpty() && leftAmount > 0 &&
+                        rightPigment != null && !rightPigment.isEmpty() && rightAmount > 0) {
+                        hasChemicalInput = true;
+                    }
                 }
             }
             
@@ -741,6 +813,16 @@ public class DynamicRecipeBuilder {
             if (!hasIngredients) {
                 showError("请至少添加一个材料！");
                 return false;
+            }
+            
+            if (isDissolution && params.extraProperties != null) {
+                String gasInput = (String) params.extraProperties.get("gasInput");
+                Object gasAmountObj = params.extraProperties.get("gasInputAmount");
+                int gasAmount = gasAmountObj instanceof Number ? ((Number) gasAmountObj).intValue() : 0;
+                if (gasInput == null || gasInput.isEmpty() || gasAmount <= 0) {
+                    showError("请设置气体输入！");
+                    return false;
+                }
             }
         }
 

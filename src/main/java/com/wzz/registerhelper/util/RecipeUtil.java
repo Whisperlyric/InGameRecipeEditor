@@ -287,10 +287,6 @@ public class RecipeUtil {
             String itemId = getItemResourceLocation(stack.getItem()).toString();
             ingredientJson.addProperty("item", itemId);
 
-            if (stack.getCount() > 1) {
-                ingredientJson.addProperty("count", stack.getCount());
-            }
-
             if (includeNBT && stack.hasTag()) {
                 if (ignoreKeys != null && !ignoreKeys.isEmpty()) {
                     // ---- 部分匹配 registerhelper:partial_nbt ----

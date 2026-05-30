@@ -56,6 +56,14 @@ public interface RecipeLayout {
     }
     
     /**
+     * 获取输出槽位的索引
+     * @return 输出槽位索引，默认为0
+     */
+    default int getOutputSlotIndex() {
+        return 0;
+    }
+    
+    /**
      * 生成输出组件列表（用于多输出槽的情况）
      * @param outputX 输出区域的基础X坐标
      * @param outputY 输出区域的基础Y坐标

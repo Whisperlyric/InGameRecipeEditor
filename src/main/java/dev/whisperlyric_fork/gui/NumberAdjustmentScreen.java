@@ -17,6 +17,7 @@ public class NumberAdjustmentScreen extends Screen {
     private long currentValue;
     private final Consumer<Long> callback;
     private final boolean isEnergyMode;
+    private final int displayDivisor;
     
     private EditBox valueInput;
     private Button btnConfirm;
@@ -31,17 +32,32 @@ public class NumberAdjustmentScreen extends Screen {
     private boolean isDraggingSlider = false;
     
     public NumberAdjustmentScreen(Screen parent, int minValue, int maxValue, int currentValue, Consumer<Integer> callback) {
-        this(parent, (long)minValue, (long)maxValue, (long)currentValue, value -> callback.accept(value.intValue()), false);
+        this(parent, (long)minValue, (long)maxValue, (long)currentValue, value -> callback.accept(value.intValue()), false, 0);
     }
     
     public NumberAdjustmentScreen(Screen parent, long minValue, long maxValue, long currentValue, Consumer<Long> callback, boolean isEnergyMode) {
-        super(Component.literal(isEnergyMode ? "能量调整" : "数量调整"));
+        this(parent, minValue, maxValue, currentValue, callback, isEnergyMode, 0);
+    }
+    
+    public NumberAdjustmentScreen(Screen parent, int minValue, int maxValue, int currentValue, Consumer<Integer> callback, int displayDivisor) {
+        this(parent, (long)minValue, (long)maxValue, (long)currentValue, value -> callback.accept(value.intValue()), false, displayDivisor);
+    }
+    
+    public NumberAdjustmentScreen(Screen parent, long minValue, long maxValue, long currentValue, Consumer<Long> callback, boolean isEnergyMode, int displayDivisor) {
+        super(Component.literal(getTitleText(isEnergyMode, displayDivisor)));
         this.parent = parent;
         this.minValue = minValue;
         this.maxValue = maxValue;
         this.currentValue = Math.max(minValue, Math.min(maxValue, currentValue));
         this.callback = callback;
         this.isEnergyMode = isEnergyMode;
+        this.displayDivisor = displayDivisor;
+    }
+    
+    private static String getTitleText(boolean isEnergyMode, int displayDivisor) {
+        if (isEnergyMode) return "能量调整";
+        if (displayDivisor > 1) return "气体数量调整";
+        return "数量调整";
     }
     
     @Override
@@ -114,7 +130,7 @@ public class NumberAdjustmentScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics);
         
-        String title = isEnergyMode ? "能量调整" : "数量调整";
+        String title = getTitleText(isEnergyMode, displayDivisor);
         guiGraphics.drawCenteredString(
             Minecraft.getInstance().font,
             Component.literal(title),
@@ -147,7 +163,20 @@ public class NumberAdjustmentScreen extends Screen {
                     0xFFFF00
                 );
             } catch (NumberFormatException e) {
-                // 忽略无效输入
+            }
+        } else if (displayDivisor > 1) {
+            try {
+                long value = Long.parseLong(valueInput.getValue());
+                long actualMB = value * displayDivisor;
+                String conversion = String.format("×%d = %,d mB", displayDivisor, actualMB);
+                guiGraphics.drawCenteredString(
+                    Minecraft.getInstance().font,
+                    Component.literal(conversion),
+                    this.width / 2,
+                    this.height / 2 + 5,
+                    0xFFFF00
+                );
+            } catch (NumberFormatException e) {
             }
         }
         
@@ -227,6 +256,19 @@ public class NumberAdjustmentScreen extends Screen {
             recipeCreator.clearAllSelections();
         }
         minecraft.setScreen(parent);
+    }
+    
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 257 || keyCode == 335) {
+            confirmValue();
+            return true;
+        }
+        if (keyCode == 256) {
+            confirmValue();
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
     
     @Override

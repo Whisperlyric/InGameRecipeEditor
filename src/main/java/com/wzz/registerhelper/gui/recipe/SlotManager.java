@@ -146,6 +146,11 @@ public class SlotManager {
                                 if (oldItem != null && !oldItem.isEmpty()) {
                                     outputSlotItems.put(newSlot.getSlotIndex(), oldItem.copy());
                                 }
+                            } else if (newComp instanceof EnergySlotComponent newEnergy && oldComp instanceof EnergySlotComponent oldEnergy) {
+                                long oldEnergyValue = oldEnergy.getEnergy();
+                                if (oldEnergyValue > 0) {
+                                    newEnergy.setEnergy(oldEnergyValue);
+                                }
                             }
                         }
                     }
@@ -170,6 +175,18 @@ public class SlotManager {
             resultSlot = new IngredientSlot(outputX, outputY, -1);
             outputComponent = null;
             return;
+        }
+        
+        int outputSlotIndex = 0;
+        if (layoutId != null) {
+            RecipeLayout layout = LayoutManager.getLayout(layoutId);
+            if (layout != null) {
+                try {
+                    outputSlotIndex = layout.getOutputSlotIndex();
+                } catch (Exception e) {
+                    outputSlotIndex = 0;
+                }
+            }
         }
         
         switch (outputType) {
@@ -257,8 +274,18 @@ public class SlotManager {
                 resultSlot = null;
             }
             default -> {
-                resultSlot = new IngredientSlot(outputX, outputY, -1);
-                outputComponent = null;
+                if (outputType.equals("item")) {
+                    ItemStack oldItem = outputSlotItems.get(outputSlotIndex);
+                    SlotComponent newSlotComp = new SlotComponent(outputX, outputY, "item_output", outputSlotIndex, "", true);
+                    if (oldItem != null && !oldItem.isEmpty()) {
+                        outputSlotItems.put(outputSlotIndex, oldItem.copy());
+                    }
+                    outputComponent = newSlotComp;
+                    resultSlot = null;
+                } else {
+                    resultSlot = new IngredientSlot(outputX, outputY, -1);
+                    outputComponent = null;
+                }
             }
         }
         

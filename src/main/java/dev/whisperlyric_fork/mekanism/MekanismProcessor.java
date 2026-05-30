@@ -2,6 +2,7 @@ package dev.whisperlyric_fork.mekanism;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.wzz.registerhelper.gui.recipe.IngredientData;
 import com.wzz.registerhelper.recipe.RecipeRequest;
 import com.wzz.registerhelper.recipe.integration.ModRecipeProcessor;
 import net.minecraft.world.item.Item;
@@ -21,7 +22,29 @@ public class MekanismProcessor implements ModRecipeProcessor {
     
     private JsonObject wrapIngredient(Object ingredient) {
         JsonObject wrapper = new JsonObject();
-        wrapper.add("ingredient", createIngredientJson(ingredient));
+        
+        int amount = 1;
+        Object ingredientWithoutCount = ingredient;
+        
+        if (ingredient instanceof IngredientData data) {
+            if (data.getType() == IngredientData.Type.ITEM) {
+                ItemStack stack = data.getItemStack();
+                amount = stack.getCount();
+                ItemStack copiedStack = stack.copy();
+                copiedStack.setCount(1);
+                ingredientWithoutCount = copiedStack;
+            } else {
+                ingredientWithoutCount = data;
+            }
+        } else if (ingredient instanceof ItemStack stack) {
+            amount = stack.getCount();
+            ItemStack copiedStack = stack.copy();
+            copiedStack.setCount(1);
+            ingredientWithoutCount = copiedStack;
+        }
+        
+        wrapper.addProperty("amount", amount);
+        wrapper.add("ingredient", createIngredientJson(ingredientWithoutCount));
         return wrapper;
     }
     
@@ -30,6 +53,13 @@ public class MekanismProcessor implements ModRecipeProcessor {
             return number.intValue();
         }
         return defaultValue;
+    }
+    
+    private boolean isEmptyIngredient(Object ingredient) {
+        if (ingredient == null) return true;
+        if (ingredient instanceof IngredientData data) return data.isEmpty();
+        if (ingredient instanceof ItemStack stack) return stack.isEmpty();
+        return false;
     }
     
     private String getItemId(ItemStack stack) {
@@ -74,7 +104,9 @@ public class MekanismProcessor implements ModRecipeProcessor {
             "painting",
             "pigment_mixing",
             "pigment_extracting",
-            "separating"
+            "separating",
+            "gas_conversion",
+            "infusion_conversion"
         };
     }
 
@@ -115,6 +147,8 @@ public class MekanismProcessor implements ModRecipeProcessor {
             case "mekanism:pigment_mixing" -> createPigmentMixingRecipe(recipe, request);
             case "mekanism:pigment_extracting" -> createPigmentExtractingRecipe(recipe, request);
             case "mekanism:separating" -> createSeparatingRecipe(recipe, request);
+            case "mekanism:gas_conversion" -> createGasConversionRecipe(recipe, request);
+            case "mekanism:infusion_conversion" -> createInfusionConversionRecipe(recipe, request);
         }
         
         return recipe;
@@ -125,12 +159,21 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("input", wrapIngredient(request.ingredients[0]));
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(1)) {
+            outputItem = request.outputSlotItems.get(1);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createEnrichingRecipe(JsonObject recipe, RecipeRequest request) {
@@ -138,12 +181,21 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("input", wrapIngredient(request.ingredients[0]));
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(1)) {
+            outputItem = request.outputSlotItems.get(1);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createSmeltingRecipe(JsonObject recipe, RecipeRequest request) {
@@ -151,12 +203,21 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("input", wrapIngredient(request.ingredients[0]));
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(1)) {
+            outputItem = request.outputSlotItems.get(1);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createCombiningRecipe(JsonObject recipe, RecipeRequest request) {
@@ -168,12 +229,21 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("extraInput", wrapIngredient(request.ingredients[1]));
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            outputItem = request.outputSlotItems.get(2);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("mainOutput", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createCompressingRecipe(JsonObject recipe, RecipeRequest request) {
@@ -182,18 +252,28 @@ public class MekanismProcessor implements ModRecipeProcessor {
         }
         
         if (request.properties.containsKey("gas") && request.properties.containsKey("gasAmount")) {
-            JsonObject gasInput = new JsonObject();
-            gasInput.addProperty("gas", (String) request.properties.get("gas"));
-            gasInput.addProperty("amount", getIntValue(request.properties.get("gasAmount"), 100));
-            recipe.add("gasInput", gasInput);
+            JsonObject chemicalInput = new JsonObject();
+            chemicalInput.addProperty("gas", (String) request.properties.get("gas"));
+            int gasAmountMB = getIntValue(request.properties.get("gasAmount"), 100);
+            chemicalInput.addProperty("amount", gasAmountMB / 200);
+            recipe.add("chemicalInput", chemicalInput);
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            outputItem = request.outputSlotItems.get(2);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createPurifyingRecipe(JsonObject recipe, RecipeRequest request) {
@@ -201,59 +281,92 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("itemInput", wrapIngredient(request.ingredients[0]));
         }
         
-        if (request.properties.containsKey("gas") && request.properties.containsKey("gasAmount")) {
-            JsonObject gasInput = new JsonObject();
-            gasInput.addProperty("gas", (String) request.properties.get("gas"));
-            gasInput.addProperty("amount", getIntValue(request.properties.get("gasAmount"), 100));
-            recipe.add("gasInput", gasInput);
+        if (request.properties.containsKey("gasInput") && request.properties.containsKey("gasInputAmount")) {
+            JsonObject chemicalInput = new JsonObject();
+            chemicalInput.addProperty("gas", (String) request.properties.get("gasInput"));
+            int gasAmountMB = getIntValue(request.properties.get("gasInputAmount"), 100);
+            chemicalInput.addProperty("amount", gasAmountMB / 200);
+            recipe.add("chemicalInput", chemicalInput);
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            outputItem = request.outputSlotItems.get(2);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createInjectingRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.ingredients != null && request.ingredients.length > 0) {
+        if (request.ingredients != null && request.ingredients.length > 0 && !isEmptyIngredient(request.ingredients[0])) {
             recipe.add("itemInput", wrapIngredient(request.ingredients[0]));
         }
         
-        if (request.properties.containsKey("gas") && request.properties.containsKey("gasAmount")) {
-            JsonObject gasInput = new JsonObject();
-            gasInput.addProperty("gas", (String) request.properties.get("gas"));
-            gasInput.addProperty("amount", getIntValue(request.properties.get("gasAmount"), 100));
-            recipe.add("gasInput", gasInput);
+        if (request.properties.containsKey("gasInput") && request.properties.containsKey("gasInputAmount")) {
+            JsonObject chemicalInput = new JsonObject();
+            chemicalInput.addProperty("gas", (String) request.properties.get("gasInput"));
+            int gasAmountMB = getIntValue(request.properties.get("gasInputAmount"), 100);
+            chemicalInput.addProperty("amount", gasAmountMB / 200);
+            recipe.add("chemicalInput", chemicalInput);
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            outputItem = request.outputSlotItems.get(2);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createMetallurgicInfusingRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.ingredients != null && request.ingredients.length > 0) {
+        if (request.ingredients != null && request.ingredients.length > 0 && !isEmptyIngredient(request.ingredients[0])) {
             recipe.add("itemInput", wrapIngredient(request.ingredients[0]));
         }
         
-        if (request.properties.containsKey("infusionType") && request.properties.containsKey("infusionAmount")) {
-            JsonObject infusionInput = new JsonObject();
-            infusionInput.addProperty("infuse_type", (String) request.properties.get("infusionType"));
-            infusionInput.addProperty("amount", getIntValue(request.properties.get("infusionAmount"), 10));
-            recipe.add("infusionInput", infusionInput);
+        if (request.properties.containsKey("infuseType") && request.properties.containsKey("infuseAmount")) {
+            String infuseType = (String) request.properties.get("infuseType");
+            int infuseAmount = getIntValue(request.properties.get("infuseAmount"), 0);
+            if (infuseType != null && !infuseType.isEmpty() && infuseAmount > 0) {
+                JsonObject chemicalInput = new JsonObject();
+                chemicalInput.addProperty("infuse_type", infuseType);
+                chemicalInput.addProperty("amount", infuseAmount);
+                recipe.add("chemicalInput", chemicalInput);
+            }
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            outputItem = request.outputSlotItems.get(2);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
 
     private void createSawingRecipe(JsonObject recipe, RecipeRequest request) {
@@ -261,27 +374,44 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("input", wrapIngredient(request.ingredients[0]));
         }
         
-        JsonObject mainOutput = new JsonObject();
-        mainOutput.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            mainOutput.addProperty("count", request.resultCount);
+        ItemStack mainOutputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(1)) {
+            mainOutputItem = request.outputSlotItems.get(1);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            mainOutputItem = request.result;
         }
-        recipe.add("mainOutput", mainOutput);
         
-        Object extraOutput = request.properties.get("extraOutput");
-        if (extraOutput != null) {
-            JsonObject secondaryOutput = new JsonObject();
+        if (mainOutputItem != null && !mainOutputItem.isEmpty()) {
+            JsonObject mainOutput = new JsonObject();
+            mainOutput.addProperty("item", getItemId(mainOutputItem));
+            if (mainOutputItem.getCount() > 1) {
+                mainOutput.addProperty("count", mainOutputItem.getCount());
+            }
+            recipe.add("mainOutput", mainOutput);
+        }
+        
+        ItemStack secondaryOutputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            secondaryOutputItem = request.outputSlotItems.get(2);
+        } else {
+            Object extraOutput = request.properties.get("extraOutput");
             if (extraOutput instanceof ItemStack stack) {
-                secondaryOutput.addProperty("item", getItemId(stack));
-                if (stack.getCount() > 1) {
-                    secondaryOutput.addProperty("count", stack.getCount());
-                }
+                secondaryOutputItem = stack;
+            }
+        }
+        
+        if (secondaryOutputItem != null && !secondaryOutputItem.isEmpty()) {
+            JsonObject secondaryOutput = new JsonObject();
+            secondaryOutput.addProperty("item", getItemId(secondaryOutputItem));
+            if (secondaryOutputItem.getCount() > 1) {
+                secondaryOutput.addProperty("count", secondaryOutputItem.getCount());
             }
             recipe.add("secondaryOutput", secondaryOutput);
             
-            if (request.properties.containsKey("secondaryChance")) {
-                recipe.addProperty("secondaryChance", (double) request.properties.get("secondaryChance"));
-            }
+            double secondaryChance = request.properties.containsKey("secondaryChance") 
+                ? (double) request.properties.get("secondaryChance") 
+                : 1.0;
+            recipe.addProperty("secondaryChance", secondaryChance);
         }
     }
 
@@ -300,10 +430,10 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("rightInput", rightInput);
         }
         
-        if (request.properties.containsKey("outputGas") && request.properties.containsKey("outputAmount")) {
+        if (request.properties.containsKey("gasOutput") && request.properties.containsKey("gasOutputAmount")) {
             JsonObject output = new JsonObject();
-            output.addProperty("gas", (String) request.properties.get("outputGas"));
-            output.addProperty("amount", getIntValue(request.properties.get("outputAmount"), 100));
+            output.addProperty("gas", (String) request.properties.get("gasOutput"));
+            output.addProperty("amount", getIntValue(request.properties.get("gasOutputAmount"), 100));
             recipe.add("output", output);
         }
     }
@@ -330,30 +460,31 @@ public class MekanismProcessor implements ModRecipeProcessor {
     }
 
     private void createDissolutionRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.properties.containsKey("inputGas") && request.properties.containsKey("inputAmount")) {
+        if (request.properties.containsKey("gasInput") && request.properties.containsKey("gasInputAmount")) {
             JsonObject gasInput = new JsonObject();
-            gasInput.addProperty("gas", (String) request.properties.get("inputGas"));
-            gasInput.addProperty("amount", getIntValue(request.properties.get("inputAmount"), 100));
+            gasInput.addProperty("gas", (String) request.properties.get("gasInput"));
+            int gasAmountMB = getIntValue(request.properties.get("gasInputAmount"), 100);
+            gasInput.addProperty("amount", gasAmountMB / 100);
             recipe.add("gasInput", gasInput);
         }
         
         if (request.ingredients != null && request.ingredients.length > 0) {
-            recipe.add("itemInput", createIngredientJson(request.ingredients[0]));
+            recipe.add("itemInput", wrapIngredient(request.ingredients[0]));
         }
         
-        if (request.properties.containsKey("outputGas") && request.properties.containsKey("outputAmount")) {
+        if (request.properties.containsKey("chemicalOutput") && request.properties.containsKey("chemicalOutputAmount")) {
             JsonObject output = new JsonObject();
-            output.addProperty("gas", (String) request.properties.get("outputGas"));
-            output.addProperty("amount", getIntValue(request.properties.get("outputAmount"), 100));
+            String chemicalType = (String) request.properties.getOrDefault("chemicalType", "slurry");
+            output.addProperty("chemicalType", chemicalType);
+            output.addProperty(chemicalType, (String) request.properties.get("chemicalOutput"));
+            output.addProperty("amount", getIntValue(request.properties.get("chemicalOutputAmount"), 1000));
             recipe.add("output", output);
         }
     }
 
     private void createEnergyConversionRecipe(JsonObject recipe, RecipeRequest request) {
         if (request.ingredients != null && request.ingredients.length > 0) {
-            JsonObject input = new JsonObject();
-            input.add("ingredient", createIngredientJson(request.ingredients[0]));
-            recipe.add("input", input);
+            recipe.add("input", wrapIngredient(request.ingredients[0]));
         }
         
         if (request.properties.containsKey("energy")) {
@@ -433,16 +564,8 @@ public class MekanismProcessor implements ModRecipeProcessor {
     }
 
     private void createReactionRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.ingredients != null && request.ingredients.length > 0) {
-            Object ingredient = request.ingredients[0];
-            if (ingredient instanceof ItemStack stack && !stack.isEmpty()) {
-                JsonObject itemInput = new JsonObject();
-                itemInput.addProperty("amount", stack.getCount());
-                JsonObject ingredientJson = new JsonObject();
-                ingredientJson.addProperty("item", getItemId(stack));
-                itemInput.add("ingredient", ingredientJson);
-                recipe.add("itemInput", itemInput);
-            }
+        if (request.ingredients != null && request.ingredients.length > 0 && !isEmptyIngredient(request.ingredients[0])) {
+            recipe.add("itemInput", wrapIngredient(request.ingredients[0]));
         }
         
         if (request.properties.containsKey("fluidInput") && request.properties.containsKey("fluidInputAmount")) {
@@ -481,52 +604,47 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("gasOutput", gasOutput);
         }
         
-        if (request.properties.containsKey("duration")) {
-            recipe.addProperty("duration", getIntValue(request.properties.get("duration"), 100));
-        }
-        
-        if (request.properties.containsKey("energyRequired")) {
-            recipe.addProperty("energyRequired", getIntValue(request.properties.get("energyRequired"), 1000));
-        }
+        int duration = request.properties.containsKey("duration") 
+            ? getIntValue(request.properties.get("duration"), 100) 
+            : 100;
+        recipe.addProperty("duration", duration);
     }
 
     private void createIsotopicCentrifugeRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.properties.containsKey("inputGas") && request.properties.containsKey("inputAmount")) {
+        if (request.properties.containsKey("gasInput") && request.properties.containsKey("gasInputAmount")) {
             JsonObject gasInput = new JsonObject();
-            gasInput.addProperty("gas", (String) request.properties.get("inputGas"));
-            gasInput.addProperty("amount", getIntValue(request.properties.get("inputAmount"), 100));
+            gasInput.addProperty("gas", (String) request.properties.get("gasInput"));
+            gasInput.addProperty("amount", getIntValue(request.properties.get("gasInputAmount"), 100));
             recipe.add("input", gasInput);
         }
         
-        if (request.properties.containsKey("outputGas") && request.properties.containsKey("outputAmount")) {
+        if (request.properties.containsKey("gasOutput") && request.properties.containsKey("gasOutputAmount")) {
             JsonObject gasOutput = new JsonObject();
-            gasOutput.addProperty("gas", (String) request.properties.get("outputGas"));
-            gasOutput.addProperty("amount", getIntValue(request.properties.get("outputAmount"), 100));
+            gasOutput.addProperty("gas", (String) request.properties.get("gasOutput"));
+            gasOutput.addProperty("amount", getIntValue(request.properties.get("gasOutputAmount"), 100));
             recipe.add("output", gasOutput);
         }
     }
 
     private void createSolarNeutronActivatorRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.properties.containsKey("inputGas") && request.properties.containsKey("inputAmount")) {
+        if (request.properties.containsKey("gasInput") && request.properties.containsKey("gasInputAmount")) {
             JsonObject gasInput = new JsonObject();
-            gasInput.addProperty("gas", (String) request.properties.get("inputGas"));
-            gasInput.addProperty("amount", getIntValue(request.properties.get("inputAmount"), 100));
+            gasInput.addProperty("gas", (String) request.properties.get("gasInput"));
+            gasInput.addProperty("amount", getIntValue(request.properties.get("gasInputAmount"), 100));
             recipe.add("input", gasInput);
         }
         
-        if (request.properties.containsKey("outputGas") && request.properties.containsKey("outputAmount")) {
+        if (request.properties.containsKey("gasOutput") && request.properties.containsKey("gasOutputAmount")) {
             JsonObject gasOutput = new JsonObject();
-            gasOutput.addProperty("gas", (String) request.properties.get("outputGas"));
-            gasOutput.addProperty("amount", getIntValue(request.properties.get("outputAmount"), 100));
+            gasOutput.addProperty("gas", (String) request.properties.get("gasOutput"));
+            gasOutput.addProperty("amount", getIntValue(request.properties.get("gasOutputAmount"), 100));
             recipe.add("output", gasOutput);
         }
     }
 
     private void createAntiprotonicNucleosynthesizerRecipe(JsonObject recipe, RecipeRequest request) {
         if (request.ingredients != null && request.ingredients.length > 0) {
-            JsonObject itemInput = new JsonObject();
-            itemInput.add("ingredient", createIngredientJson(request.ingredients[0]));
-            recipe.add("itemInput", itemInput);
+            recipe.add("itemInput", wrapIngredient(request.ingredients[0]));
         }
         
         if (request.properties.containsKey("gasInput") && request.properties.containsKey("gasInputAmount")) {
@@ -536,16 +654,26 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("gasInput", gasInput);
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            outputItem = request.outputSlotItems.get(2);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
         
-        if (request.properties.containsKey("duration")) {
-            recipe.addProperty("duration", getIntValue(request.properties.get("duration"), 500));
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
         }
+        
+        int duration = request.properties.containsKey("duration") 
+            ? getIntValue(request.properties.get("duration"), 500) 
+            : 500;
+        recipe.addProperty("duration", duration);
     }
 
     private void createEvaporatingRecipe(JsonObject recipe, RecipeRequest request) {
@@ -565,59 +693,72 @@ public class MekanismProcessor implements ModRecipeProcessor {
     }
 
     private void createOxidizerRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.ingredients != null && request.ingredients.length > 0) {
+        if (request.ingredients != null && request.ingredients.length > 0 && !isEmptyIngredient(request.ingredients[0])) {
             recipe.add("input", wrapIngredient(request.ingredients[0]));
         }
         
-        if (request.properties.containsKey("outputGas") && request.properties.containsKey("outputAmount")) {
+        if (request.properties.containsKey("gasOutput") && request.properties.containsKey("gasOutputAmount")) {
             JsonObject output = new JsonObject();
-            output.addProperty("gas", (String) request.properties.get("outputGas"));
-            output.addProperty("amount", getIntValue(request.properties.get("outputAmount"), 100));
+            output.addProperty("gas", (String) request.properties.get("gasOutput"));
+            output.addProperty("amount", getIntValue(request.properties.get("gasOutputAmount"), 100));
             recipe.add("output", output);
         }
     }
     
     private void createWashingRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.properties.containsKey("fluid") && request.properties.containsKey("fluidAmount")) {
+        if (request.properties.containsKey("fluidInput") && request.properties.containsKey("fluidInputAmount")) {
             JsonObject fluidInput = new JsonObject();
-            fluidInput.addProperty("fluid", (String) request.properties.get("fluid"));
-            fluidInput.addProperty("amount", getIntValue(request.properties.get("fluidAmount"), 5));
+            fluidInput.addProperty("fluid", (String) request.properties.get("fluidInput"));
+            fluidInput.addProperty("amount", getIntValue(request.properties.get("fluidInputAmount"), 5));
             recipe.add("fluidInput", fluidInput);
         }
         
-        if (request.properties.containsKey("inputSlurry") && request.properties.containsKey("inputSlurryAmount")) {
+        if (request.properties.containsKey("inputGas") && request.properties.containsKey("inputAmount")) {
             JsonObject slurryInput = new JsonObject();
-            slurryInput.addProperty("slurry", (String) request.properties.get("inputSlurry"));
-            slurryInput.addProperty("amount", getIntValue(request.properties.get("inputSlurryAmount"), 1));
+            slurryInput.addProperty("slurry", (String) request.properties.get("inputGas"));
+            slurryInput.addProperty("amount", getIntValue(request.properties.get("inputAmount"), 1));
             recipe.add("slurryInput", slurryInput);
         }
         
-        if (request.properties.containsKey("outputSlurry") && request.properties.containsKey("outputSlurryAmount")) {
+        if (request.properties.containsKey("chemicalOutput") && request.properties.containsKey("chemicalOutputAmount")) {
             JsonObject output = new JsonObject();
-            output.addProperty("slurry", (String) request.properties.get("outputSlurry"));
-            output.addProperty("amount", getIntValue(request.properties.get("outputSlurryAmount"), 1));
+            output.addProperty("slurry", (String) request.properties.get("chemicalOutput"));
+            output.addProperty("amount", getIntValue(request.properties.get("chemicalOutputAmount"), 1));
             recipe.add("output", output);
         }
     }
     
     private void createPaintingRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.ingredients != null && request.ingredients.length > 0) {
+        if (request.ingredients != null && request.ingredients.length > 0 && !isEmptyIngredient(request.ingredients[0])) {
             recipe.add("itemInput", wrapIngredient(request.ingredients[0]));
         }
         
         if (request.properties.containsKey("pigment") && request.properties.containsKey("pigmentAmount")) {
-            JsonObject chemicalInput = new JsonObject();
-            chemicalInput.addProperty("pigment", (String) request.properties.get("pigment"));
-            chemicalInput.addProperty("amount", getIntValue(request.properties.get("pigmentAmount"), 256));
-            recipe.add("chemicalInput", chemicalInput);
+            String pigment = (String) request.properties.get("pigment");
+            int pigmentAmount = getIntValue(request.properties.get("pigmentAmount"), 0);
+            if (pigment != null && !pigment.isEmpty() && pigmentAmount > 0) {
+                JsonObject chemicalInput = new JsonObject();
+                chemicalInput.addProperty("pigment", pigment);
+                chemicalInput.addProperty("amount", pigmentAmount);
+                recipe.add("chemicalInput", chemicalInput);
+            }
         }
         
-        JsonObject output = new JsonObject();
-        output.addProperty("item", getItemId(request.result));
-        if (request.resultCount > 1) {
-            output.addProperty("count", request.resultCount);
+        ItemStack outputItem = null;
+        if (request.outputSlotItems != null && request.outputSlotItems.containsKey(2)) {
+            outputItem = request.outputSlotItems.get(2);
+        } else if (request.result != null && !request.result.isEmpty()) {
+            outputItem = request.result;
         }
-        recipe.add("output", output);
+        
+        if (outputItem != null && !outputItem.isEmpty()) {
+            JsonObject output = new JsonObject();
+            output.addProperty("item", getItemId(outputItem));
+            if (outputItem.getCount() > 1) {
+                output.addProperty("count", outputItem.getCount());
+            }
+            recipe.add("output", output);
+        }
     }
     
     private void createPigmentMixingRecipe(JsonObject recipe, RecipeRequest request) {
@@ -678,8 +819,35 @@ public class MekanismProcessor implements ModRecipeProcessor {
             recipe.add("rightGasOutput", rightGasOutput);
         }
         
-        if (request.properties.containsKey("energyMultiplier")) {
-            recipe.addProperty("energyMultiplier", (double) request.properties.get("energyMultiplier"));
+        double energyMultiplier = request.properties.containsKey("energyMultiplier") 
+            ? (double) request.properties.get("energyMultiplier") 
+            : 1.0;
+        recipe.addProperty("energyMultiplier", energyMultiplier);
+    }
+
+    private void createGasConversionRecipe(JsonObject recipe, RecipeRequest request) {
+        if (request.ingredients != null && request.ingredients.length > 0) {
+            recipe.add("input", wrapIngredient(request.ingredients[0]));
+        }
+        
+        if (request.properties.containsKey("gasOutput") && request.properties.containsKey("gasOutputAmount")) {
+            JsonObject output = new JsonObject();
+            output.addProperty("gas", (String) request.properties.get("gasOutput"));
+            output.addProperty("amount", getIntValue(request.properties.get("gasOutputAmount"), 100));
+            recipe.add("output", output);
+        }
+    }
+
+    private void createInfusionConversionRecipe(JsonObject recipe, RecipeRequest request) {
+        if (request.ingredients != null && request.ingredients.length > 0) {
+            recipe.add("input", wrapIngredient(request.ingredients[0]));
+        }
+        
+        if (request.properties.containsKey("chemicalOutput") && request.properties.containsKey("chemicalOutputAmount")) {
+            JsonObject output = new JsonObject();
+            output.addProperty("infuse_type", (String) request.properties.get("chemicalOutput"));
+            output.addProperty("amount", getIntValue(request.properties.get("chemicalOutputAmount"), 100));
+            recipe.add("output", output);
         }
     }
 }

@@ -39,8 +39,21 @@ public class PigmentMixingLayout implements RecipeLayout {
         return components;
     }
     
-    public int getOutputSlotIndex() {
-        return 2;
+    @Override
+    public List<RecipeComponent> generateOutputComponents(int outputX, int outputY) {
+        List<RecipeComponent> outputs = new ArrayList<>();
+        
+        outputs.add(new ChemicalSlotComponent(
+            outputX, outputY,
+            "pigment_output",
+            2,
+            ChemicalSlotComponent.ChemicalType.PIGMENT,
+            "",
+            0,
+            10000
+        ));
+        
+        return outputs;
     }
     
     public String getOutputType() {

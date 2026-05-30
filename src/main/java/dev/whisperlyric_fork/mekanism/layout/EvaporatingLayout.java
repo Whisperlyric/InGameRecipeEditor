@@ -26,8 +26,20 @@ public class EvaporatingLayout implements RecipeLayout {
         return components;
     }
     
-    public int getOutputSlotIndex() {
-        return 1;
+    @Override
+    public List<RecipeComponent> generateOutputComponents(int outputX, int outputY) {
+        List<RecipeComponent> outputs = new ArrayList<>();
+        
+        outputs.add(new FluidSlotComponent(
+            outputX, outputY,
+            "fluid_output",
+            1,
+            "",
+            0,
+            10000
+        ));
+        
+        return outputs;
     }
     
     public String getOutputType() {
