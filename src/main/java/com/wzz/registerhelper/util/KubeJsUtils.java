@@ -539,7 +539,6 @@ public class KubeJsUtils {
         Path scriptsDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/rh_generated");
 
         if (singleFile) {
-            // 按配方类型分组
             Map<String, List<String>> recipesByMod = new LinkedHashMap<>();
             Map<String, Set<String>> recipeTypesByMod = new LinkedHashMap<>();
             Set<RotaryType> rotaryTypes = new HashSet<>();
@@ -562,7 +561,6 @@ public class KubeJsUtils {
                     recipesByMod.computeIfAbsent(modName, k -> new ArrayList<>()).add(jsScript);
                     recipeTypesByMod.computeIfAbsent(modName, k -> new HashSet<>()).add(recipeType);
                     
-                    // 记录 rotary 配方的类型
                     if (recipeType.equals("mekanism:rotary")) {
                         RotaryType rotaryType = getRotaryType(recipeJson);
                         if (rotaryType != null) {
@@ -576,22 +574,30 @@ public class KubeJsUtils {
                 }
             }
 
-            // 生成脚本
             StringBuilder allRecipes = new StringBuilder();
             allRecipes.append("// Auto-generated from config/registerhelper/recipes\n");
             allRecipes.append("// Total recipes: ").append(jsonFiles.size()).append("\n\n");
             
             allRecipes.append("ServerEvents.recipes(event => {\n");
             
-            // 添加必要的常量声明
             if (recipesByMod.containsKey("avaritia")) {
                 allRecipes.append("    const { avaritia } = event.recipes;\n");
             }
             
-            // 根据配方类型添加对应的函数定义
+            allRecipes.append("\n");
+            
+            Set<String> allRecipeTypes = new HashSet<>();
+            for (Set<String> types : recipeTypesByMod.values()) {
+                allRecipeTypes.addAll(types);
+            }
+            
+            for (String recipeType : allRecipeTypes) {
+                if (FUNCTION_DEFINITIONS.containsKey(recipeType)) {
+                    allRecipes.append(FUNCTION_DEFINITIONS.get(recipeType).generateFunctionDefinition()).append("\n");
+                }
+            }
+            
             if (!rotaryTypes.isEmpty()) {
-                allRecipes.append("\n");
-                
                 if (rotaryTypes.contains(RotaryType.REVERSIBLE)) {
                     allRecipes.append("    // 回旋式气液转换器 - 可逆模式\n");
                     allRecipes.append("    function rotary(fluid, gas, fluidAmount, gasAmount) {\n");
@@ -630,13 +636,10 @@ public class KubeJsUtils {
                     allRecipes.append("            gasInput: { amount: gasAmount, gas: gasInput },\n");
                     allRecipes.append("            fluidOutput: { amount: fluidAmount, fluid: fluidOutput }\n");
                     allRecipes.append("        });\n");
-                    allRecipes.append("    }\n");
+                    allRecipes.append("    }\n\n");
                 }
             }
             
-            allRecipes.append("\n");
-            
-            // 按 mod 分组输出
             for (Map.Entry<String, List<String>> entry : recipesByMod.entrySet()) {
                 allRecipes.append("    // ========== ").append(entry.getKey().toUpperCase())
                           .append(" Recipes (").append(entry.getValue().size()).append(") ==========\n\n");
@@ -657,7 +660,6 @@ public class KubeJsUtils {
             }
 
         } else {
-            // 按目录结构分文件导出
             for (Path jsonFile : jsonFiles) {
                 try {
                     Path relativePath = recipesBaseDir.relativize(jsonFile);
@@ -689,7 +691,10 @@ public class KubeJsUtils {
                         content.append("    const { avaritia } = event.recipes;\n\n");
                     }
                     
-                    // 根据配方类型添加对应的函数定义
+                    if (FUNCTION_DEFINITIONS.containsKey(recipeType)) {
+                        content.append(FUNCTION_DEFINITIONS.get(recipeType).generateFunctionDefinition()).append("\n");
+                    }
+                    
                     if (recipeType.equals("mekanism:rotary")) {
                         RotaryType rotaryType = getRotaryType(recipeJson);
                         
@@ -749,7 +754,6 @@ public class KubeJsUtils {
         List<Path> jsonFiles = getAllJsonRecipeFiles();
         Path scriptsDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/rh_generated");
         
-        // 按 mod 分组
         Map<String, List<String>> recipesByMod = new LinkedHashMap<>();
         Map<String, Set<String>> recipeTypesByMod = new LinkedHashMap<>();
         Map<String, Set<RotaryType>> rotaryTypesByMod = new LinkedHashMap<>();
@@ -772,7 +776,6 @@ public class KubeJsUtils {
                 recipesByMod.computeIfAbsent(modName, k -> new ArrayList<>()).add(jsScript);
                 recipeTypesByMod.computeIfAbsent(modName, k -> new HashSet<>()).add(recipeType);
                 
-                // 记录 rotary 配方的类型
                 if (recipeType.equals("mekanism:rotary")) {
                     RotaryType rotaryType = getRotaryType(recipeJson);
                     if (rotaryType != null) {
@@ -786,7 +789,6 @@ public class KubeJsUtils {
             }
         }
         
-        // 按 mod 分文件导出
         try {
             Files.createDirectories(scriptsDir);
             
@@ -806,7 +808,12 @@ public class KubeJsUtils {
                     content.append("    const { avaritia } = event.recipes;\n\n");
                 }
                 
-                // 根据配方类型添加对应的函数定义
+                for (String recipeType : recipeTypes) {
+                    if (FUNCTION_DEFINITIONS.containsKey(recipeType)) {
+                        content.append(FUNCTION_DEFINITIONS.get(recipeType).generateFunctionDefinition()).append("\n");
+                    }
+                }
+                
                 if (modName.equals("mekanism") && !rotaryTypes.isEmpty()) {
                     if (rotaryTypes.contains(RotaryType.REVERSIBLE)) {
                         content.append("    // 回旋式气液转换器 - 可逆模式\n");
@@ -938,6 +945,200 @@ public class KubeJsUtils {
         return null;
     }
     
+    @FunctionalInterface
+    private interface FunctionDefinitionGenerator {
+        String generateFunctionDefinition();
+    }
+    
+    private static final Map<String, FunctionDefinitionGenerator> FUNCTION_DEFINITIONS = new HashMap<>();
+    
+    static {
+        FUNCTION_DEFINITIONS.put("mekanism:separating", () -> 
+            "    // 电解分离器\n" +
+            "    function separating(input, leftGasOutput, rightGasOutput, energyMultiplier) {\n" +
+            "        energyMultiplier = energyMultiplier !== undefined ? energyMultiplier : 1;\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:separating',\n" +
+            "            input: input,\n" +
+            "            leftGasOutput: leftGasOutput,\n" +
+            "            rightGasOutput: rightGasOutput,\n" +
+            "            energyMultiplier: energyMultiplier\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:reaction", () -> 
+            "    // 加压反应室\n" +
+            "    function reaction(itemInput, fluidInput, gasInput, itemOutput, gasOutput, duration, energyRequired) {\n" +
+            "        duration = duration !== undefined ? duration : 100;\n" +
+            "        energyRequired = energyRequired !== undefined ? energyRequired : 100;\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:reaction',\n" +
+            "            itemInput: itemInput,\n" +
+            "            fluidInput: fluidInput,\n" +
+            "            gasInput: gasInput,\n" +
+            "            itemOutput: itemOutput,\n" +
+            "            gasOutput: gasOutput,\n" +
+            "            duration: duration,\n" +
+            "            energyRequired: energyRequired\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:centrifuging", () -> 
+            "    // 同位素离心机\n" +
+            "    function centrifuging(input, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:centrifuging',\n" +
+            "            input: input,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:activating", () -> 
+            "    // 太阳能中子活化器\n" +
+            "    function activating(input, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:activating',\n" +
+            "            input: input,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:nucleosynthesizing", () -> 
+            "    // 反质子核合成器\n" +
+            "    function nucleosynthesizing(itemInput, gasInput, output, duration) {\n" +
+            "        duration = duration !== undefined ? duration : 100;\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:nucleosynthesizing',\n" +
+            "            itemInput: itemInput,\n" +
+            "            gasInput: gasInput,\n" +
+            "            output: output,\n" +
+            "            duration: duration\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:evaporating", () -> 
+            "    // 热力蒸馏塔\n" +
+            "    function evaporating(input, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:evaporating',\n" +
+            "            input: input,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:oxidizing", () -> 
+            "    // 化学氧化机\n" +
+            "    function oxidizing(input, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:oxidizing',\n" +
+            "            input: input,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:sawing", () -> 
+            "    // 精密锯木机\n" +
+            "    function sawing(input, mainOutput, secondaryOutput, secondaryChance) {\n" +
+            "        secondaryChance = secondaryChance !== undefined ? secondaryChance : 0.05;\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:sawing',\n" +
+            "            input: input,\n" +
+            "            mainOutput: mainOutput,\n" +
+            "            secondaryOutput: secondaryOutput,\n" +
+            "            secondaryChance: secondaryChance\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:dissolution", () -> 
+            "    // 化学溶解室\n" +
+            "    function dissolution(gasInput, itemInput, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:dissolution',\n" +
+            "            gasInput: gasInput,\n" +
+            "            itemInput: itemInput,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:gas_conversion", () -> 
+            "    // 物品到气体\n" +
+            "    function gasConversion(input, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:gas_conversion',\n" +
+            "            input: input,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:infusion_conversion", () -> 
+            "    // 物品到灌注类型\n" +
+            "    function infusionConversion(input, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:infusion_conversion',\n" +
+            "            input: input,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:washing", () -> 
+            "    // 化学清洗机\n" +
+            "    function washing(fluidInput, slurryInput, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:washing',\n" +
+            "            fluidInput: fluidInput,\n" +
+            "            slurryInput: slurryInput,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:painting", () -> 
+            "    // 上色机\n" +
+            "    function painting(chemicalInput, itemInput, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:painting',\n" +
+            "            chemicalInput: chemicalInput,\n" +
+            "            itemInput: itemInput,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:pigment_mixing", () -> 
+            "    // 颜料混合器\n" +
+            "    function pigmentMixing(leftInput, rightInput, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:pigment_mixing',\n" +
+            "            leftInput: leftInput,\n" +
+            "            rightInput: rightInput,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+        
+        FUNCTION_DEFINITIONS.put("mekanism:pigment_extracting", () -> 
+            "    // 颜料提取器\n" +
+            "    function pigmentExtracting(input, output) {\n" +
+            "        event.custom({\n" +
+            "            type: 'mekanism:pigment_extracting',\n" +
+            "            input: input,\n" +
+            "            output: output\n" +
+            "        });\n" +
+            "    }\n"
+        );
+    }
+    
     private static String convertMekanismRotaryToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
         
@@ -1024,126 +1225,196 @@ public class KubeJsUtils {
     
     private static String convertMekanismSeparatingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:separating',\n");
+        script.append("    separating(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatChemicalObject(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("leftGasOutput")) {
-            script.append("        leftGasOutput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("leftGasOutput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("leftGasOutput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("rightGasOutput")) {
-            script.append("        rightGasOutput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("rightGasOutput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("rightGasOutput")));
+        } else {
+            script.append("        {}");
         }
+        
         if (recipeJson.has("energyMultiplier")) {
-            script.append("        energyMultiplier: ").append(recipeJson.get("energyMultiplier").getAsDouble()).append("\n");
+            script.append(",\n        ").append(recipeJson.get("energyMultiplier").getAsDouble());
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismReactionToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:reaction',\n");
+        script.append("    reaction(\n");
+        
         if (recipeJson.has("itemInput")) {
-            script.append("        itemInput: ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("fluidInput")) {
-            script.append("        fluidInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("fluidInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("fluidInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("gasInput")) {
-            script.append("        gasInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("gasInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("gasInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("itemOutput")) {
-            script.append("        itemOutput: ").append(formatItemOutput(recipeJson.getAsJsonObject("itemOutput"))).append(",\n");
+            script.append("        ").append(formatItemOutput(recipeJson.getAsJsonObject("itemOutput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("gasOutput")) {
-            script.append("        gasOutput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("gasOutput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("gasOutput")));
+        } else {
+            script.append("        {}");
         }
-        if (recipeJson.has("duration")) {
-            script.append("        duration: ").append(recipeJson.get("duration").getAsInt()).append(",\n");
+        
+        if (recipeJson.has("duration") && recipeJson.has("energyRequired")) {
+            script.append(",\n        ").append(recipeJson.get("duration").getAsInt());
+            script.append(", ").append(recipeJson.get("energyRequired").getAsInt());
         }
-        if (recipeJson.has("energyRequired")) {
-            script.append("        energyRequired: ").append(recipeJson.get("energyRequired").getAsInt()).append("\n");
-        }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismCentrifugingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:centrifuging',\n");
+        script.append("    centrifuging(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatChemicalObject(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismActivatingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:activating',\n");
+        script.append("    activating(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatChemicalObject(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismNucleosynthesizingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:nucleosynthesizing',\n");
+        script.append("    nucleosynthesizing(\n");
+        
         if (recipeJson.has("itemInput")) {
-            script.append("        itemInput: ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("gasInput")) {
-            script.append("        gasInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("gasInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("gasInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatItemOutput(recipeJson.getAsJsonObject("output"))).append(",\n");
+            script.append("        ").append(formatItemOutput(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
+        
         if (recipeJson.has("duration")) {
-            script.append("        duration: ").append(recipeJson.get("duration").getAsInt()).append("\n");
+            script.append(",\n        ").append(recipeJson.get("duration").getAsInt());
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismEvaporatingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:evaporating',\n");
+        script.append("    evaporating(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatChemicalObject(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismOxidizingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:oxidizing',\n");
+        script.append("    oxidizing(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatIngredient(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
@@ -1176,21 +1447,33 @@ public class KubeJsUtils {
     
     private static String convertMekanismSawingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:sawing',\n");
+        script.append("    sawing(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatIngredient(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("mainOutput")) {
-            script.append("        mainOutput: ").append(formatItemOutput(recipeJson.getAsJsonObject("mainOutput"))).append(",\n");
+            script.append("        ").append(formatItemOutput(recipeJson.getAsJsonObject("mainOutput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("secondaryOutput")) {
-            script.append("        secondaryOutput: ").append(formatItemOutput(recipeJson.getAsJsonObject("secondaryOutput"))).append(",\n");
+            script.append("        ").append(formatItemOutput(recipeJson.getAsJsonObject("secondaryOutput")));
+        } else {
+            script.append("        {}");
         }
+        
         if (recipeJson.has("secondaryChance")) {
-            script.append("        secondaryChance: ").append(recipeJson.get("secondaryChance").getAsDouble()).append("\n");
+            script.append(",\n        ").append(recipeJson.get("secondaryChance").getAsDouble());
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
@@ -1249,19 +1532,27 @@ public class KubeJsUtils {
     
     private static String convertMekanismDissolutionToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:dissolution',\n");
+        script.append("    dissolution(\n");
+        
         if (recipeJson.has("gasInput")) {
             JsonObject gasInput = recipeJson.getAsJsonObject("gasInput");
-            script.append("        gasInput: { gas: '").append(gasInput.get("gas").getAsString()).append("'");
-            script.append(", amount: ").append(gasInput.get("amount").getAsInt()).append(" },\n");
+            script.append("        { gas: '").append(gasInput.get("gas").getAsString()).append("'");
+            script.append(", amount: ").append(gasInput.get("amount").getAsInt()).append(" }");
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("itemInput")) {
-            script.append("        itemInput: ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
             JsonObject output = recipeJson.getAsJsonObject("output");
-            script.append("        output: { ");
+            script.append("        { ");
             if (output.has("chemicalType")) {
                 script.append("chemicalType: '").append(output.get("chemicalType").getAsString()).append("', ");
             }
@@ -1269,9 +1560,12 @@ public class KubeJsUtils {
             if (output.has(chemicalType)) {
                 script.append(chemicalType).append(": '").append(output.get(chemicalType).getAsString()).append("', ");
             }
-            script.append("amount: ").append(output.get("amount").getAsInt()).append(" }\n");
+            script.append("amount: ").append(output.get("amount").getAsInt()).append(" }");
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
@@ -1344,94 +1638,148 @@ public class KubeJsUtils {
     
     private static String convertMekanismGasConversionToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:gas_conversion',\n");
+        script.append("    gasConversion(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatIngredient(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismInfusionConversionToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:infusion_conversion',\n");
+        script.append("    infusionConversion(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatIngredient(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismWashingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:washing',\n");
+        script.append("    washing(\n");
+        
         if (recipeJson.has("fluidInput")) {
-            script.append("        fluidInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("fluidInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("fluidInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("slurryInput")) {
-            script.append("        slurryInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("slurryInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("slurryInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismPaintingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:painting',\n");
+        script.append("    painting(\n");
+        
         if (recipeJson.has("chemicalInput")) {
-            script.append("        chemicalInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("chemicalInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("chemicalInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("itemInput")) {
-            script.append("        itemInput: ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("itemInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatItemOutput(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatItemOutput(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismPigmentMixingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:pigment_mixing',\n");
+        script.append("    pigmentMixing(\n");
+        
         if (recipeJson.has("leftInput")) {
-            script.append("        leftInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("leftInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("leftInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("rightInput")) {
-            script.append("        rightInput: ").append(formatChemicalObject(recipeJson.getAsJsonObject("rightInput"))).append(",\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("rightInput")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
     
     private static String convertMekanismPigmentExtractingToJS(JsonObject recipeJson) {
         StringBuilder script = new StringBuilder();
-        script.append("    event.custom({\n");
-        script.append("        type: 'mekanism:pigment_extracting',\n");
+        script.append("    pigmentExtracting(\n");
+        
         if (recipeJson.has("input")) {
-            script.append("        input: ").append(formatIngredient(recipeJson.getAsJsonObject("input"))).append(",\n");
+            script.append("        ").append(formatIngredient(recipeJson.getAsJsonObject("input")));
+        } else {
+            script.append("        {}");
         }
+        script.append(",\n");
+        
         if (recipeJson.has("output")) {
-            script.append("        output: ").append(formatChemicalObject(recipeJson.getAsJsonObject("output"))).append("\n");
+            script.append("        ").append(formatChemicalObject(recipeJson.getAsJsonObject("output")));
+        } else {
+            script.append("        {}");
         }
-        script.append("    })");
+        
+        script.append("\n    )");
         return script.toString();
     }
 }

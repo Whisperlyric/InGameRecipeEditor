@@ -133,8 +133,8 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-Xlint:-removal' // 忽略removal警告
 }
 
-//task sourcesJar(type: Jar, dependsOn: classes) {
-//    archiveClassifier = 'sources'
-//    from sourceSets.main.allSource
-//}
-//build.dependsOn sourcesJar
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+build.dependsOn sourcesJar
