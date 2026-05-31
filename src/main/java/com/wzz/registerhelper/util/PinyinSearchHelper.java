@@ -1,7 +1,5 @@
 package com.wzz.registerhelper.util;
 
-import com.github.promeg.pinyinhelper_fork.Pinyin;
-
 import java.util.*;
 import java.util.function.Function;
 
@@ -12,6 +10,24 @@ import java.util.function.Function;
  * @param <T> 被搜索的对象类型
  */
 public class PinyinSearchHelper<T> {
+    
+    private static boolean pinyinAvailable = false;
+    private static boolean pinyinChecked = false;
+    
+    static {
+        checkPinyinAvailability();
+    }
+    
+    private static void checkPinyinAvailability() {
+        if (pinyinChecked) return;
+        pinyinChecked = true;
+        try {
+            Class.forName("com.github.promeg.pinyinhelper_fork.Pinyin");
+            pinyinAvailable = true;
+        } catch (ClassNotFoundException e) {
+            pinyinAvailable = false;
+        }
+    }
     
     private final Map<T, PinyinInfo> pinyinCache = new HashMap<>();
     private final Function<T, String> displayNameGetter;
@@ -82,14 +98,19 @@ public class PinyinSearchHelper<T> {
             return new PinyinInfo("", "", "");
         }
         
+        if (!pinyinAvailable) {
+            return new PinyinInfo(text.toLowerCase(), text.toLowerCase(), text.toLowerCase());
+        }
+        
         try {
-            String fullPinyin = Pinyin.toPinyin(text, " ").toLowerCase();
+            com.github.promeg.pinyinhelper_fork.Pinyin pinyinLib = null;
+            String fullPinyin = com.github.promeg.pinyinhelper_fork.Pinyin.toPinyin(text, " ").toLowerCase();
             StringBuilder initials = new StringBuilder();
             StringBuilder nospace = new StringBuilder();
             
             for (char c : text.toCharArray()) {
-                if (Pinyin.isChinese(c)) {
-                    String pinyin = Pinyin.toPinyin(c).toLowerCase();
+                if (com.github.promeg.pinyinhelper_fork.Pinyin.isChinese(c)) {
+                    String pinyin = com.github.promeg.pinyinhelper_fork.Pinyin.toPinyin(c).toLowerCase();
                     if (!pinyin.isEmpty()) {
                         initials.append(pinyin.charAt(0));
                         nospace.append(pinyin);
@@ -112,10 +133,16 @@ public class PinyinSearchHelper<T> {
      */
     public static boolean containsChinese(String text) {
         if (text == null) return false;
-        for (char c : text.toCharArray()) {
-            if (Pinyin.isChinese(c)) {
-                return true;
+        if (!pinyinAvailable) return false;
+        
+        try {
+            for (char c : text.toCharArray()) {
+                if (com.github.promeg.pinyinhelper_fork.Pinyin.isChinese(c)) {
+                    return true;
+                }
             }
+        } catch (Exception e) {
+            return false;
         }
         return false;
     }

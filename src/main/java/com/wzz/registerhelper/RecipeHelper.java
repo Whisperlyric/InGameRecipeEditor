@@ -1,6 +1,7 @@
 package com.wzz.registerhelper;
 
 import com.wzz.registerhelper.command.RecipeCommand;
+import com.wzz.registerhelper.command.TagsOverviewCommand;
 import com.wzz.registerhelper.ingredient.PartialNbtIngredient;
 import com.wzz.registerhelper.init.ModConfig;
 import com.wzz.registerhelper.init.ModIntegrations;
@@ -56,5 +57,6 @@ public class RecipeHelper {
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
         RecipeCommand.register(event.getDispatcher(), event.getBuildContext());
+        TagsOverviewCommand.register(event.getDispatcher(), event.getBuildContext());
     }
 }

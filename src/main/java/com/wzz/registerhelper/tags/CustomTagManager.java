@@ -50,20 +50,44 @@ public class CustomTagManager {
         }
         
         try {
-            // 去重：只保留不同的物品类型
             List<Item> uniqueItems = items.stream()
                     .map(ItemStack::getItem)
                     .distinct()
                     .collect(Collectors.toList());
             
-            // 保存标签文件
-            saveTagFile(tagId, uniqueItems);
+            saveTagFile(tagId, uniqueItems, "items");
             
-            LOGGER.info("已创建自定义标签: {} (包含 {} 个物品)", tagId, uniqueItems.size());
+            LOGGER.info("已创建自定义物品标签: {} (包含 {} 个物品)", tagId, uniqueItems.size());
             return true;
             
         } catch (Exception e) {
-            LOGGER.error("注册自定义标签失败: " + tagId, e);
+            LOGGER.error("注册自定义物品标签失败: " + tagId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 注册自定义流体标签
+     * @param tagId 标签ID (例如: minecraft:water)
+     * @param fluidIds 流体ID列表
+     */
+    public static boolean registerFluidTag(ResourceLocation tagId, List<ResourceLocation> fluidIds) {
+        if (tagId == null || fluidIds == null || fluidIds.isEmpty()) {
+            return false;
+        }
+        
+        try {
+            List<ResourceLocation> uniqueFluids = fluidIds.stream()
+                    .distinct()
+                    .collect(Collectors.toList());
+            
+            saveFluidTagFile(tagId, uniqueFluids);
+            
+            LOGGER.info("已创建自定义流体标签: {} (包含 {} 个流体)", tagId, uniqueFluids.size());
+            return true;
+            
+        } catch (Exception e) {
+            LOGGER.error("注册自定义流体标签失败: " + tagId, e);
             return false;
         }
     }
@@ -73,13 +97,23 @@ public class CustomTagManager {
      */
     public static boolean removeTag(ResourceLocation tagId) {
         try {
-            File tagFile = getTagFile(tagId);
-            if (tagFile.exists()) {
-                tagFile.delete();
-                LOGGER.info("已删除自定义标签: {}", tagId);
-                return true;
+            boolean removed = false;
+            
+            File itemTagFile = getTagFile(tagId, "items");
+            if (itemTagFile.exists()) {
+                itemTagFile.delete();
+                LOGGER.info("已删除自定义物品标签: {}", tagId);
+                removed = true;
             }
-            return false;
+            
+            File fluidTagFile = getTagFile(tagId, "fluids");
+            if (fluidTagFile.exists()) {
+                fluidTagFile.delete();
+                LOGGER.info("已删除自定义流体标签: {}", tagId);
+                removed = true;
+            }
+            
+            return removed;
             
         } catch (Exception e) {
             LOGGER.error("删除自定义标签失败: " + tagId, e);
@@ -91,7 +125,7 @@ public class CustomTagManager {
      * 检查标签是否存在
      */
     public static boolean hasTag(ResourceLocation tagId) {
-        return getTagFile(tagId).exists();
+        return getTagFile(tagId, "items").exists() || getTagFile(tagId, "fluids").exists();
     }
     
     /**
@@ -152,7 +186,7 @@ public class CustomTagManager {
     /**
      * 保存标签文件（标准 Minecraft 标签格式）
      */
-    private static void saveTagFile(ResourceLocation tagId, List<Item> items) throws Exception {
+    private static void saveTagFile(ResourceLocation tagId, List<Item> items, String tagType) throws Exception {
         JsonObject tagJson = new JsonObject();
         tagJson.addProperty("replace", false);
         
@@ -163,7 +197,7 @@ public class CustomTagManager {
         }
         tagJson.add("values", valuesArray);
         
-        File tagFile = getTagFile(tagId);
+        File tagFile = getTagFile(tagId, tagType);
         Files.createDirectories(tagFile.getParentFile().toPath());
         
         try (FileWriter writer = new FileWriter(tagFile)) {
@@ -174,12 +208,35 @@ public class CustomTagManager {
     }
     
     /**
+     * 保存流体标签文件
+     */
+    private static void saveFluidTagFile(ResourceLocation tagId, List<ResourceLocation> fluidIds) throws Exception {
+        JsonObject tagJson = new JsonObject();
+        tagJson.addProperty("replace", false);
+        
+        JsonArray valuesArray = new JsonArray();
+        for (ResourceLocation fluidId : fluidIds) {
+            valuesArray.add(fluidId.toString());
+        }
+        tagJson.add("values", valuesArray);
+        
+        File tagFile = getTagFile(tagId, "fluids");
+        Files.createDirectories(tagFile.getParentFile().toPath());
+        
+        try (FileWriter writer = new FileWriter(tagFile)) {
+            GSON.toJson(tagJson, writer);
+        }
+        
+        LOGGER.info("已保存流体标签文件: {}", tagFile.getPath());
+    }
+    
+    /**
      * 获取标签文件路径
      */
-    private static File getTagFile(ResourceLocation tagId) {
+    private static File getTagFile(ResourceLocation tagId, String tagType) {
         Path tagPath = TAGS_DIR
                 .resolve(tagId.getNamespace())
-                .resolve("items")
+                .resolve(tagType)
                 .resolve(tagId.getPath() + ".json");
         return tagPath.toFile();
     }
@@ -188,20 +245,34 @@ public class CustomTagManager {
      * 读取标签内容
      */
     public static List<String> readTagItems(ResourceLocation tagId) {
-        List<String> itemIds = new ArrayList<>();
+        return readTagValues(tagId, "items");
+    }
+    
+    /**
+     * 读取流体标签内容
+     */
+    public static List<String> readTagFluids(ResourceLocation tagId) {
+        return readTagValues(tagId, "fluids");
+    }
+    
+    /**
+     * 读取标签值
+     */
+    private static List<String> readTagValues(ResourceLocation tagId, String tagType) {
+        List<String> values = new ArrayList<>();
         
         try {
-            File tagFile = getTagFile(tagId);
+            File tagFile = getTagFile(tagId, tagType);
             if (!tagFile.exists()) {
-                return itemIds;
+                return values;
             }
             
             try (FileReader reader = new FileReader(tagFile)) {
                 JsonObject tagJson = GSON.fromJson(reader, JsonObject.class);
                 if (tagJson != null && tagJson.has("values")) {
-                    JsonArray values = tagJson.getAsJsonArray("values");
-                    for (int i = 0; i < values.size(); i++) {
-                        itemIds.add(values.get(i).getAsString());
+                    JsonArray jsonArray = tagJson.getAsJsonArray("values");
+                    for (int i = 0; i < jsonArray.size(); i++) {
+                        values.add(jsonArray.get(i).getAsString());
                     }
                 }
             }
@@ -210,6 +281,6 @@ public class CustomTagManager {
             LOGGER.error("读取标签文件失败: " + tagId, e);
         }
         
-        return itemIds;
+        return values;
     }
 }

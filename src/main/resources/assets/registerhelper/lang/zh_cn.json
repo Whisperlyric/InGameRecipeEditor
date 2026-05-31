@@ -14,5 +14,8 @@
   "item.registerhelper.placeholder_6": "占位物品 6",
   "item.registerhelper.placeholder_7": "占位物品 7",
   "item.registerhelper.placeholder_8": "占位物品 8",
-  "item.registerhelper.placeholder_9": "占位物品 9"
+  "item.registerhelper.placeholder_9": "占位物品 9",
+  "key.categories.registerhelper": "配方助手",
+  "key.registerhelper.open_recipe_helper": "打开配方助手",
+  "key.registerhelper.open_tags_overview": "打开标签概览"
 }
