@@ -169,7 +169,7 @@ public class ComponentRenderManager {
 
     public void renderAll(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         if (this.font == null)
-            this.font = Minecraft.getInstance().font();
+            this.font = Minecraft.getInstance().font;
         
         for (ComponentRenderer renderer : renderers) {
             renderer.render(guiGraphics, font, mouseX, mouseY);

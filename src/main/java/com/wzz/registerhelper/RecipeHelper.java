@@ -31,6 +31,7 @@ public class RecipeHelper {
         modEventBus.addListener(this::commonSetup);
         if (FMLEnvironment.dist == Dist.CLIENT) {
             modEventBus.addListener(this::clientSetup);
+            modEventBus.addListener(com.wzz.registerhelper.init.ModKeyMappings::register);
         }
         MinecraftForge.EVENT_BUS.register(this);
         ModContainers.CONTAINERS.register(modEventBus);
