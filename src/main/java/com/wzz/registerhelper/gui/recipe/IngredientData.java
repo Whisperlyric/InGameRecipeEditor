@@ -37,6 +37,7 @@ public class IngredientData {
     private ItemStack itemStack;           // 物品类型（包含NBT）
     private ResourceLocation tagId;        // 标签ID
     private List<ItemStack> customTagItems; // 自定义标签的物品列表
+    private List<ResourceLocation> customFluidIds; // 自定义流体标签的流体ID列表
     private boolean includeNBT = true;     // 是否在配方JSON中写入NBT匹配（仅对ITEM类型有效）
 
     /**
@@ -53,6 +54,7 @@ public class IngredientData {
     private IngredientData(Type type) {
         this.type = type;
         this.customTagItems = new ArrayList<>();
+        this.customFluidIds = new ArrayList<>();
     }
 
     /**
@@ -83,6 +85,16 @@ public class IngredientData {
         for (ItemStack item : items) {
             data.customTagItems.add(item.copy());
         }
+        return data;
+    }
+    
+    /**
+     * 创建自定义流体标签材料
+     */
+    public static IngredientData fromCustomFluidTag(ResourceLocation tagId, List<ResourceLocation> fluidIds) {
+        IngredientData data = new IngredientData(Type.FLUID);
+        data.tagId = tagId;
+        data.customFluidIds = new ArrayList<>(fluidIds);
         return data;
     }
     
@@ -172,7 +184,15 @@ public class IngredientData {
             case ITEM -> getItemStack();
             case TAG -> getFirstTagItem();
             case CUSTOM_TAG -> customTagItems.isEmpty() ? ItemStack.EMPTY : customTagItems.get(0);
-            case FLUID -> ItemStack.EMPTY;
+            case FLUID -> {
+                if (!customFluidIds.isEmpty()) {
+                    net.minecraft.world.level.material.Fluid fluid = ForgeRegistries.FLUIDS.getValue(customFluidIds.get(0));
+                    if (fluid != null) {
+                        yield new ItemStack(fluid.getBucket());
+                    }
+                }
+                yield ItemStack.EMPTY;
+            }
             case GAS -> ItemStack.EMPTY;
         };
     }

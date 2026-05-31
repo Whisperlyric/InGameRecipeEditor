@@ -14,5 +14,8 @@
   "item.registerhelper.placeholder_6": "Placeholder Item 6",
   "item.registerhelper.placeholder_7": "Placeholder Item 7",
   "item.registerhelper.placeholder_8": "Placeholder Item 8",
-  "item.registerhelper.placeholder_9": "Placeholder Item 9"
+  "item.registerhelper.placeholder_9": "Placeholder Item 9",
+  "key.categories.registerhelper": "Recipe Helper",
+  "key.registerhelper.open_recipe_helper": "Open Recipe Helper",
+  "key.registerhelper.open_tags_overview": "Open Tags Overview"
 }

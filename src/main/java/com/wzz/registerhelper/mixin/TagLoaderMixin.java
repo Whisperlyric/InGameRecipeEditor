@@ -10,7 +10,9 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.TagEntry;
 import net.minecraft.tags.TagLoader;
 import org.slf4j.Logger;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -22,6 +24,10 @@ import java.util.*;
 
 @Mixin(TagLoader.class)
 public class TagLoaderMixin {
+    @Shadow
+    @Final
+    private String directory;
+    
     @Unique
     private static final Logger registerhelper$LOGGER = LogUtils.getLogger();
     @Unique
@@ -39,8 +45,13 @@ public class TagLoaderMixin {
     private void injectCustomTags(ResourceManager resourceManager,
                                   CallbackInfoReturnable<Map<ResourceLocation, List<TagLoader.EntryWithSource>>> cir) {
         try {
+            String tagType = extractTagType();
+            if (tagType == null) {
+                return;
+            }
+            
             Map<ResourceLocation, List<TagLoader.EntryWithSource>> originalTags = cir.getReturnValue();
-            Map<ResourceLocation, List<TagLoader.EntryWithSource>> customTags = loadCustomTags();
+            Map<ResourceLocation, List<TagLoader.EntryWithSource>> customTags = loadCustomTags(tagType);
 
             if (!customTags.isEmpty()) {
                 for (Map.Entry<ResourceLocation, List<TagLoader.EntryWithSource>> entry : customTags.entrySet()) {
@@ -60,10 +71,22 @@ public class TagLoaderMixin {
     }
 
     /**
+     * 从directory字段提取标签类型
+     * directory格式: "tags/items", "tags/blocks", "tags/fluids"等
+     */
+    @Unique
+    private String extractTagType() {
+        if (directory == null || !directory.startsWith("tags/")) {
+            return null;
+        }
+        return directory.substring("tags/".length());
+    }
+
+    /**
      * 加载所有自定义标签
      */
     @Unique
-    private Map<ResourceLocation, List<TagLoader.EntryWithSource>> loadCustomTags() {
+    private Map<ResourceLocation, List<TagLoader.EntryWithSource>> loadCustomTags(String tagType) {
         Map<ResourceLocation, List<TagLoader.EntryWithSource>> tags = new HashMap<>();
 
         File tagsDir = new File(CUSTOM_TAGS_DIR);
@@ -80,7 +103,7 @@ public class TagLoaderMixin {
 
         for (File namespaceDir : namespaceDirs) {
             String namespace = namespaceDir.getName();
-            loadNamespaceTags(namespace, namespaceDir, tags);
+            loadNamespaceTags(namespace, namespaceDir, tagType, tags);
         }
 
         return tags;
@@ -90,18 +113,11 @@ public class TagLoaderMixin {
      * 加载特定命名空间的标签
      */
     @Unique
-    private void loadNamespaceTags(String namespace, File namespaceDir,
+    private void loadNamespaceTags(String namespace, File namespaceDir, String tagType,
                                    Map<ResourceLocation, List<TagLoader.EntryWithSource>> tags) {
-        // 扫描items子目录
-        File itemsDir = new File(namespaceDir, "items");
-        if (itemsDir.exists() && itemsDir.isDirectory()) {
-            loadTagFiles(namespace, "items", itemsDir, tags);
-        }
-
-        // 扫描blocks子目录
-        File blocksDir = new File(namespaceDir, "blocks");
-        if (blocksDir.exists() && blocksDir.isDirectory()) {
-            loadTagFiles(namespace, "blocks", blocksDir, tags);
+        File typeDir = new File(namespaceDir, tagType);
+        if (typeDir.exists() && typeDir.isDirectory()) {
+            loadTagFiles(namespace, tagType, typeDir, tags);
         }
     }
 

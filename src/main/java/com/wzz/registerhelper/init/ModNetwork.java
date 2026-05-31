@@ -3,6 +3,7 @@ package com.wzz.registerhelper.init;
 import com.wzz.registerhelper.RecipeHelper;
 import com.wzz.registerhelper.network.CreateRecipeJsonPacket;
 import com.wzz.registerhelper.network.OpenGUIPacket;
+import com.wzz.registerhelper.network.OpenTagsOverviewPacket;
 import com.wzz.registerhelper.network.RecipeBlacklistPacket;
 import com.wzz.registerhelper.network.RequestRecipeListPacket;
 import com.wzz.registerhelper.network.SyncRecipeListPacket;
@@ -26,6 +27,13 @@ public class ModNetwork {
                 .encoder(OpenGUIPacket::encode)
                 .decoder(OpenGUIPacket::decode)
                 .consumerMainThread(OpenGUIPacket::handle)
+                .add();
+
+        // 打开标签概览的包（服务器 -> 客户端）
+        CHANNEL.messageBuilder(OpenTagsOverviewPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(OpenTagsOverviewPacket::encode)
+                .decoder(OpenTagsOverviewPacket::decode)
+                .consumerMainThread(OpenTagsOverviewPacket::handle)
                 .add();
 
         // 创建配方的包

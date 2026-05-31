@@ -91,10 +91,50 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
                 guiGraphics.drawString(font, "?", x + width / 2 - 3, y + height / 2 - 4, 0xFFFFFF);
             }
         }
+    }
+    
+    public void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY) {
+        if (!active) return;
+        
+        int x = component.getX();
+        int y = component.getY();
+        int width = 16;
+        int height = 58;
+        
+        boolean isMouseOver = mouseX >= x && mouseX < x + width &&
+                             mouseY >= y && mouseY < y + height;
         
         if (isMouseOver) {
-            renderTooltip(guiGraphics, font, mouseX, mouseY, chemicalId, amount, maxAmount);
+            String chemicalId = component.getChemicalId();
+            long amount = component.getAmount();
+            long maxAmount = component.getMaxAmount();
+            renderTooltipContent(guiGraphics, font, mouseX, mouseY, chemicalId, amount, maxAmount);
         }
+    }
+    
+    private void renderTooltipContent(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String chemicalId, long amount, long maxAmount) {
+        java.util.List<Component> tooltip = new java.util.ArrayList<>();
+        
+        String typeName = component.getChemicalType().getDisplayName();
+        
+        if (chemicalId == null || chemicalId.isEmpty() || amount <= 0) {
+            tooltip.add(Component.literal("§7" + typeName + ": 空"));
+            tooltip.add(Component.literal("§e点击选择" + typeName));
+        } else {
+            String chemicalName = getChemicalDisplayName(chemicalId);
+            tooltip.add(Component.literal("§6" + chemicalName));
+            tooltip.add(Component.literal("§7" + chemicalId));
+            tooltip.add(Component.empty());
+            tooltip.add(Component.literal("§f" + typeName + "量: §e" + formatAmountDetailed(amount)));
+            tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
+            tooltip.add(Component.literal("§f填充度: §b" + String.format("%.1f%%", (double) amount / maxAmount * 100)));
+        }
+        
+        java.util.List<net.minecraft.util.FormattedCharSequence> formattedTooltip = new java.util.ArrayList<>();
+        for (Component comp : tooltip) {
+            formattedTooltip.add(comp.getVisualOrderText());
+        }
+        guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
     }
     
     private void renderChemical(GuiGraphics guiGraphics, int color, int x, int y, int width, int height, ResourceLocation textureLocation, ResourceLocation fallbackTexture) {
@@ -276,32 +316,32 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
         }
     }
     
-    private void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String chemicalId, long amount, long maxAmount) {
-        java.util.List<Component> tooltip = new java.util.ArrayList<>();
-        
-        String typeName = component.getChemicalType().getDisplayName();
-        
-        if (chemicalId == null || chemicalId.isEmpty() || amount <= 0) {
-            tooltip.add(Component.literal("§7" + typeName + ": 空"));
-            tooltip.add(Component.literal("§e点击选择" + typeName));
-        } else {
-            String chemicalName = getChemicalDisplayName(chemicalId);
-            tooltip.add(Component.literal("§6" + chemicalName));
-            tooltip.add(Component.literal("§7" + chemicalId));
-            tooltip.add(Component.empty());
-            tooltip.add(Component.literal("§f" + typeName + "量: §e" + formatAmountDetailed(amount)));
-            tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
-            tooltip.add(Component.literal("§f填充度: §b" + String.format("%.1f%%", (double) amount / maxAmount * 100)));
-        }
-        
-        java.util.List<net.minecraft.util.FormattedCharSequence> formattedTooltip = new java.util.ArrayList<>();
-        for (Component comp : tooltip) {
-            formattedTooltip.add(comp.getVisualOrderText());
-        }
-        guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
-    }
-    
     private String getChemicalDisplayName(String chemicalId) {
+        try {
+            ResourceLocation location = new ResourceLocation(chemicalId);
+            
+            Gas gas = MekanismAPI.gasRegistry().getValue(location);
+            if (gas != null && !gas.isEmptyType()) {
+                return gas.getTextComponent().getString();
+            }
+            
+            InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
+            if (infuseType != null && !infuseType.isEmptyType()) {
+                return infuseType.getTextComponent().getString();
+            }
+            
+            Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
+            if (pigment != null && !pigment.isEmptyType()) {
+                return pigment.getTextComponent().getString();
+            }
+            
+            Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
+            if (slurry != null && !slurry.isEmptyType()) {
+                return slurry.getTextComponent().getString();
+            }
+        } catch (Exception e) {
+        }
+        
         String path = chemicalId.contains(":") ? chemicalId.substring(chemicalId.indexOf(":") + 1) : chemicalId;
         
         path = path.replace("_", " ");

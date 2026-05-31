@@ -682,7 +682,7 @@ public class RecipeCreatorScreen extends Screen {
         Button createCustomTagButton = addRenderableWidget(Button.builder(
                         Component.literal("创建自定义标签"),
                         button -> openCustomTagCreator())
-                .bounds(currentX, controlY2, 110, 20)
+                .bounds(currentX, controlY2, 80, 20)
                 .build());
 
         // 右侧面板
@@ -715,7 +715,7 @@ public class RecipeCreatorScreen extends Screen {
      */
     private void initializeSlotOperationButtons() {
         int buttonY = topPos + contentHeight - 60;
-        int buttonWidth = 100;
+        int buttonWidth = 64;
         int buttonHeight = 20;
         int spacing = 10;
         int startX = leftPos + 20;
@@ -1031,10 +1031,15 @@ public class RecipeCreatorScreen extends Screen {
      */
     private void openCustomTagCreator() {
         if (minecraft != null) {
-            minecraft.setScreen(new CustomTagCreatorScreen(this, (tagId, itemStacks) -> {
-                if (tagId != null && !itemStacks.isEmpty()) {
-                    CustomTagManager.registerTag(tagId, itemStacks);
-                    displaySuccess("自定义标签已创建: #" + tagId);
+            minecraft.setScreen(new CustomTagCreatorScreen(this, result -> {
+                if (result != null && result.tagId != null) {
+                    if (result.mode == CustomTagCreatorScreen.Mode.ITEM && !result.items.isEmpty()) {
+                        CustomTagManager.registerTag(result.tagId, result.items);
+                        displaySuccess("自定义物品标签已创建: #" + result.tagId);
+                    } else if (result.mode == CustomTagCreatorScreen.Mode.FLUID && !result.fluidIds.isEmpty()) {
+                        CustomTagManager.registerFluidTag(result.tagId, result.fluidIds);
+                        displaySuccess("自定义流体标签已创建: #" + result.tagId);
+                    }
                 }
             }));
         }
@@ -1411,16 +1416,26 @@ public class RecipeCreatorScreen extends Screen {
                 }));
             }
             case CUSTOM_TAG -> {
-                // 创建自定义标签
-                minecraft.setScreen(new CustomTagCreatorScreen(this, (tagId, items) -> {
-                    CustomTagManager.registerTag(tagId, items);
-                    IngredientData data = IngredientData.fromCustomTag(tagId, items);
-                    slotManager.setIngredientData(listIndex, data);
-                    // 同步到渲染器（使用第一个物品显示）- 使用 SlotComponent 的 slotIndex 作为 key
-                    if (componentRenderManager != null) {
-                        componentRenderManager.updateSlotItem(slotIndex, data.getDisplayStack());
+                minecraft.setScreen(new CustomTagCreatorScreen(this, result -> {
+                    if (result != null && result.tagId != null) {
+                        if (result.mode == CustomTagCreatorScreen.Mode.ITEM && !result.items.isEmpty()) {
+                            CustomTagManager.registerTag(result.tagId, result.items);
+                            IngredientData data = IngredientData.fromCustomTag(result.tagId, result.items);
+                            slotManager.setIngredientData(listIndex, data);
+                            if (componentRenderManager != null) {
+                                componentRenderManager.updateSlotItem(slotIndex, data.getDisplayStack());
+                            }
+                            displayInfo("已添加自定义物品标签: #" + result.tagId + " (包含 " + result.items.size() + " 个物品)");
+                        } else if (result.mode == CustomTagCreatorScreen.Mode.FLUID && !result.fluidIds.isEmpty()) {
+                            CustomTagManager.registerFluidTag(result.tagId, result.fluidIds);
+                            IngredientData data = IngredientData.fromCustomFluidTag(result.tagId, result.fluidIds);
+                            slotManager.setIngredientData(listIndex, data);
+                            if (componentRenderManager != null) {
+                                componentRenderManager.updateSlotItem(slotIndex, data.getDisplayStack());
+                            }
+                            displayInfo("已添加自定义流体标签: #" + result.tagId + " (包含 " + result.fluidIds.size() + " 个流体)");
+                        }
                     }
-                    displayInfo("已添加自定义标签: #" + tagId + " (包含 " + items.size() + " 个物品)");
                 }));
             }
         }

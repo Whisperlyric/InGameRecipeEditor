@@ -87,10 +87,56 @@ public class FluidSlotRenderer implements ComponentRenderer {
                 guiGraphics.drawString(font, "?", x + width / 2 - 3, y + height / 2 - 4, 0xFFFFFF);
             }
         }
+    }
+    
+    public void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY) {
+        if (!active) return;
+        
+        int x = component.getX();
+        int y = component.getY();
+        int width = 16;
+        int height = 58;
+        
+        boolean isMouseOver = mouseX >= x && mouseX < x + width &&
+                             mouseY >= y && mouseY < y + height;
         
         if (isMouseOver) {
-            renderTooltip(guiGraphics, font, mouseX, mouseY, fluidId, amount, maxAmount);
+            String fluidId = component.getFluidId();
+            long amount = component.getAmount();
+            long maxAmount = component.getMaxAmount();
+            renderTooltipContent(guiGraphics, font, mouseX, mouseY, fluidId, amount, maxAmount);
         }
+    }
+    
+    private void renderTooltipContent(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String fluidId, long amount, long maxAmount) {
+        java.util.List<Component> tooltip = new java.util.ArrayList<>();
+        
+        if (fluidId == null || fluidId.isEmpty() || amount <= 0) {
+            tooltip.add(Component.literal("§7流体: 空"));
+            tooltip.add(Component.literal("§e点击选择流体"));
+        } else {
+            try {
+                ResourceLocation fluidLoc = new ResourceLocation(fluidId);
+                Fluid fluid = ForgeRegistries.FLUIDS.getValue(fluidLoc);
+                if (fluid != null && fluid != Fluids.EMPTY) {
+                    String fluidName = fluid.defaultFluidState().createLegacyBlock().getBlock().getName().getString();
+                    tooltip.add(Component.literal("§6" + fluidName));
+                    tooltip.add(Component.literal("§7" + fluidId));
+                    tooltip.add(Component.empty());
+                    tooltip.add(Component.literal("§f存储量: §e" + formatAmountDetailed(amount)));
+                    tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
+                    tooltip.add(Component.literal("§f填充度: §b" + String.format("%.1f%%", (double) amount / maxAmount * 100)));
+                }
+            } catch (Exception e) {
+                tooltip.add(Component.literal("§c错误: " + fluidId));
+            }
+        }
+        
+        java.util.List<net.minecraft.util.FormattedCharSequence> formattedTooltip = new java.util.ArrayList<>();
+        for (Component comp : tooltip) {
+            formattedTooltip.add(comp.getVisualOrderText());
+        }
+        guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
     }
     
     private void renderFluidWithFlow(GuiGraphics guiGraphics, FluidStack fluidStack, int x, int y, int width, int height) {
@@ -203,37 +249,6 @@ public class FluidSlotRenderer implements ComponentRenderer {
         } else {
             return String.valueOf(amount);
         }
-    }
-    
-    private void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String fluidId, long amount, long maxAmount) {
-        java.util.List<Component> tooltip = new java.util.ArrayList<>();
-        
-        if (fluidId == null || fluidId.isEmpty() || amount <= 0) {
-            tooltip.add(Component.literal("§7流体: 空"));
-            tooltip.add(Component.literal("§e点击选择流体"));
-        } else {
-            try {
-                ResourceLocation fluidLoc = new ResourceLocation(fluidId);
-                Fluid fluid = ForgeRegistries.FLUIDS.getValue(fluidLoc);
-                if (fluid != null && fluid != Fluids.EMPTY) {
-                    String fluidName = fluid.defaultFluidState().createLegacyBlock().getBlock().getName().getString();
-                    tooltip.add(Component.literal("§6" + fluidName));
-                    tooltip.add(Component.literal("§7" + fluidId));
-                    tooltip.add(Component.empty());
-                    tooltip.add(Component.literal("§f存储量: §e" + formatAmountDetailed(amount)));
-                    tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
-                    tooltip.add(Component.literal("§f填充度: §b" + String.format("%.1f%%", (double) amount / maxAmount * 100)));
-                }
-            } catch (Exception e) {
-                tooltip.add(Component.literal("§c错误: " + fluidId));
-            }
-        }
-        
-        java.util.List<net.minecraft.util.FormattedCharSequence> formattedTooltip = new java.util.ArrayList<>();
-        for (Component comp : tooltip) {
-            formattedTooltip.add(comp.getVisualOrderText());
-        }
-        guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
     }
     
     private String formatAmountDetailed(long amount) {

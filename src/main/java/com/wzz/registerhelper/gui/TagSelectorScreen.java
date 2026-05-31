@@ -2,16 +2,25 @@ package com.wzz.registerhelper.gui;
 
 import com.wzz.registerhelper.util.PinyinSearchHelper;
 import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
@@ -25,6 +34,29 @@ import java.util.function.Consumer;
 @OnlyIn(Dist.CLIENT)
 public class TagSelectorScreen extends Screen {
     
+    public enum TagType {
+        ALL("全部", null),
+        BLOCKS("方块", "blocks"),
+        ITEMS("物品", "items"),
+        FLUIDS("流体", "fluids");
+        
+        private final String displayName;
+        private final String directory;
+        
+        TagType(String displayName, String directory) {
+            this.displayName = displayName;
+            this.directory = directory;
+        }
+        
+        public String getDisplayName() {
+            return displayName;
+        }
+        
+        public String getDirectory() {
+            return directory;
+        }
+    }
+    
     private static final int TAGS_PER_PAGE = 12;
     private static final int GUI_WIDTH = 300;
     private static final int GUI_HEIGHT = 320;
@@ -36,11 +68,13 @@ public class TagSelectorScreen extends Screen {
     private Button prevPageButton;
     private Button nextPageButton;
     private Button cancelButton;
+    private final List<Button> typeButtons = new ArrayList<>();
     
     private final List<TagEntry> allTags = new ArrayList<>();
     private final List<TagEntry> filteredTags = new ArrayList<>();
     private PinyinSearchHelper<TagEntry> searchHelper;
     
+    private TagType currentTagType = TagType.ALL;
     private int currentPage = 0;
     private int maxPage = 0;
     private int leftPos, topPos;
@@ -51,14 +85,27 @@ public class TagSelectorScreen extends Screen {
     private static class TagEntry {
         final ResourceLocation tagId;
         final ItemStack representativeItem;
+        final Fluid representativeFluid;
         final String displayName;
         final int itemCount;
+        final TagType tagType;
         
-        TagEntry(ResourceLocation tagId, ItemStack representativeItem, int itemCount) {
+        TagEntry(ResourceLocation tagId, ItemStack representativeItem, int itemCount, TagType tagType) {
             this.tagId = tagId;
             this.representativeItem = representativeItem;
+            this.representativeFluid = null;
             this.itemCount = itemCount;
             this.displayName = tagId.toString();
+            this.tagType = tagType;
+        }
+        
+        TagEntry(ResourceLocation tagId, Fluid fluid, int itemCount, TagType tagType) {
+            this.tagId = tagId;
+            this.representativeItem = ItemStack.EMPTY;
+            this.representativeFluid = fluid;
+            this.itemCount = itemCount;
+            this.displayName = tagId.toString();
+            this.tagType = tagType;
         }
     }
     
@@ -75,39 +122,99 @@ public class TagSelectorScreen extends Screen {
     }
     
     /**
-     * 收集所有可用的物品标签
+     * 收集所有可用的标签
      */
     private void collectAllTags() {
         allTags.clear();
         
         Set<ResourceLocation> processedTags = new HashSet<>();
         
-        // 遍历所有物品，收集它们的标签
+        if (currentTagType == TagType.ALL || currentTagType == TagType.ITEMS) {
+            collectItemTags(processedTags);
+        }
+        
+        if (currentTagType == TagType.ALL || currentTagType == TagType.BLOCKS) {
+            collectBlockTags(processedTags);
+        }
+        
+        if (currentTagType == TagType.ALL || currentTagType == TagType.FLUIDS) {
+            collectFluidTags(processedTags);
+        }
+        
+        // 按命名空间和路径排序
+        allTags.sort(Comparator.comparing(tag -> tag.tagId.toString()));
+        searchHelper.buildCache(allTags);
+    }
+    
+    /**
+     * 收集物品标签
+     */
+    private void collectItemTags(Set<ResourceLocation> processedTags) {
         for (Item item : ForgeRegistries.ITEMS.getValues()) {
             if (item == net.minecraft.world.item.Items.AIR) continue;
             
-            // 获取物品的所有标签
             item.builtInRegistryHolder().tags().forEach(tagKey -> {
                 ResourceLocation tagId = tagKey.location();
                 
                 if (!processedTags.contains(tagId)) {
                     processedTags.add(tagId);
                     
-                    // 计算该标签包含的物品数量
                     int itemCount = (int) ForgeRegistries.ITEMS.getValues().stream()
                             .filter(i -> i.builtInRegistryHolder().is(tagKey))
                             .count();
                     
-                    // 创建标签条目
                     ItemStack representativeItem = new ItemStack(item, 1);
-                    allTags.add(new TagEntry(tagId, representativeItem, itemCount));
+                    allTags.add(new TagEntry(tagId, representativeItem, itemCount, TagType.ITEMS));
                 }
             });
         }
-        
-        // 按命名空间和路径排序
-        allTags.sort(Comparator.comparing(tag -> tag.tagId.toString()));
-        searchHelper.buildCache(allTags);
+    }
+    
+    /**
+     * 收集方块标签
+     */
+    private void collectBlockTags(Set<ResourceLocation> processedTags) {
+        for (Block block : ForgeRegistries.BLOCKS.getValues()) {
+            if (block == net.minecraft.world.level.block.Blocks.AIR) continue;
+            
+            block.builtInRegistryHolder().tags().forEach(tagKey -> {
+                ResourceLocation tagId = tagKey.location();
+                
+                if (!processedTags.contains(tagId)) {
+                    processedTags.add(tagId);
+                    
+                    int blockCount = (int) ForgeRegistries.BLOCKS.getValues().stream()
+                            .filter(b -> b.builtInRegistryHolder().is(tagKey))
+                            .count();
+                    
+                    ItemStack representativeItem = new ItemStack(block.asItem(), 1);
+                    allTags.add(new TagEntry(tagId, representativeItem, blockCount, TagType.BLOCKS));
+                }
+            });
+        }
+    }
+    
+    /**
+     * 收集流体标签
+     */
+    private void collectFluidTags(Set<ResourceLocation> processedTags) {
+        for (Fluid fluid : ForgeRegistries.FLUIDS.getValues()) {
+            if (fluid == net.minecraft.world.level.material.Fluids.EMPTY) continue;
+            
+            fluid.builtInRegistryHolder().tags().forEach(tagKey -> {
+                ResourceLocation tagId = tagKey.location();
+                
+                if (!processedTags.contains(tagId)) {
+                    processedTags.add(tagId);
+                    
+                    int fluidCount = (int) ForgeRegistries.FLUIDS.getValues().stream()
+                            .filter(f -> f.builtInRegistryHolder().is(tagKey))
+                            .count();
+                    
+                    allTags.add(new TagEntry(tagId, fluid, fluidCount, TagType.FLUIDS));
+                }
+            });
+        }
     }
     
     /**
@@ -156,26 +263,58 @@ public class TagSelectorScreen extends Screen {
         searchBox.setResponder(this::updateFilteredTags);
         addWidget(searchBox);
         
+        // 分类按钮
+        typeButtons.clear();
+        int buttonWidth = 60;
+        int buttonSpacing = 5;
+        int totalButtonsWidth = TagType.values().length * buttonWidth + (TagType.values().length - 1) * buttonSpacing;
+        int startX = leftPos + (GUI_WIDTH - totalButtonsWidth) / 2;
+        
+        for (TagType type : TagType.values()) {
+            Button typeButton = addRenderableWidget(Button.builder(
+                    Component.literal(type.getDisplayName()),
+                    button -> {
+                        currentTagType = type;
+                        currentPage = 0;
+                        collectAllTags();
+                        updateFilteredTags(searchBox.getValue());
+                        updateTypeButtons();
+                    })
+                    .bounds(startX, topPos + 30, buttonWidth, 20)
+                    .build());
+            typeButtons.add(typeButton);
+            startX += buttonWidth + buttonSpacing;
+        }
+        updateTypeButtons();
+        
         // 翻页按钮
         prevPageButton = addRenderableWidget(Button.builder(
                 Component.literal("<"),
                 button -> previousPage())
-                .bounds(leftPos + 8, topPos + GUI_HEIGHT - 24, 20, 20)
+                .bounds(leftPos + (GUI_WIDTH - 48) / 2 - 28, topPos + GUI_HEIGHT + 20, 20, 20)
                 .build());
         
         nextPageButton = addRenderableWidget(Button.builder(
                 Component.literal(">"),
                 button -> nextPage())
-                .bounds(leftPos + GUI_WIDTH - 28, topPos + GUI_HEIGHT - 24, 20, 20)
+                .bounds(leftPos + (GUI_WIDTH - 48) / 2 - 4, topPos + GUI_HEIGHT + 20, 20, 20)
                 .build());
         
         cancelButton = addRenderableWidget(Button.builder(
                 Component.literal("取消"),
                 button -> onClose())
-                .bounds(leftPos + (GUI_WIDTH - 48) / 2, topPos + GUI_HEIGHT - 24, 48, 20)
+                .bounds(leftPos + (GUI_WIDTH - 48) / 2 + 28, topPos + GUI_HEIGHT + 20, 48, 20)
                 .build());
         
         updateButtons();
+    }
+    
+    private void updateTypeButtons() {
+        for (int i = 0; i < typeButtons.size(); i++) {
+            Button button = typeButtons.get(i);
+            TagType type = TagType.values()[i];
+            button.active = type != currentTagType;
+        }
     }
     
     private void updateButtons() {
@@ -231,7 +370,7 @@ public class TagSelectorScreen extends Screen {
         int startIndex = currentPage * TAGS_PER_PAGE;
         int endIndex = Math.min(startIndex + TAGS_PER_PAGE, filteredTags.size());
         
-        int startY = topPos + 35;
+        int startY = topPos + 55;
         int rowHeight = 22;
         
         for (int i = startIndex; i < endIndex; i++) {
@@ -253,9 +392,13 @@ public class TagSelectorScreen extends Screen {
             guiGraphics.fill(leftPos + 8, rowY, leftPos + GUI_WIDTH - 8, rowY + 1, borderColor);
             guiGraphics.fill(leftPos + 8, rowY + rowHeight - 2, leftPos + GUI_WIDTH - 8, rowY + rowHeight - 1, borderColor);
             
-            // 渲染代表性物品图标
+            // 渲染代表性物品/流体图标
             RenderSystem.enableDepthTest();
-            guiGraphics.renderItem(tag.representativeItem, leftPos + 12, rowY + 2);
+            if (tag.representativeFluid != null) {
+                renderFluid(guiGraphics, tag.representativeFluid, leftPos + 12, rowY + 2, 16, 16);
+            } else {
+                guiGraphics.renderItem(tag.representativeItem, leftPos + 12, rowY + 2);
+            }
             RenderSystem.disableDepthTest();
             
             // 标签ID
@@ -271,11 +414,35 @@ public class TagSelectorScreen extends Screen {
         }
     }
     
+    private void renderFluid(GuiGraphics guiGraphics, Fluid fluid, int x, int y, int width, int height) {
+        if (fluid == null) return;
+        
+        FluidStack fluidStack = new FluidStack(fluid, 1000);
+        IClientFluidTypeExtensions fluidExtensions = IClientFluidTypeExtensions.of(fluid);
+        
+        ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
+        if (stillTexture == null) return;
+        
+        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+        
+        int tintColor = fluidExtensions.getTintColor(fluidStack);
+        float r = ((tintColor >> 16) & 0xFF) / 255.0f;
+        float g = ((tintColor >> 8) & 0xFF) / 255.0f;
+        float b = (tintColor & 0xFF) / 255.0f;
+        
+        RenderSystem.setShaderColor(r, g, b, 1.0f);
+        RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+        
+        guiGraphics.blit(x, y, 0, width, height, sprite);
+        
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+    
     private void renderTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         int startIndex = currentPage * TAGS_PER_PAGE;
         int endIndex = Math.min(startIndex + TAGS_PER_PAGE, filteredTags.size());
         
-        int startY = topPos + 35;
+        int startY = topPos + 55;
         int rowHeight = 22;
         
         for (int i = startIndex; i < endIndex; i++) {
@@ -289,8 +456,10 @@ public class TagSelectorScreen extends Screen {
                 List<Component> tooltip = new ArrayList<>();
                 
                 tooltip.add(Component.literal("§6标签: §f#" + tag.tagId));
-                tooltip.add(Component.literal("§7包含 " + tag.itemCount + " 个物品"));
-                tooltip.add(Component.literal("§8点击选择此标签"));
+                tooltip.add(Component.literal("§7类型: §f" + tag.tagType.getDisplayName()));
+                tooltip.add(Component.literal("§7包含 " + tag.itemCount + " 个" + tag.tagType.getDisplayName()));
+                tooltip.add(Component.literal("§a左键: §f选择此标签"));
+                tooltip.add(Component.literal("§e右键: §f预览标签内容"));
                 
                 guiGraphics.renderTooltip(this.font, tooltip, Optional.empty(), mouseX, mouseY);
                 break;
@@ -304,7 +473,7 @@ public class TagSelectorScreen extends Screen {
             int startIndex = currentPage * TAGS_PER_PAGE;
             int endIndex = Math.min(startIndex + TAGS_PER_PAGE, filteredTags.size());
             
-            int startY = topPos + 35;
+            int startY = topPos + 55;
             int rowHeight = 22;
             
             for (int i = startIndex; i < endIndex; i++) {
@@ -317,6 +486,27 @@ public class TagSelectorScreen extends Screen {
                     TagEntry tag = filteredTags.get(i);
                     onTagSelected.accept(tag.tagId);
                     onClose();
+                    return true;
+                }
+            }
+        } else if (button == 1) { // 右键
+            int startIndex = currentPage * TAGS_PER_PAGE;
+            int endIndex = Math.min(startIndex + TAGS_PER_PAGE, filteredTags.size());
+            
+            int startY = topPos + 55;
+            int rowHeight = 22;
+            
+            for (int i = startIndex; i < endIndex; i++) {
+                int relativeIndex = i - startIndex;
+                int rowY = startY + relativeIndex * rowHeight;
+                
+                if (mouseX >= leftPos + 8 && mouseX < leftPos + GUI_WIDTH - 8 &&
+                    mouseY >= rowY && mouseY < rowY + rowHeight - 2) {
+                    
+                    TagEntry tag = filteredTags.get(i);
+                    if (minecraft != null) {
+                        minecraft.setScreen(new TagPreviewScreen(this, tag.tagId, tag.tagType));
+                    }
                     return true;
                 }
             }
