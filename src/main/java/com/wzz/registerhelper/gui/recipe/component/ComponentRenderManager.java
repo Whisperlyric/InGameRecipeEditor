@@ -169,19 +169,39 @@ public class ComponentRenderManager {
 
     public void renderAll(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         if (this.font == null)
-            this.font = Minecraft.getInstance().font;
+            this.font = Minecraft.getInstance().font();
         
-        // 先渲染所有槽位
         for (ComponentRenderer renderer : renderers) {
             renderer.render(guiGraphics, font, mouseX, mouseY);
         }
         
-        // 然后渲染所有tooltip
+        ComponentRenderer hoveredRenderer = null;
         for (ComponentRenderer renderer : renderers) {
             if (renderer instanceof ChemicalSlotRenderer chemicalRenderer) {
-                chemicalRenderer.renderTooltip(guiGraphics, font, mouseX, mouseY);
+                if (chemicalRenderer.getBounds().contains(mouseX, mouseY)) {
+                    hoveredRenderer = renderer;
+                    break;
+                }
             } else if (renderer instanceof FluidSlotRenderer fluidRenderer) {
+                if (fluidRenderer.getBounds().contains(mouseX, mouseY)) {
+                    hoveredRenderer = renderer;
+                    break;
+                }
+            } else if (renderer instanceof GasSlotRenderer gasRenderer) {
+                if (gasRenderer.getBounds().contains(mouseX, mouseY)) {
+                    hoveredRenderer = renderer;
+                    break;
+                }
+            }
+        }
+        
+        if (hoveredRenderer != null) {
+            if (hoveredRenderer instanceof ChemicalSlotRenderer chemicalRenderer) {
+                chemicalRenderer.renderTooltip(guiGraphics, font, mouseX, mouseY);
+            } else if (hoveredRenderer instanceof FluidSlotRenderer fluidRenderer) {
                 fluidRenderer.renderTooltip(guiGraphics, font, mouseX, mouseY);
+            } else if (hoveredRenderer instanceof GasSlotRenderer gasRenderer) {
+                gasRenderer.renderTooltip(guiGraphics, font, mouseX, mouseY);
             }
         }
     }

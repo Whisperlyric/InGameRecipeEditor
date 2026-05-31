@@ -94,11 +94,30 @@ public class GasSlotRenderer implements ComponentRenderer {
         }
         
         if (isMouseOver) {
-            renderTooltip(guiGraphics, font, mouseX, mouseY, gasId, amount, maxAmount, displayDivisor);
         }
     }
     
-    private void renderGasWithFlow(GuiGraphics guiGraphics, int color, int x, int y, int width, int height) {
+    public void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY) {
+        if (!active) return;
+        
+        int x = component.getX();
+        int y = component.getY();
+        int width = 16;
+        int height = 58;
+        
+        boolean isMouseOver = mouseX >= x && mouseX < x + width &&
+                             mouseY >= y && mouseY < y + height;
+        
+        if (isMouseOver) {
+            String gasId = component.getGasId();
+            int amount = component.getAmount();
+            int maxAmount = component.getMaxAmount();
+            int displayDivisor = component.getDisplayDivisor();
+            renderTooltipContent(guiGraphics, font, mouseX, mouseY, gasId, amount, maxAmount, displayDivisor);
+        }
+    }
+    
+    private void renderTooltipContent(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String gasId, int amount, int maxAmount, int displayDivisor) {
         float r = ((color >> 16) & 0xFF) / 255.0f;
         float g = ((color >> 8) & 0xFF) / 255.0f;
         float b = (color & 0xFF) / 255.0f;
@@ -343,8 +362,48 @@ public class GasSlotRenderer implements ComponentRenderer {
     }
     
     private String getGasDisplayName(String gasId) {
-        String path = gasId.contains(":") ? gasId.substring(gasId.indexOf(":") + 1) : gasId;
+        if (gasId == null || gasId.isEmpty()) {
+            return "空";
+        }
         
+        try {
+            ResourceLocation location = new ResourceLocation(gasId);
+            
+            Gas gas = MekanismAPI.gasRegistry().getValue(location);
+            if (gas != null && !gas.isEmptyType()) {
+                Component textComponent = gas.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
+            }
+            
+            InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
+            if (infuseType != null && !infuseType.isEmptyType()) {
+                Component textComponent = infuseType.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
+            }
+            
+            Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
+            if (pigment != null && !pigment.isEmptyType()) {
+                Component textComponent = pigment.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
+            }
+            
+            Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
+            if (slurry != null && !slurry.isEmptyType()) {
+                Component textComponent = slurry.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
+            }
+        } catch (Exception e) {
+        }
+        
+        String path = gasId.contains(":") ? gasId.substring(gasId.indexOf(":") + 1) : gasId;
         path = path.replace("_", " ");
         
         StringBuilder result = new StringBuilder();
