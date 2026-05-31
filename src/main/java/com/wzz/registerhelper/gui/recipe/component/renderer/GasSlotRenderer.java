@@ -92,9 +92,6 @@ public class GasSlotRenderer implements ComponentRenderer {
                 guiGraphics.drawString(font, "?", x + width / 2 - 3, y + height / 2 - 4, 0xFFFFFF);
             }
         }
-        
-        if (isMouseOver) {
-        }
     }
     
     public void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY) {
@@ -118,6 +115,37 @@ public class GasSlotRenderer implements ComponentRenderer {
     }
     
     private void renderTooltipContent(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String gasId, int amount, int maxAmount, int displayDivisor) {
+        java.util.List<Component> tooltip = new java.util.ArrayList<>();
+        
+        int displayAmount = amount / displayDivisor;
+        int displayMaxAmount = maxAmount / displayDivisor;
+        
+        if (gasId == null || gasId.isEmpty()) {
+            tooltip.add(Component.literal("§7空槽位"));
+            tooltip.add(Component.literal("§e点击选择气体"));
+        } else {
+            String gasName = getGasDisplayName(gasId);
+            tooltip.add(Component.literal("§6" + gasName));
+            tooltip.add(Component.literal("§7" + gasId));
+            tooltip.add(Component.empty());
+            if (displayDivisor > 1) {
+                tooltip.add(Component.literal("§f数量: §e" + displayAmount + " (×" + displayDivisor + " mB)"));
+                tooltip.add(Component.literal("§f最大: §e" + displayMaxAmount + " (×" + displayDivisor + " mB)"));
+            } else {
+                tooltip.add(Component.literal("§f存储量: §e" + formatAmountDetailed(amount)));
+                tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
+            }
+            tooltip.add(Component.literal("§f填充度: §b" + String.format("%.1f%%", (double) amount / maxAmount * 100)));
+        }
+        
+        java.util.List<net.minecraft.util.FormattedCharSequence> formattedTooltip = new java.util.ArrayList<>();
+        for (Component comp : tooltip) {
+            formattedTooltip.add(comp.getVisualOrderText());
+        }
+        guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
+    }
+    
+    private void renderGasWithFlow(GuiGraphics guiGraphics, int color, int x, int y, int width, int height) {
         float r = ((color >> 16) & 0xFF) / 255.0f;
         float g = ((color >> 8) & 0xFF) / 255.0f;
         float b = (color & 0xFF) / 255.0f;
@@ -180,7 +208,7 @@ public class GasSlotRenderer implements ComponentRenderer {
             }
         }
         
-        com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+        BufferUploader.drawWithShader(vertexBuffer.end());
         RenderSystem.disableBlend();
         
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -314,7 +342,7 @@ public class GasSlotRenderer implements ComponentRenderer {
             }
         }
         
-        com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+        BufferUploader.drawWithShader(vertexBuffer.end());
         RenderSystem.disableBlend();
         
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -328,37 +356,6 @@ public class GasSlotRenderer implements ComponentRenderer {
         } else {
             return String.valueOf(amount);
         }
-    }
-    
-    private void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY, String gasId, int amount, int maxAmount, int displayDivisor) {
-        java.util.List<Component> tooltip = new java.util.ArrayList<>();
-        
-        int displayAmount = amount / displayDivisor;
-        int displayMaxAmount = maxAmount / displayDivisor;
-        
-        if (gasId == null || gasId.isEmpty()) {
-            tooltip.add(Component.literal("§7空槽位"));
-            tooltip.add(Component.literal("§e点击选择气体"));
-        } else {
-            String gasName = getGasDisplayName(gasId);
-            tooltip.add(Component.literal("§6" + gasName));
-            tooltip.add(Component.literal("§7" + gasId));
-            tooltip.add(Component.empty());
-            if (displayDivisor > 1) {
-                tooltip.add(Component.literal("§f数量: §e" + displayAmount + " (×" + displayDivisor + " mB)"));
-                tooltip.add(Component.literal("§f最大: §e" + displayMaxAmount + " (×" + displayDivisor + " mB)"));
-            } else {
-                tooltip.add(Component.literal("§f存储量: §e" + formatAmountDetailed(amount)));
-                tooltip.add(Component.literal("§f最大容量: §e" + formatAmountDetailed(maxAmount)));
-            }
-            tooltip.add(Component.literal("§f填充度: §b" + String.format("%.1f%%", (double) amount / maxAmount * 100)));
-        }
-        
-        java.util.List<net.minecraft.util.FormattedCharSequence> formattedTooltip = new java.util.ArrayList<>();
-        for (Component component : tooltip) {
-            formattedTooltip.add(component.getVisualOrderText());
-        }
-        guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
     }
     
     private String getGasDisplayName(String gasId) {
