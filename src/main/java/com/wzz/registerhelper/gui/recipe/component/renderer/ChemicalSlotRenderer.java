@@ -317,33 +317,48 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
     }
     
     private String getChemicalDisplayName(String chemicalId) {
+        if (chemicalId == null || chemicalId.isEmpty()) {
+            return "空";
+        }
+        
         try {
             ResourceLocation location = new ResourceLocation(chemicalId);
             
             Gas gas = MekanismAPI.gasRegistry().getValue(location);
             if (gas != null && !gas.isEmptyType()) {
-                return gas.getTextComponent().getString();
+                Component textComponent = gas.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
             }
             
             InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
             if (infuseType != null && !infuseType.isEmptyType()) {
-                return infuseType.getTextComponent().getString();
+                Component textComponent = infuseType.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
             }
             
             Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
             if (pigment != null && !pigment.isEmptyType()) {
-                return pigment.getTextComponent().getString();
+                Component textComponent = pigment.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
             }
             
             Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
             if (slurry != null && !slurry.isEmptyType()) {
-                return slurry.getTextComponent().getString();
+                Component textComponent = slurry.getTextComponent();
+                if (textComponent != null) {
+                    return textComponent.getString();
+                }
             }
         } catch (Exception e) {
         }
         
         String path = chemicalId.contains(":") ? chemicalId.substring(chemicalId.indexOf(":") + 1) : chemicalId;
-        
         path = path.replace("_", " ");
         
         StringBuilder result = new StringBuilder();
