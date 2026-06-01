@@ -295,8 +295,8 @@ public class SlotManager {
     }
 
     private void updateCraftingSlotPositions() {
-        int gridWidth = Math.min(3, currentRecipeType.getMaxGridWidth());
-        int gridHeight = Math.min(3, currentRecipeType.getMaxGridHeight());
+        int gridWidth = currentRecipeType.getMaxGridWidth();
+        int gridHeight = currentRecipeType.getMaxGridHeight();
         updateGridSlotPositions(gridWidth, gridHeight);
     }
 
@@ -472,7 +472,9 @@ public class SlotManager {
     }
 
     private void initializeCraftingSlots() {
-        initializeGridSlots(3, 3);
+        int gridWidth = currentRecipeType.getMaxGridWidth();
+        int gridHeight = currentRecipeType.getMaxGridHeight();
+        initializeGridSlots(gridWidth, gridHeight);
     }
 
     private void initializeAvaritiaSlots() {

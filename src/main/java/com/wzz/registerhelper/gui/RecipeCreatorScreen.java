@@ -974,7 +974,9 @@ public class RecipeCreatorScreen extends Screen {
         // 合成模式按钮
         if (craftingModeButton != null) {
             String category = currentRecipeType.getProperty("category", String.class);
-            craftingModeButton.visible = "crafting".equals(category) || "avaritia".equals(category);
+            String typeId = currentRecipeType.getId();
+            boolean is2x2 = "crafting_shaped_2x2".equals(typeId);
+            craftingModeButton.visible = ("crafting".equals(category) || "avaritia".equals(category)) && !is2x2;
         }
 
         // 烹饪类型按钮
@@ -1068,6 +1070,24 @@ public class RecipeCreatorScreen extends Screen {
 
     private void onCraftingModeChanged(CycleButton<String> button, String newMode) {
         this.currentCraftingMode = newMode;
+        
+        if (currentRecipeType != null && "crafting".equals(currentRecipeType.getProperty("category", String.class))) {
+            String currentTypeId = currentRecipeType.getId();
+            if (!"crafting_shaped_2x2".equals(currentTypeId)) {
+                String newTypeId = switch (newMode) {
+                    case "shaped" -> "crafting_shaped";
+                    case "shapeless" -> "crafting_shapeless";
+                    default -> "crafting_shaped";
+                };
+                
+                RecipeTypeDefinition newType = DynamicRecipeTypeConfig.getRecipeType(newTypeId);
+                if (newType != null && newType != currentRecipeType) {
+                    this.currentRecipeType = newType;
+                    updateSlotManagerRecipeType();
+                    syncDataToRenderer();
+                }
+            }
+        }
     }
 
     private void onCookingTypeChanged(CycleButton<String> button, String newType) {

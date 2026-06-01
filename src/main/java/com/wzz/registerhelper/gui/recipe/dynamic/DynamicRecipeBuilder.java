@@ -479,15 +479,6 @@ public class DynamicRecipeBuilder {
         for (Map.Entry<String, Object> entry : allData.entrySet()) {
             request.withProperty(entry.getKey(), entry.getValue());
         }
-        if (allData.containsKey("fluidAmount")) {
-            Map<String, Object> fluidOutput = new HashMap<>();
-            fluidOutput.put("fluid", allData.get("fluid"));
-            fluidOutput.put("amount", allData.get("fluidAmount"));
-            allData.put("fluidOutput", fluidOutput);
-        }
-//        if (allData.containsKey("create_cutting")) {
-//            allData.put("processingTime", allData.get("processingTime"));
-//        }
     }
 
     /**

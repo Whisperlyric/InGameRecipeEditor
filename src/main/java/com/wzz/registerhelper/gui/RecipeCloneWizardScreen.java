@@ -1,6 +1,8 @@
 package com.wzz.registerhelper.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.wzz.registerhelper.gui.util.RecipePreviewRenderer;
+import com.wzz.registerhelper.gui.util.RecipePreviewRenderer.PreviewSlot;
 import com.wzz.registerhelper.util.PinyinSearchHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -461,13 +463,8 @@ public class RecipeCloneWizardScreen extends Screen {
     }
 
     private void renderSlot(GuiGraphics g, int x, int y, ItemStack item, boolean result) {
-        g.fill(x-1, y-1, x+SLOT+1, y+SLOT+1, result ? 0xFF6666FF : 0xFF555555);
-        g.fill(x, y, x+SLOT, y+SLOT, 0xFF373737);
-        if (!item.isEmpty()) {
-            RenderSystem.enableDepthTest();
-            g.renderItem(item, x+1, y+1);
-            RenderSystem.disableDepthTest();
-        }
+        PreviewSlot slot = new PreviewSlot(x, y, item);
+        RecipePreviewRenderer.renderSlot(g, slot, result);
     }
 
     private void renderSB(GuiGraphics g, int x, int y, int w, int h,
