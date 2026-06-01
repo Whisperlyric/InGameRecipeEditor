@@ -181,6 +181,7 @@ public class DynamicRecipeTypeConfig {
         return switch (modId) {
             case "minecraft" -> switch (type) {
                 case "crafting_shaped" -> "有序合成";
+                case "crafting_shaped_2x2" -> "有序合成2x2";
                 case "crafting_shapeless" -> "无序合成";
                 case "smelting" -> "熔炉";
                 case "blasting" -> "高炉";
@@ -208,11 +209,18 @@ public class DynamicRecipeTypeConfig {
                 .property("mode", "shaped")
                 .processor(minecraftProcessor)
                 .build());
-        registerRecipeType(new RecipeTypeDefinition.Builder("crafting_shapeless", "原版合成无序")
+        registerRecipeType(new RecipeTypeDefinition.Builder("crafting_shaped_2x2", "原版合成2x2")
+                .modId("minecraft")
+                .gridSize(2, 2)
+                .property("category", "crafting")
+                .property("mode", "shaped")
+                .processor(minecraftProcessor)
+                .build());
+        registerRecipeType(new RecipeTypeDefinition.Builder("crafting_shapeless", "原版合成")
                 .modId("minecraft")
                 .gridSize(3, 3)
                 .property("category", "crafting")
-                .property("mode", "shaped")
+                .property("mode", "shapeless")
                 .displayable(false)
                 .processor(minecraftProcessor)
                 .build());
