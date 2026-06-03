@@ -9,6 +9,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -16,8 +18,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
+import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.NotNull;
@@ -73,7 +79,25 @@ public class RecipeCloneWizardScreen extends Screen {
     private final PinyinSearchHelper<ItemStack> searchHelper;
 
     private static final int ITEM_COLS = 8;
-    private static final int ITEM_ROWS = 7;
+    private static final int ITEM_ROWS = 5;  // 减少物品行数，为流体和化学品腾出空间
+
+    // ── 流体选择 ──────────────────────────────────────────────────
+    private final List<FluidStack> allFluids = new ArrayList<>();
+    private final List<FluidStack> filteredFluids = new ArrayList<>();
+    private EditBox fluidSearchBox;
+    private int fluidScroll = 0;
+    private FluidStack targetFluid = FluidStack.EMPTY;
+    private final PinyinSearchHelper<FluidStack> fluidSearchHelper;
+    private static final int FLUID_ROWS = 2;  // 流体行数
+
+    // ── 化学品选择 ──────────────────────────────────────────────────
+    private final List<ChemicalEntry> allChemicals = new ArrayList<>();
+    private final List<ChemicalEntry> filteredChemicals = new ArrayList<>();
+    private EditBox chemicalSearchBox;
+    private int chemicalScroll = 0;
+    private ChemicalEntry targetChemical = null;
+    private final PinyinSearchHelper<ChemicalEntry> chemicalSearchHelper;
+    private static final int CHEMICAL_ROWS = 2;  // 化学品行数
 
     // ── Step 2：配方列表 ──────────────────────────────────────────
     private final List<RecipeEntry> recipeList = new ArrayList<>();  // 合并列表（原料在前，产物在后）
@@ -84,6 +108,13 @@ public class RecipeCloneWizardScreen extends Screen {
     // ── Step 3：预览 ──────────────────────────────────────────────
     private final List<PreviewSlot> currentRecipeSlots = new ArrayList<>();
     private PreviewSlot currentResultSlot = null;
+
+    // ── 滚动条拖动状态 ────────────────────────────────────────────
+    private boolean draggingItemScroll = false;
+    private boolean draggingFluidScroll = false;
+    private boolean draggingChemicalScroll = false;
+    private boolean draggingRecipeScroll = false;
+    private int dragScrollY = 0;  // 拖动起始Y坐标
 
     // ── 面板坐标（init后有效）────────────────────────────────────
     private int px, py;
@@ -101,7 +132,20 @@ public class RecipeCloneWizardScreen extends Screen {
                     return rl != null ? rl.toString() : "";
                 }
         );
+        this.fluidSearchHelper = new PinyinSearchHelper<>(
+                fluid -> fluid.getDisplayName().getString(),
+                fluid -> {
+                    ResourceLocation rl = ForgeRegistries.FLUIDS.getKey(fluid.getFluid());
+                    return rl != null ? rl.toString() : "";
+                }
+        );
+        this.chemicalSearchHelper = new PinyinSearchHelper<>(
+                chemical -> chemical.getDisplayName(),
+                chemical -> chemical.id != null ? chemical.id.toString() : ""
+        );
         loadItems();
+        loadFluids();
+        loadChemicals();
     }
 
     // ── 物品加载 ─────────────────────────────────────────────────
@@ -125,6 +169,83 @@ public class RecipeCloneWizardScreen extends Screen {
         allItems.add(s);
     }
 
+    // ── 流体加载 ─────────────────────────────────────────────────
+    private void loadFluids() {
+        for (Fluid fluid : ForgeRegistries.FLUIDS.getValues()) {
+            if (fluid != Fluids.EMPTY && fluid != Fluids.LAVA && fluid != Fluids.WATER) {
+                // 只添加源流体，避免重复
+                if (fluid.isSource(fluid.defaultFluidState())) {
+                    allFluids.add(new FluidStack(fluid, 1000));
+                }
+            }
+        }
+        filteredFluids.addAll(allFluids);
+        fluidSearchHelper.buildCache(allFluids);
+    }
+
+    // ── 化学品加载 ───────────────────────────────────────────────
+    private void loadChemicals() {
+        try {
+            // 尝试加载Mekanism化学品
+            if (net.minecraftforge.fml.ModList.get().isLoaded("mekanism")) {
+                // 气体
+                try {
+                    for (var gas : mekanism.api.MekanismAPI.gasRegistry().getValues()) {
+                        if (!gas.isEmptyType()) {
+                            allChemicals.add(new ChemicalEntry(
+                                    mekanism.api.MekanismAPI.gasRegistry().getKey(gas),
+                                    RecipePreviewRenderer.ContentType.GAS,
+                                    gas.getTint()
+                            ));
+                        }
+                    }
+                } catch (Exception e) {}
+
+                // 灌注类型
+                try {
+                    for (var infuseType : mekanism.api.MekanismAPI.infuseTypeRegistry().getValues()) {
+                        if (!infuseType.isEmptyType()) {
+                            allChemicals.add(new ChemicalEntry(
+                                    mekanism.api.MekanismAPI.infuseTypeRegistry().getKey(infuseType),
+                                    RecipePreviewRenderer.ContentType.INFUSE_TYPE,
+                                    infuseType.getTint()
+                            ));
+                        }
+                    }
+                } catch (Exception e) {}
+
+                // 颜料
+                try {
+                    for (var pigment : mekanism.api.MekanismAPI.pigmentRegistry().getValues()) {
+                        if (!pigment.isEmptyType()) {
+                            allChemicals.add(new ChemicalEntry(
+                                    mekanism.api.MekanismAPI.pigmentRegistry().getKey(pigment),
+                                    RecipePreviewRenderer.ContentType.PIGMENT,
+                                    pigment.getTint()
+                            ));
+                        }
+                    }
+                } catch (Exception e) {}
+
+                // 矿泥
+                try {
+                    for (var slurry : mekanism.api.MekanismAPI.slurryRegistry().getValues()) {
+                        if (!slurry.isEmptyType()) {
+                            allChemicals.add(new ChemicalEntry(
+                                    mekanism.api.MekanismAPI.slurryRegistry().getKey(slurry),
+                                    RecipePreviewRenderer.ContentType.SLURRY,
+                                    slurry.getTint()
+                            ));
+                        }
+                    }
+                } catch (Exception e) {}
+            }
+        } catch (Exception e) {}
+        
+        filteredChemicals.addAll(allChemicals);
+        chemicalSearchHelper.buildCache(allChemicals);
+    }
+
     // ── 搜索（支持中文名称、拼音、首字母、mod过滤） ───────────────
     private void onSearch(String text) {
         filteredItems.clear();
@@ -138,6 +259,34 @@ public class RecipeCloneWizardScreen extends Screen {
             }
         }
         itemScroll = 0;
+    }
+
+    private void onFluidSearch(String text) {
+        filteredFluids.clear();
+        if (text.isBlank()) {
+            filteredFluids.addAll(allFluids);
+        } else {
+            for (FluidStack f : allFluids) {
+                if (fluidSearchHelper.matches(f, text)) {
+                    filteredFluids.add(f);
+                }
+            }
+        }
+        fluidScroll = 0;
+    }
+
+    private void onChemicalSearch(String text) {
+        filteredChemicals.clear();
+        if (text.isBlank()) {
+            filteredChemicals.addAll(allChemicals);
+        } else {
+            for (ChemicalEntry c : allChemicals) {
+                if (chemicalSearchHelper.matches(c, text)) {
+                    filteredChemicals.add(c);
+                }
+            }
+        }
+        chemicalScroll = 0;
     }
 
     // ── 选中物品 → 加载配方 ──────────────────────────────────────
@@ -557,14 +706,32 @@ public class RecipeCloneWizardScreen extends Screen {
         c3x = c2x + COL2_W + PAD;
         col3W = W - (c3x - px) - PAD;
 
-        // 搜索框（栏1顶部）
+        // 物品搜索框（栏1顶部）
         searchBox = new EditBox(font, c1x, contentY + 2, COL1_W, 14,
-                Component.literal("搜索"));
+                Component.literal("搜索物品"));
         searchBox.setMaxLength(64);
         searchBox.setHint(Component.literal("§8名称/拼音/首字母/@mod"));
         searchBox.setResponder(this::onSearch);
         addWidget(searchBox);
         searchBox.setFocused(true);
+
+        // 流体搜索框
+        int fluidSearchY = contentY + 2 + (ITEM_ROWS * (SLOT + 2)) + 30;  // 下移16像素
+        fluidSearchBox = new EditBox(font, c1x, fluidSearchY, COL1_W, 14,
+                Component.literal("搜索流体"));
+        fluidSearchBox.setMaxLength(64);
+        fluidSearchBox.setHint(Component.literal("§8流体名称/拼音"));
+        fluidSearchBox.setResponder(this::onFluidSearch);
+        addWidget(fluidSearchBox);
+
+        // 化学品搜索框
+        int chemicalSearchY = fluidSearchY + 16 + (FLUID_ROWS * (SLOT + 2)) + 30;  // 下移16像素
+        chemicalSearchBox = new EditBox(font, c1x, chemicalSearchY, COL1_W, 14,
+                Component.literal("搜索化学品"));
+        chemicalSearchBox.setMaxLength(64);
+        chemicalSearchBox.setHint(Component.literal("§8化学品名称/拼音"));
+        chemicalSearchBox.setResponder(this::onChemicalSearch);
+        addWidget(chemicalSearchBox);
 
         // 底部按钮
         int footY = py + H - FOOT_H + 5;
@@ -611,18 +778,19 @@ public class RecipeCloneWizardScreen extends Screen {
         // 底栏分割线
         g.fill(px, py+H-FOOT_H, px+W, py+H-FOOT_H+1, divColor);
 
-        renderCol1(g, mx, my);    // 物品选择
+        renderCol1(g, mx, my);    // 物品、流体、化学品选择
         renderCol2(g, mx, my);    // 配方列表
         renderCol3(g, mx, my);    // 预览
         searchBox.render(g, mx, my, pt);
+        fluidSearchBox.render(g, mx, my, pt);
+        chemicalSearchBox.render(g, mx, my, pt);
         super.render(g, mx, my, pt);
     }
 
-    // ── 栏1：物品选择 ────────────────────────────────────────────
+    // ── 栏1：物品、流体、化学品选择 ──────────────────────────────
     private void renderCol1(GuiGraphics g, int mx, int my) {
-        g.drawString(font, targetItem.isEmpty()
-                        ? "§7① 选择目标物品"
-                        : "§a✔ 已选: §f" + targetItem.getHoverName().getString(),
+        // ── 物品选择 ────────────────────────────────────────────────
+        g.drawString(font, "§7物品",
                 c1x, contentY - 10, 0xAAAAAA, false);
 
         int gridTop = contentY + 18;
@@ -654,13 +822,162 @@ public class RecipeCloneWizardScreen extends Screen {
             }
         }
 
-        // 滚动条
+        // 物品滚动条
         renderSB(g, c1x+gridW+1, gridTop, 3, gridH,
                 (filteredItems.size()+ITEM_COLS-1)/ITEM_COLS, ITEM_ROWS, itemScroll);
 
-        // 计数
-        g.drawString(font, "§8共 " + filteredItems.size() + " 项",
-                c1x, gridTop + gridH + 2, 0x666666, false);
+        // ── 流体选择 ────────────────────────────────────────────────
+        int fluidTop = gridTop + gridH + 36;  // 下移16像素
+        g.drawString(font, "§7流体",
+                c1x, fluidTop - 16, 0xAAAAAA, false);
+
+        int fluidGridTop = fluidTop + 2;
+        int maxFluidScroll = Math.max(0,
+                (filteredFluids.size() + ITEM_COLS - 1) / ITEM_COLS - FLUID_ROWS);
+        fluidScroll = clamp(fluidScroll, 0, maxFluidScroll);
+
+        int fluidGridH = FLUID_ROWS * (SLOT+2);
+        g.fill(c1x-1, fluidGridTop-1, c1x+gridW+1, fluidGridTop+fluidGridH+1, 0xFF333340);
+        g.fill(c1x,   fluidGridTop,   c1x+gridW,   fluidGridTop+fluidGridH,   0xFF0C0C18);
+
+        for (int row = 0; row < FLUID_ROWS; row++) {
+            for (int col = 0; col < ITEM_COLS; col++) {
+                int idx = (row + fluidScroll) * ITEM_COLS + col;
+                if (idx >= filteredFluids.size()) break;
+                FluidStack fluid = filteredFluids.get(idx);
+                int sx = c1x + col*(SLOT+2);
+                int sy = fluidGridTop + row*(SLOT+2);
+                boolean hov = mx>=sx && mx<sx+SLOT && my>=sy && my<sy+SLOT;
+                boolean sel = !targetFluid.isEmpty() && fluid.isFluidStackIdentical(targetFluid);
+                if (sel) g.fill(sx, sy, sx+SLOT, sy+SLOT, 0xFF3A6A3A);
+                else if (hov) g.fill(sx, sy, sx+SLOT, sy+SLOT, 0xFF3A3A6A);
+                
+                // 渲染流体（JEI样式）
+                renderFluidSlot(g, fluid, sx+1, sy+1);
+                
+                if (hov) {
+                    List<Component> tooltip = new ArrayList<>();
+                    tooltip.add(fluid.getDisplayName());
+                    tooltip.add(Component.literal("§8" + ForgeRegistries.FLUIDS.getKey(fluid.getFluid())));
+                    g.renderTooltip(font, tooltip, Optional.empty(), mx, my);
+                }
+            }
+        }
+
+        // 流体滚动条
+        renderSB(g, c1x+gridW+1, fluidGridTop, 3, fluidGridH,
+                (filteredFluids.size()+ITEM_COLS-1)/ITEM_COLS, FLUID_ROWS, fluidScroll);
+
+        // ── 化学品选择 ──────────────────────────────────────────────
+        int chemicalTop = fluidGridTop + fluidGridH + 44;  // 下移16像素
+        g.drawString(font, "§7化学品",
+                c1x, chemicalTop - 16, 0xAAAAAA, false);
+
+        int chemicalGridTop = chemicalTop + 2;
+        int maxChemicalScroll = Math.max(0,
+                (filteredChemicals.size() + ITEM_COLS - 1) / ITEM_COLS - CHEMICAL_ROWS);
+        chemicalScroll = clamp(chemicalScroll, 0, maxChemicalScroll);
+
+        int chemicalGridH = CHEMICAL_ROWS * (SLOT+2);
+        g.fill(c1x-1, chemicalGridTop-1, c1x+gridW+1, chemicalGridTop+chemicalGridH+1, 0xFF333340);
+        g.fill(c1x,   chemicalGridTop,   c1x+gridW,   chemicalGridTop+chemicalGridH,   0xFF0C0C18);
+
+        for (int row = 0; row < CHEMICAL_ROWS; row++) {
+            for (int col = 0; col < ITEM_COLS; col++) {
+                int idx = (row + chemicalScroll) * ITEM_COLS + col;
+                if (idx >= filteredChemicals.size()) break;
+                ChemicalEntry chemical = filteredChemicals.get(idx);
+                int sx = c1x + col*(SLOT+2);
+                int sy = chemicalGridTop + row*(SLOT+2);
+                boolean hov = mx>=sx && mx<sx+SLOT && my>=sy && my<sy+SLOT;
+                boolean sel = chemical.equals(targetChemical);
+                if (sel) g.fill(sx, sy, sx+SLOT, sy+SLOT, 0xFF3A6A3A);
+                else if (hov) g.fill(sx, sy, sx+SLOT, sy+SLOT, 0xFF3A3A6A);
+                
+                // 渲染化学品（JEI样式）
+                renderChemicalSlot(g, chemical, sx+1, sy+1);
+                
+                if (hov) {
+                    List<Component> tooltip = new ArrayList<>();
+                    tooltip.add(Component.literal(chemical.getDisplayName()));
+                    tooltip.add(Component.literal("§8" + chemical.id));
+                    tooltip.add(Component.literal("§7类型: " + chemical.type.name()));
+                    g.renderTooltip(font, tooltip, Optional.empty(), mx, my);
+                }
+            }
+        }
+
+        // 化学品滚动条
+        renderSB(g, c1x+gridW+1, chemicalGridTop, 3, chemicalGridH,
+                (filteredChemicals.size()+ITEM_COLS-1)/ITEM_COLS, CHEMICAL_ROWS, chemicalScroll);
+    }
+    
+    /**
+     * 渲染流体槽位（JEI样式）
+     */
+    private void renderFluidSlot(GuiGraphics g, FluidStack fluid, int x, int y) {
+        if (fluid.isEmpty()) return;
+        
+        Fluid f = fluid.getFluid();
+        IClientFluidTypeExtensions fluidExt = IClientFluidTypeExtensions.of(f);
+        
+        int tintColor = fluidExt.getTintColor(fluid);
+        float r = ((tintColor >> 16) & 0xFF) / 255.0f;
+        float g2 = ((tintColor >> 8) & 0xFF) / 255.0f;
+        float b = (tintColor & 0xFF) / 255.0f;
+        
+        // 尝试获取静止纹理
+        ResourceLocation stillTexture = fluidExt.getStillTexture(fluid);
+        TextureAtlasSprite sprite = null;
+        
+        if (stillTexture != null) {
+            try {
+                sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+            } catch (Exception e) {
+                // 纹理加载失败，sprite保持为null
+            }
+        }
+        
+        // 如果静止纹理不可用，尝试使用流动纹理
+        if (sprite == null) {
+            ResourceLocation flowingTexture = fluidExt.getFlowingTexture(fluid);
+            if (flowingTexture != null) {
+                try {
+                    sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(flowingTexture);
+                } catch (Exception e) {
+                    // 流动纹理也加载失败
+                }
+            }
+        }
+        
+        if (sprite != null) {
+            // 使用纹理渲染
+            RenderSystem.setShaderColor(r, g2, b, 1.0f);
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            g.blit(x, y, 0, 16, 16, sprite);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } else {
+            // 当纹理完全不可用时，使用颜色填充
+            RenderSystem.setShaderColor(r, g2, b, 1.0f);
+            g.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+    }
+    
+    /**
+     * 渲染化学品槽位（JEI样式）
+     */
+    private void renderChemicalSlot(GuiGraphics g, ChemicalEntry chemical, int x, int y) {
+        if (chemical == null || chemical.id == null) return;
+        
+        int color = chemical.color;
+        float r = ((color >> 16) & 0xFF) / 255.0f;
+        float g2 = ((color >> 8) & 0xFF) / 255.0f;
+        float b = (color & 0xFF) / 255.0f;
+        
+        RenderSystem.setShaderColor(r, g2, b, 1.0f);
+        g.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     // ── 栏2：配方列表 ────────────────────────────────────────────
@@ -815,10 +1132,54 @@ public class RecipeCloneWizardScreen extends Screen {
     // ── 输入 ─────────────────────────────────────────────────────
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
-        // 物品网格
         int gridTop = contentY + 18;
         int gridW   = ITEM_COLS*(SLOT+2);
         int gridH   = ITEM_ROWS*(SLOT+2);
+        int sbX = c1x + gridW + 1;  // 滚动条X位置
+        int sbW = 3;  // 滚动条宽度
+        
+        // ── 滚动条点击检测 ────────────────────────────────────────
+        // 物品滚动条
+        int maxItemScroll = Math.max(0, (filteredItems.size()+ITEM_COLS-1)/ITEM_COLS-ITEM_ROWS);
+        if (maxItemScroll > 0 && mx >= sbX && mx < sbX + sbW && my >= gridTop && my < gridTop + gridH) {
+            draggingItemScroll = true;
+            dragScrollY = (int)my;
+            return true;
+        }
+        
+        // 流体滚动条
+        int fluidTop = gridTop + gridH + 36;
+        int fluidGridH = FLUID_ROWS * (SLOT+2);
+        int fluidGridTop = fluidTop + 2;
+        int maxFluidScroll = Math.max(0, (filteredFluids.size()+ITEM_COLS-1)/ITEM_COLS-FLUID_ROWS);
+        if (maxFluidScroll > 0 && mx >= sbX && mx < sbX + sbW && my >= fluidGridTop && my < fluidGridTop + fluidGridH) {
+            draggingFluidScroll = true;
+            dragScrollY = (int)my;
+            return true;
+        }
+        
+        // 化学品滚动条
+        int chemicalTop = fluidGridTop + fluidGridH + 36;
+        int chemicalGridH = CHEMICAL_ROWS * (SLOT+2);
+        int chemicalGridTop = chemicalTop + 2;
+        int maxChemicalScroll = Math.max(0, (filteredChemicals.size()+ITEM_COLS-1)/ITEM_COLS-CHEMICAL_ROWS);
+        if (maxChemicalScroll > 0 && mx >= sbX && mx < sbX + sbW && my >= chemicalGridTop && my < chemicalGridTop + chemicalGridH) {
+            draggingChemicalScroll = true;
+            dragScrollY = (int)my;
+            return true;
+        }
+        
+        // 配方列表滚动条
+        int maxRecipeScroll = Math.max(0, recipeList.size() - listVisRows + 2);
+        int recipeSbX = c2x + COL2_W - 3;
+        if (maxRecipeScroll > 0 && mx >= recipeSbX && mx < recipeSbX + 3 && my >= contentY && my < contentY + contentH) {
+            draggingRecipeScroll = true;
+            dragScrollY = (int)my;
+            return true;
+        }
+        
+        // ── 网格点击检测 ────────────────────────────────────────────
+        // 物品网格
         if (mx>=c1x && mx<c1x+gridW && my>=gridTop && my<gridTop+gridH) {
             int col = ((int)mx-c1x)/(SLOT+2);
             int row = ((int)my-gridTop)/(SLOT+2);
@@ -827,6 +1188,33 @@ public class RecipeCloneWizardScreen extends Screen {
                 pickItem(filteredItems.get(idx)); return true;
             }
         }
+        
+        // 流体网格
+        if (mx>=c1x && mx<c1x+gridW && my>=fluidGridTop && my<fluidGridTop+fluidGridH) {
+            int col = ((int)mx-c1x)/(SLOT+2);
+            int row = ((int)my-fluidGridTop)/(SLOT+2);
+            int idx = (row+fluidScroll)*ITEM_COLS+col;
+            if (idx >= 0 && idx < filteredFluids.size()) {
+                targetFluid = filteredFluids.get(idx).copy();
+                targetItem = ItemStack.EMPTY;  // 清除物品选择
+                targetChemical = null;  // 清除化学品选择
+                return true;
+            }
+        }
+        
+        // 化学品网格
+        if (mx>=c1x && mx<c1x+gridW && my>=chemicalGridTop && my<chemicalGridTop+chemicalGridH) {
+            int col = ((int)mx-c1x)/(SLOT+2);
+            int row = ((int)my-chemicalGridTop)/(SLOT+2);
+            int idx = (row+chemicalScroll)*ITEM_COLS+col;
+            if (idx >= 0 && idx < filteredChemicals.size()) {
+                targetChemical = filteredChemicals.get(idx);
+                targetItem = ItemStack.EMPTY;  // 清除物品选择
+                targetFluid = FluidStack.EMPTY;  // 清除流体选择
+                return true;
+            }
+        }
+        
         // 配方列表（需要把显示行映射回数据行）
         if (!targetItem.isEmpty() && mx>=c2x && mx<c2x+COL2_W-3
                 && my>=contentY && my<contentY+contentH) {
@@ -847,15 +1235,121 @@ public class RecipeCloneWizardScreen extends Screen {
         }
         return super.mouseClicked(mx, my, btn);
     }
+    
+    @Override
+    public boolean mouseDragged(double mx, double my, int button, double dragX, double dragY) {
+        int gridTop = contentY + 18;
+        int gridH   = ITEM_ROWS*(SLOT+2);
+        
+        // 物品滚动条拖动
+        if (draggingItemScroll) {
+            int maxScroll = Math.max(0, (filteredItems.size()+ITEM_COLS-1)/ITEM_COLS-ITEM_ROWS);
+            if (maxScroll > 0) {
+                int thumbH = Math.max(8, gridH * ITEM_ROWS / ((filteredItems.size()+ITEM_COLS-1)/ITEM_COLS));
+                int scrollableH = gridH - thumbH;
+                if (scrollableH > 0) {
+                    int deltaY = (int)my - dragScrollY;
+                    int deltaScroll = (int)((deltaY * maxScroll) / (double)scrollableH);
+                    itemScroll = clamp(itemScroll + deltaScroll, 0, maxScroll);
+                    dragScrollY = (int)my;
+                }
+            }
+            return true;
+        }
+        
+        // 流体滚动条拖动
+        if (draggingFluidScroll) {
+            int fluidGridH = FLUID_ROWS * (SLOT+2);
+            int maxScroll = Math.max(0, (filteredFluids.size()+ITEM_COLS-1)/ITEM_COLS-FLUID_ROWS);
+            if (maxScroll > 0) {
+                int thumbH = Math.max(8, fluidGridH * FLUID_ROWS / ((filteredFluids.size()+ITEM_COLS-1)/ITEM_COLS));
+                int scrollableH = fluidGridH - thumbH;
+                if (scrollableH > 0) {
+                    int deltaY = (int)my - dragScrollY;
+                    int deltaScroll = (int)((deltaY * maxScroll) / (double)scrollableH);
+                    fluidScroll = clamp(fluidScroll + deltaScroll, 0, maxScroll);
+                    dragScrollY = (int)my;
+                }
+            }
+            return true;
+        }
+        
+        // 化学品滚动条拖动
+        if (draggingChemicalScroll) {
+            int chemicalGridH = CHEMICAL_ROWS * (SLOT+2);
+            int maxScroll = Math.max(0, (filteredChemicals.size()+ITEM_COLS-1)/ITEM_COLS-CHEMICAL_ROWS);
+            if (maxScroll > 0) {
+                int thumbH = Math.max(8, chemicalGridH * CHEMICAL_ROWS / ((filteredChemicals.size()+ITEM_COLS-1)/ITEM_COLS));
+                int scrollableH = chemicalGridH - thumbH;
+                if (scrollableH > 0) {
+                    int deltaY = (int)my - dragScrollY;
+                    int deltaScroll = (int)((deltaY * maxScroll) / (double)scrollableH);
+                    chemicalScroll = clamp(chemicalScroll + deltaScroll, 0, maxScroll);
+                    dragScrollY = (int)my;
+                }
+            }
+            return true;
+        }
+        
+        // 配方列表滚动条拖动
+        if (draggingRecipeScroll) {
+            int maxScroll = Math.max(0, recipeList.size() - listVisRows + 2);
+            if (maxScroll > 0) {
+                int thumbH = Math.max(8, contentH * listVisRows / (recipeList.size() + 2));
+                int scrollableH = contentH - thumbH;
+                if (scrollableH > 0) {
+                    int deltaY = (int)my - dragScrollY;
+                    int deltaScroll = (int)((deltaY * maxScroll) / (double)scrollableH);
+                    recipeScroll = clamp(recipeScroll + deltaScroll, 0, maxScroll);
+                    dragScrollY = (int)my;
+                }
+            }
+            return true;
+        }
+        
+        return super.mouseDragged(mx, my, button, dragX, dragY);
+    }
+    
+    @Override
+    public boolean mouseReleased(double mx, double my, int button) {
+        draggingItemScroll = false;
+        draggingFluidScroll = false;
+        draggingChemicalScroll = false;
+        draggingRecipeScroll = false;
+        return super.mouseReleased(mx, my, button);
+    }
 
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
         int gridTop = contentY + 18;
         int gridW   = ITEM_COLS*(SLOT+2);
-        if (mx>=c1x && mx<c1x+gridW && my>=gridTop) {
+        int gridH   = ITEM_ROWS*(SLOT+2);
+        
+        // 物品滚动
+        if (mx>=c1x && mx<c1x+gridW && my>=gridTop && my<gridTop+gridH) {
             int max = Math.max(0,(filteredItems.size()+ITEM_COLS-1)/ITEM_COLS-ITEM_ROWS);
             itemScroll = clamp(itemScroll-(int)delta, 0, max); return true;
         }
+        
+        // 流体滚动
+        int fluidTop = gridTop + gridH + 36;
+        int fluidGridH = FLUID_ROWS * (SLOT+2);
+        int fluidGridTop = fluidTop + 2;
+        if (mx>=c1x && mx<c1x+gridW && my>=fluidGridTop && my<fluidGridTop+fluidGridH) {
+            int max = Math.max(0,(filteredFluids.size()+ITEM_COLS-1)/ITEM_COLS-FLUID_ROWS);
+            fluidScroll = clamp(fluidScroll-(int)delta, 0, max); return true;
+        }
+        
+        // 化学品滚动
+        int chemicalTop = fluidGridTop + fluidGridH + 36;
+        int chemicalGridH = CHEMICAL_ROWS * (SLOT+2);
+        int chemicalGridTop = chemicalTop + 2;
+        if (mx>=c1x && mx<c1x+gridW && my>=chemicalGridTop && my<chemicalGridTop+chemicalGridH) {
+            int max = Math.max(0,(filteredChemicals.size()+ITEM_COLS-1)/ITEM_COLS-CHEMICAL_ROWS);
+            chemicalScroll = clamp(chemicalScroll-(int)delta, 0, max); return true;
+        }
+        
+        // 配方列表滚动
         if (!targetItem.isEmpty() && mx>=c2x && mx<c2x+COL2_W) {
             recipeScroll = clamp(recipeScroll-(int)delta, 0,
                     Math.max(0, recipeList.size()-listVisRows+2)); return true;
@@ -866,6 +1360,8 @@ public class RecipeCloneWizardScreen extends Screen {
     @Override
     public boolean keyPressed(int kc, int sc, int mods) {
         if (searchBox.isFocused()) return searchBox.keyPressed(kc, sc, mods);
+        if (fluidSearchBox.isFocused()) return fluidSearchBox.keyPressed(kc, sc, mods);
+        if (chemicalSearchBox.isFocused()) return chemicalSearchBox.keyPressed(kc, sc, mods);
         if (kc == 264 && selectedIdx < recipeList.size()-1) { selectRecipe(selectedIdx+1); return true; }
         if (kc == 265 && selectedIdx > 0)                   { selectRecipe(selectedIdx-1); return true; }
         if (kc == 257 || kc == 335)                          { doClone(); return true; }
@@ -876,6 +1372,8 @@ public class RecipeCloneWizardScreen extends Screen {
     @Override
     public boolean charTyped(char c, int mods) {
         if (searchBox.isFocused()) return searchBox.charTyped(c, mods);
+        if (fluidSearchBox.isFocused()) return fluidSearchBox.charTyped(c, mods);
+        if (chemicalSearchBox.isFocused()) return chemicalSearchBox.charTyped(c, mods);
         return super.charTyped(c, mods);
     }
 
@@ -886,6 +1384,55 @@ public class RecipeCloneWizardScreen extends Screen {
     public boolean isPauseScreen() { return false; }
 
     // ── 数据类 ───────────────────────────────────────────────────
+    /**
+     * 化学品条目（用于显示气体、灌注类型、颜料、矿泥）
+     */
+    private static class ChemicalEntry {
+        final ResourceLocation id;
+        final RecipePreviewRenderer.ContentType type;
+        final int color;
+        
+        ChemicalEntry(ResourceLocation id, RecipePreviewRenderer.ContentType type, int color) {
+            this.id = id;
+            this.type = type;
+            this.color = color;
+        }
+        
+        String getDisplayName() {
+            if (id == null) return "Unknown";
+            String path = id.getPath();
+            path = path.replace("_", " ");
+            
+            StringBuilder result = new StringBuilder();
+            boolean capitalizeNext = true;
+            for (char c : path.toCharArray()) {
+                if (Character.isSpaceChar(c)) {
+                    result.append(c);
+                    capitalizeNext = true;
+                } else if (capitalizeNext) {
+                    result.append(Character.toUpperCase(c));
+                    capitalizeNext = false;
+                } else {
+                    result.append(c);
+                }
+            }
+            
+            return result.toString();
+        }
+        
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (!(obj instanceof ChemicalEntry other)) return false;
+            return Objects.equals(id, other.id) && type == other.type;
+        }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, type);
+        }
+    }
+    
     private static class RecipeEntry {
         final ResourceLocation id;
         final Recipe<?>        recipe;

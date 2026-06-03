@@ -36,10 +36,6 @@
     },
     {
       "type": "minecraft:single",
-      "resource": "registerhelper:infuse_type/carbon"
-    },
-    {
-      "type": "minecraft:single",
       "resource": "registerhelper:pigment/base"
     },
     {

@@ -143,76 +143,100 @@ public class FluidSlotRenderer implements ComponentRenderer {
         Fluid fluid = fluidStack.getFluid();
         IClientFluidTypeExtensions fluidExtensions = IClientFluidTypeExtensions.of(fluid);
         
-        ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
-        if (stillTexture == null) {
-            return;
-        }
-        
-        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
-        
         int tintColor = fluidExtensions.getTintColor(fluidStack);
         float r = ((tintColor >> 16) & 0xFF) / 255.0f;
         float g = ((tintColor >> 8) & 0xFF) / 255.0f;
         float b = (tintColor & 0xFF) / 255.0f;
         
-        RenderSystem.setShaderColor(r, g, b, 1.0f);
-        RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+        // 尝试获取静止纹理
+        ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
+        TextureAtlasSprite sprite = null;
         
-        int textureWidth = 16;
-        int textureHeight = 16;
-        
-        int xTileCount = width / textureWidth;
-        int xRemainder = width - (xTileCount * textureWidth);
-        int yTileCount = height / textureHeight;
-        int yRemainder = height - (yTileCount * textureHeight);
-        int yStart = y + height;
-        
-        float uMin = sprite.getU0();
-        float uMax = sprite.getU1();
-        float vMin = sprite.getV0();
-        float vMax = sprite.getV1();
-        float uDif = uMax - uMin;
-        float vDif = vMax - vMin;
-        
-        RenderSystem.enableBlend();
-        
-        com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
-        vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
-        org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
-        
-        for (int xTile = 0; xTile <= xTileCount; xTile++) {
-            int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
-            if (tileWidth == 0) {
-                break;
-            }
-            int tileX = x + (xTile * textureWidth);
-            int maskRight = textureWidth - tileWidth;
-            int shiftedX = tileX + textureWidth - maskRight;
-            float uLocalDif = uDif * maskRight / textureWidth;
-            float uLocalMin = uMin;
-            float uLocalMax = uMax - uLocalDif;
-            
-            for (int yTile = 0; yTile <= yTileCount; yTile++) {
-                int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
-                if (tileHeight == 0) {
-                    break;
-                }
-                int tileY = yStart - ((yTile + 1) * textureHeight);
-                int maskTop = textureHeight - tileHeight;
-                float vLocalDif = vDif * maskTop / textureHeight;
-                float vLocalMin = vMin + vLocalDif;
-                float vLocalMax = vMax;
-                
-                vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
-                vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
-                vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
-                vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+        if (stillTexture != null) {
+            try {
+                sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+            } catch (Exception e) {
+                // 纹理加载失败
             }
         }
         
-        com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
-        RenderSystem.disableBlend();
+        // 如果静止纹理不可用，尝试使用流动纹理
+        if (sprite == null) {
+            ResourceLocation flowingTexture = fluidExtensions.getFlowingTexture(fluidStack);
+            if (flowingTexture != null) {
+                try {
+                    sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(flowingTexture);
+                } catch (Exception e) {
+                    // 流动纹理也加载失败
+                }
+            }
+        }
+        
+        if (sprite != null) {
+            // 正常渲染流体纹理
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            int textureWidth = 16;
+            int textureHeight = 16;
+            
+            int xTileCount = width / textureWidth;
+            int xRemainder = width - (xTileCount * textureWidth);
+            int yTileCount = height / textureHeight;
+            int yRemainder = height - (yTileCount * textureHeight);
+            int yStart = y + height;
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            float uDif = uMax - uMin;
+            float vDif = vMax - vMin;
+            
+            RenderSystem.enableBlend();
+            
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                if (tileWidth == 0) {
+                    break;
+                }
+                int tileX = x + (xTile * textureWidth);
+                int maskRight = textureWidth - tileWidth;
+                int shiftedX = tileX + textureWidth - maskRight;
+                float uLocalDif = uDif * maskRight / textureWidth;
+                float uLocalMin = uMin;
+                float uLocalMax = uMax - uLocalDif;
+                
+                for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                    if (tileHeight == 0) {
+                        break;
+                    }
+                    int tileY = yStart - ((yTile + 1) * textureHeight);
+                    int maskTop = textureHeight - tileHeight;
+                    float vLocalDif = vDif * maskTop / textureHeight;
+                    float vLocalMin = vMin + vLocalDif;
+                    float vLocalMax = vMax;
+                    
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                }
+            }
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+        } else {
+            // 当纹理完全不可用时，使用颜色填充
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + width, y + height, 0xFFFFFFFF);
+        }
         
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
     }
