@@ -82,9 +82,8 @@ public class RecipeCloneWizardScreen extends Screen {
     private int listVisRows;   // 计算后赋值
 
     // ── Step 3：预览 ──────────────────────────────────────────────
-    private final List<int[]> previewSlots = new ArrayList<>();  // [x,y,stackIdx]
-    private final List<ItemStack> previewItems = new ArrayList<>();
-    private ItemStack previewResult = ItemStack.EMPTY;
+    private final List<PreviewSlot> currentRecipeSlots = new ArrayList<>();
+    private PreviewSlot currentResultSlot = null;
 
     // ── 面板坐标（init后有效）────────────────────────────────────
     private int px, py;
@@ -147,9 +146,8 @@ public class RecipeCloneWizardScreen extends Screen {
         recipeList.clear();
         selectedIdx   = -1;
         recipeScroll  = 0;
-        previewItems.clear();
-        previewSlots.clear();
-        previewResult = ItemStack.EMPTY;
+        currentRecipeSlots.clear();
+        currentResultSlot = null;
 
         RecipeManager rm = getRM();
         if (rm == null) return;
@@ -176,25 +174,364 @@ public class RecipeCloneWizardScreen extends Screen {
     // ── 选中配方 → 更新预览 ──────────────────────────────────────
     private void selectRecipe(int idx) {
         selectedIdx = idx;
-        previewItems.clear();
-        previewSlots.clear();
-        previewResult = ItemStack.EMPTY;
+        currentRecipeSlots.clear();
+        currentResultSlot = null;
         if (idx < 0 || idx >= recipeList.size()) return;
         Recipe<?> r = recipeList.get(idx).recipe;
+        
+        // 解析配方数据
+        parseRecipe(r);
+    }
+    
+    /**
+     * 解析配方数据（支持普通配方和Mekanism配方）
+     */
+    private void parseRecipe(Recipe<?> recipe) {
+        String recipeTypeName = recipe.getType().toString().toLowerCase();
+        
+        // 检查是否为Mekanism配方
+        if (recipeTypeName.contains("mekanism") || recipeTypeName.contains("rotary") || 
+            recipeTypeName.contains("condensentrator") || recipeTypeName.contains("metallurgic") ||
+            recipeTypeName.contains("infuser") || recipeTypeName.contains("energy_conversion") ||
+            recipeTypeName.contains("infusion_conversion") || recipeTypeName.contains("sawmill") ||
+            recipeTypeName.contains("pressurized")) {
+            parseMekanismRecipe(recipe);
+        } else {
+            parseNormalRecipe(recipe);
+        }
+    }
+    
+    /**
+     * 解析普通配方
+     */
+    private void parseNormalRecipe(Recipe<?> recipe) {
         try {
-            previewResult = r.getResultItem(Minecraft.getInstance().level.registryAccess()).copy();
-            List<Ingredient> ings = r.getIngredients();
-            int cols = ings.size() <= 9 ? 3 : ings.size() <= 16 ? 4 : 5;
-            for (int i = 0; i < ings.size(); i++) {
-                ItemStack it = ItemStack.EMPTY;
-                if (!ings.get(i).isEmpty()) {
-                    ItemStack[] arr = ings.get(i).getItems();
-                    if (arr.length > 0) it = arr[0].copy();
+            int slotX = c3x + 8;
+            int slotY = contentY + 20;
+            int slotSpacing = SLOT + 3;
+            
+            // 解析输入材料
+            List<Ingredient> ingredients = recipe.getIngredients();
+            int cols = ingredients.size() <= 9 ? 3 : ingredients.size() <= 16 ? 4 : 5;
+            
+            for (int i = 0; i < ingredients.size(); i++) {
+                Ingredient ingredient = ingredients.get(i);
+                if (!ingredient.isEmpty()) {
+                    ItemStack[] items = ingredient.getItems();
+                    if (items.length > 0) {
+                        int x = slotX + (i % cols) * slotSpacing;
+                        int y = slotY + (i / cols) * slotSpacing;
+                        currentRecipeSlots.add(new PreviewSlot(x, y, items[0].copy()));
+                    }
                 }
-                previewItems.add(it);
-                previewSlots.add(new int[]{ i % cols, i / cols });
             }
-        } catch (Exception ignored) {}
+            
+            // 解析输出
+            ItemStack result = recipe.getResultItem(Minecraft.getInstance().level.registryAccess()).copy();
+            if (!result.isEmpty()) {
+                int rows = ingredients.isEmpty() ? 0 : (ingredients.size() - 1) / cols + 1;
+                int arrowY = slotY + rows * slotSpacing / 2 - 4;
+                int resultX = slotX + cols * slotSpacing + 4;
+                int resultY = slotY + rows * slotSpacing / 2 - SLOT / 2;
+                currentResultSlot = new PreviewSlot(resultX, resultY, result);
+            }
+        } catch (Exception e) {
+            // 解析失败，清空预览
+            currentRecipeSlots.clear();
+            currentResultSlot = null;
+        }
+    }
+    
+    /**
+     * 解析Mekanism配方
+     */
+    private void parseMekanismRecipe(Recipe<?> recipe) {
+        try {
+            int slotX = c3x + 8;
+            int slotY = contentY + 20;
+            int slotSpacing = SLOT + 3;
+            
+            String recipeTypeName = recipe.getType().toString().toLowerCase();
+            
+            // 回旋式气液转换器
+            if (recipeTypeName.contains("rotary") || recipeTypeName.contains("condensentrator")) {
+                try {
+                    java.lang.reflect.Method getFluidInput = recipe.getClass().getMethod("getFluidInput");
+                    java.lang.reflect.Method getGasInput = recipe.getClass().getMethod("getGasInput");
+                    java.lang.reflect.Method getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
+                    
+                    Object fluidInput = getFluidInput.invoke(recipe);
+                    Object gasInput = getGasInput.invoke(recipe);
+                    
+                    boolean hasFluidInput = false;
+                    boolean hasGasInput = false;
+                    net.minecraftforge.fluids.FluidStack fluidStack = null;
+                    mekanism.api.chemical.gas.GasStack gasStack = null;
+                    
+                    if (fluidInput instanceof mekanism.api.recipes.ingredients.FluidStackIngredient fluidIngredient) {
+                        List<net.minecraftforge.fluids.FluidStack> matchingStacks = fluidIngredient.getRepresentations();
+                        if (!matchingStacks.isEmpty()) {
+                            fluidStack = matchingStacks.get(0);
+                            hasFluidInput = true;
+                        }
+                    }
+                    
+                    if (gasInput instanceof mekanism.api.recipes.ingredients.ChemicalStackIngredient.GasStackIngredient gasIngredient) {
+                        List<mekanism.api.chemical.gas.GasStack> matchingStacks = gasIngredient.getRepresentations();
+                        if (!matchingStacks.isEmpty()) {
+                            gasStack = matchingStacks.get(0);
+                            hasGasInput = true;
+                        }
+                    }
+                    
+                    // 输入槽
+                    if (hasFluidInput) {
+                        currentRecipeSlots.add(new PreviewSlot(slotX, slotY, fluidStack));
+                    } else if (hasGasInput) {
+                        ResourceLocation gasId = mekanism.api.MekanismAPI.gasRegistry().getKey(gasStack.getType());
+                        if (gasId != null) {
+                            currentRecipeSlots.add(new PreviewSlot(slotX, slotY, gasId.toString(), 
+                                    RecipePreviewRenderer.ContentType.GAS, gasStack.getAmount()));
+                        }
+                    }
+                    
+                    // 输出槽
+                    Object outputDef = getOutputDefinition.invoke(recipe);
+                    if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                        Object output = outputList.get(0);
+                        int resultX = slotX + slotSpacing * 2;
+                        int resultY = slotY;
+                        
+                        if (output instanceof net.minecraftforge.fluids.FluidStack outputFluid) {
+                            currentResultSlot = new PreviewSlot(resultX, resultY, outputFluid);
+                        } else if (output instanceof mekanism.api.chemical.gas.GasStack outputGas) {
+                            ResourceLocation gasId = mekanism.api.MekanismAPI.gasRegistry().getKey(outputGas.getType());
+                            if (gasId != null) {
+                                currentResultSlot = new PreviewSlot(resultX, resultY, gasId.toString(), 
+                                        RecipePreviewRenderer.ContentType.GAS, outputGas.getAmount());
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                }
+                return;
+            }
+            
+            // 能量转换
+            if (recipeTypeName.contains("energy_conversion")) {
+                try {
+                    java.lang.reflect.Method getInput = recipe.getClass().getMethod("getInput");
+                    
+                    Object input = getInput.invoke(recipe);
+                    if (input instanceof mekanism.api.recipes.ingredients.ItemStackIngredient ingredient) {
+                        List<ItemStack> matchingStacks = ingredient.getRepresentations();
+                        if (!matchingStacks.isEmpty()) {
+                            currentRecipeSlots.add(new PreviewSlot(slotX, slotY, matchingStacks.get(0).copy()));
+                        }
+                    }
+                    
+                    try {
+                        java.lang.reflect.Method getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
+                        Object outputDef = getOutputDefinition.invoke(recipe);
+                        
+                        if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                            Object output = outputList.get(0);
+                            long energyValue = 0;
+                            
+                            if (output instanceof Long energyOutput) {
+                                energyValue = energyOutput;
+                            } else if (output instanceof mekanism.api.math.FloatingLong floatingLong) {
+                                energyValue = floatingLong.longValue();
+                            }
+                            
+                            if (energyValue > 0) {
+                                int resultX = slotX + slotSpacing * 2;
+                                currentResultSlot = new PreviewSlot(resultX, slotY, energyValue);
+                            }
+                        }
+                    } catch (Exception e) {
+                    }
+                } catch (Exception e) {
+                }
+                return;
+            }
+            
+            // 其他Mekanism配方类型 - 通用解析
+            try {
+                java.lang.reflect.Method getItemInput = null;
+                java.lang.reflect.Method getFluidInput = null;
+                java.lang.reflect.Method getChemicalInput = null;
+                java.lang.reflect.Method getOutput = null;
+                java.lang.reflect.Method getOutputDefinition = null;
+                
+                try {
+                    getItemInput = recipe.getClass().getMethod("getItemInput");
+                } catch (Exception e) {}
+                
+                try {
+                    getFluidInput = recipe.getClass().getMethod("getFluidInput");
+                } catch (Exception e) {}
+                
+                try {
+                    getChemicalInput = recipe.getClass().getMethod("getChemicalInput");
+                } catch (Exception e) {}
+                
+                try {
+                    getOutput = recipe.getClass().getMethod("getOutput");
+                } catch (Exception e) {}
+                
+                try {
+                    getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
+                } catch (Exception e) {}
+                
+                int currentX = slotX;
+                
+                if (getItemInput != null) {
+                    try {
+                        Object itemInput = getItemInput.invoke(recipe);
+                        if (itemInput instanceof mekanism.api.recipes.ingredients.ItemStackIngredient ingredient) {
+                            List<ItemStack> matchingStacks = ingredient.getRepresentations();
+                            if (!matchingStacks.isEmpty()) {
+                                currentRecipeSlots.add(new PreviewSlot(currentX, slotY, matchingStacks.get(0).copy()));
+                                currentX += slotSpacing;
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
+                
+                if (getFluidInput != null) {
+                    try {
+                        Object fluidInput = getFluidInput.invoke(recipe);
+                        if (fluidInput instanceof mekanism.api.recipes.ingredients.FluidStackIngredient fluidIngredient) {
+                            List<net.minecraftforge.fluids.FluidStack> matchingStacks = fluidIngredient.getRepresentations();
+                            if (!matchingStacks.isEmpty()) {
+                                currentRecipeSlots.add(new PreviewSlot(currentX, slotY, matchingStacks.get(0)));
+                                currentX += slotSpacing;
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
+                
+                if (getChemicalInput != null) {
+                    try {
+                        Object chemicalInput = getChemicalInput.invoke(recipe);
+                        if (chemicalInput != null) {
+                            Class<?> inputClass = chemicalInput.getClass();
+                            java.lang.reflect.Method getRepresentations = inputClass.getMethod("getRepresentations");
+                            List<?> matchingStacks = (List<?>) getRepresentations.invoke(chemicalInput);
+                            
+                            if (!matchingStacks.isEmpty()) {
+                                Object stack = matchingStacks.get(0);
+                                Class<?> stackClass = stack.getClass();
+                                java.lang.reflect.Method getType = stackClass.getMethod("getType");
+                                java.lang.reflect.Method getAmount = stackClass.getMethod("getAmount");
+                                
+                                Object chemical = getType.invoke(stack);
+                                long amount = (Long) getAmount.invoke(stack);
+                                
+                                ResourceLocation chemicalId = null;
+                                RecipePreviewRenderer.ContentType chemicalType = RecipePreviewRenderer.ContentType.GAS;
+                                
+                                String chemicalClassName = chemical.getClass().getName();
+                                if (chemicalClassName.contains("Gas")) {
+                                    chemicalType = RecipePreviewRenderer.ContentType.GAS;
+                                    mekanism.api.chemical.gas.Gas gas = (mekanism.api.chemical.gas.Gas) chemical;
+                                    chemicalId = mekanism.api.MekanismAPI.gasRegistry().getKey(gas);
+                                } else if (chemicalClassName.contains("InfuseType")) {
+                                    chemicalType = RecipePreviewRenderer.ContentType.INFUSE_TYPE;
+                                    mekanism.api.chemical.infuse.InfuseType infuseType = (mekanism.api.chemical.infuse.InfuseType) chemical;
+                                    chemicalId = mekanism.api.MekanismAPI.infuseTypeRegistry().getKey(infuseType);
+                                } else if (chemicalClassName.contains("Pigment")) {
+                                    chemicalType = RecipePreviewRenderer.ContentType.PIGMENT;
+                                    mekanism.api.chemical.pigment.Pigment pigment = (mekanism.api.chemical.pigment.Pigment) chemical;
+                                    chemicalId = mekanism.api.MekanismAPI.pigmentRegistry().getKey(pigment);
+                                } else if (chemicalClassName.contains("Slurry")) {
+                                    chemicalType = RecipePreviewRenderer.ContentType.SLURRY;
+                                    mekanism.api.chemical.slurry.Slurry slurry = (mekanism.api.chemical.slurry.Slurry) chemical;
+                                    chemicalId = mekanism.api.MekanismAPI.slurryRegistry().getKey(slurry);
+                                }
+                                
+                                if (chemicalId != null) {
+                                    currentRecipeSlots.add(new PreviewSlot(currentX, slotY, chemicalId.toString(), chemicalType, amount));
+                                    currentX += slotSpacing;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
+                
+                // 输出
+                if (getOutput != null) {
+                    try {
+                        Object output = getOutput.invoke(recipe);
+                        if (output instanceof ItemStack itemStack) {
+                            int resultX = currentX + slotSpacing;
+                            currentResultSlot = new PreviewSlot(resultX, slotY, itemStack.copy());
+                        } else if (output instanceof net.minecraftforge.fluids.FluidStack fluidStack) {
+                            int resultX = currentX + slotSpacing;
+                            currentResultSlot = new PreviewSlot(resultX, slotY, fluidStack.copy());
+                        } else if (output instanceof mekanism.api.chemical.ChemicalStack<?> chemicalStack) {
+                            Object chemical = chemicalStack.getType();
+                            long amount = chemicalStack.getAmount();
+                            
+                            ResourceLocation chemicalId = null;
+                            RecipePreviewRenderer.ContentType chemicalType = RecipePreviewRenderer.ContentType.GAS;
+                            
+                            String chemicalClassName = chemical.getClass().getName();
+                            if (chemicalClassName.contains("Gas")) {
+                                chemicalType = RecipePreviewRenderer.ContentType.GAS;
+                                mekanism.api.chemical.gas.Gas gas = (mekanism.api.chemical.gas.Gas) chemical;
+                                chemicalId = mekanism.api.MekanismAPI.gasRegistry().getKey(gas);
+                            } else if (chemicalClassName.contains("InfuseType")) {
+                                chemicalType = RecipePreviewRenderer.ContentType.INFUSE_TYPE;
+                                mekanism.api.chemical.infuse.InfuseType infuseType = (mekanism.api.chemical.infuse.InfuseType) chemical;
+                                chemicalId = mekanism.api.MekanismAPI.infuseTypeRegistry().getKey(infuseType);
+                            } else if (chemicalClassName.contains("Pigment")) {
+                                chemicalType = RecipePreviewRenderer.ContentType.PIGMENT;
+                                mekanism.api.chemical.pigment.Pigment pigment = (mekanism.api.chemical.pigment.Pigment) chemical;
+                                chemicalId = mekanism.api.MekanismAPI.pigmentRegistry().getKey(pigment);
+                            } else if (chemicalClassName.contains("Slurry")) {
+                                chemicalType = RecipePreviewRenderer.ContentType.SLURRY;
+                                mekanism.api.chemical.slurry.Slurry slurry = (mekanism.api.chemical.slurry.Slurry) chemical;
+                                chemicalId = mekanism.api.MekanismAPI.slurryRegistry().getKey(slurry);
+                            }
+                            
+                            if (chemicalId != null) {
+                                int resultX = currentX + slotSpacing;
+                                currentResultSlot = new PreviewSlot(resultX, slotY, chemicalId.toString(), chemicalType, amount);
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
+                
+                if (getOutputDefinition != null) {
+                    try {
+                        Object outputDef = getOutputDefinition.invoke(recipe);
+                        if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                            Object output = outputList.get(0);
+                            if (output instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                                int resultX = currentX + slotSpacing;
+                                currentResultSlot = new PreviewSlot(resultX, slotY, itemStack.copy());
+                            } else if (output instanceof net.minecraftforge.fluids.FluidStack fluidStack) {
+                                int resultX = currentX + slotSpacing;
+                                currentResultSlot = new PreviewSlot(resultX, slotY, fluidStack.copy());
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
+                
+            } catch (Exception e) {
+            }
+            
+            // 如果没有解析到任何槽位，回退到普通配方解析
+            if (currentRecipeSlots.isEmpty() && currentResultSlot == null) {
+                parseNormalRecipe(recipe);
+            }
+            
+        } catch (Exception e) {
+            // 解析失败，回退到普通配方解析
+            parseNormalRecipe(recipe);
+        }
     }
 
     private RecipeManager getRM() {
@@ -428,43 +765,41 @@ public class RecipeCloneWizardScreen extends Screen {
         g.drawString(font, "§7" + entry.typeName + "  §8" + entry.id.getNamespace(),
                 c3x+4, contentY+3, 0xAAAAAA, false);
 
-        // 材料槽网格
-        int slotOff = (SLOT+3);
-        int gsx = c3x + 8;
-        int gsy = contentY + 20;
-        for (int i = 0; i < previewSlots.size(); i++) {
-            int[] pos = previewSlots.get(i);
-            int sx = gsx + pos[0]*slotOff;
-            int sy = gsy + pos[1]*slotOff;
-            renderSlot(g, sx, sy, i < previewItems.size() ? previewItems.get(i) : ItemStack.EMPTY, false);
+        // 使用RecipePreviewRenderer渲染槽位
+        for (PreviewSlot slot : currentRecipeSlots) {
+            RecipePreviewRenderer.renderSlot(g, slot, false);
+        }
+        
+        // 渲染结果槽
+        if (currentResultSlot != null) {
+            RecipePreviewRenderer.renderSlot(g, currentResultSlot, true);
+        }
+        
+        // 渲染箭头
+        if (!currentRecipeSlots.isEmpty() && currentResultSlot != null) {
+            // 计算箭头位置
+            int lastInputX = 0;
+            int lastInputY = 0;
+            for (PreviewSlot slot : currentRecipeSlots) {
+                if (slot.x > lastInputX) {
+                    lastInputX = slot.x;
+                    lastInputY = slot.y;
+                }
+            }
+            
+            int arrowX = lastInputX + SLOT + 4;
+            int arrowY = lastInputY + SLOT / 2 - 4;
+            
+            // 绘制箭头
+            g.drawString(font, "§e→", arrowX, arrowY, 0xFFAA00, false);
         }
 
-        // 箭头 + 产物
-        if (!previewResult.isEmpty()) {
-            int rows = previewSlots.isEmpty() ? 0 :
-                    previewSlots.stream().mapToInt(p -> p[1]).max().orElse(0) + 1;
-            int arrowY = gsy + rows * slotOff / 2 - 4;
-            int cols   = previewSlots.isEmpty() ? 0 :
-                    previewSlots.stream().mapToInt(p -> p[0]).max().orElse(0) + 1;
-            int arrowX = gsx + cols * slotOff + 4;
-            g.drawString(font, "§7→", arrowX, arrowY, 0x888888, false);
-            renderSlot(g, arrowX+14, arrowY-5, previewResult, true);
-            // 产物名称
-            g.drawString(font, "§f" + previewResult.getHoverName().getString(),
-                    arrowX+14, arrowY + SLOT + 2, 0xFFFFFF, false);
+        // 配方ID信息
+        if (entry != null) {
+            int infoY = contentY + contentH - 30;
+            g.drawString(font, "§7ID: §f" + entry.id.toString(),
+                    c3x + 4, infoY, 0xAAAAAA, false);
         }
-
-        // 完整 ID 信息（底部）
-        int infoY = contentY + contentH - 28;
-        g.fill(c3x, infoY, c3x+col3W, contentY+contentH, 0xFF0A0A16);
-        g.drawString(font, "§8ID: §7" + entry.id, c3x+4, infoY+2, 0xFFFFFF, false);
-        g.drawString(font, "§8材料: §7" + entry.recipe.getIngredients().size() + " 格",
-                c3x+4, infoY+12, 0xFFFFFF, false);
-    }
-
-    private void renderSlot(GuiGraphics g, int x, int y, ItemStack item, boolean result) {
-        PreviewSlot slot = new PreviewSlot(x, y, item);
-        RecipePreviewRenderer.renderSlot(g, slot, result);
     }
 
     private void renderSB(GuiGraphics g, int x, int y, int w, int h,
