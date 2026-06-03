@@ -30,9 +30,10 @@ public class RecipePreviewRenderer {
     public static final int SMALL_SLOT_WIDTH = 16;
     public static final int SMALL_SLOT_HEIGHT = 28;
     
-    private static final ResourceLocation GAUGE_SMALL = new ResourceLocation("mekanism", "gui/gauge/small.png");
-    private static final ResourceLocation POWER_SLOT = new ResourceLocation("mekanism", "textures/gui/slot/power.png");
-    private static final ResourceLocation OVERLAY_POWER = new ResourceLocation("mekanism", "textures/gui/slot/overlay_power.png");
+    private static final ResourceLocation ELEMENT_HOLDER = new ResourceLocation("registerhelper", "textures/gui/element_holder.png");
+    private static final ResourceLocation GAUGE_SMALL = new ResourceLocation("registerhelper", "textures/gui/gauge/small.png");
+    private static final ResourceLocation POWER_SLOT = new ResourceLocation("registerhelper", "textures/gui/slot/power.png");
+    private static final ResourceLocation OVERLAY_POWER = new ResourceLocation("registerhelper", "textures/gui/slot/overlay_power.png");
     
     public enum ContentType {
         ITEM,
@@ -110,9 +111,13 @@ public class RecipePreviewRenderer {
             guiGraphics.fill(x - 1, y, x, y + SLOT_SIZE, borderColor);
             guiGraphics.fill(x + SLOT_SIZE, y, x + SLOT_SIZE + 1, y + SLOT_SIZE, borderColor);
         } else if (slot.type == ContentType.ENERGY) {
+            com.mojang.logging.LogUtils.getLogger().info("renderSlot: Rendering ENERGY slot at x={}, y={}, amount={}", x, y, slot.amount);
             RenderSystem.setShaderTexture(0, POWER_SLOT);
             guiGraphics.blit(POWER_SLOT, x, y, 0, 0, 18, 18, 18, 18);
         } else {
+            RenderSystem.setShaderTexture(0, ELEMENT_HOLDER);
+            guiGraphics.blit(ELEMENT_HOLDER, x, y, 0, 0, SMALL_SLOT_WIDTH, SMALL_SLOT_HEIGHT, SMALL_SLOT_WIDTH, SMALL_SLOT_HEIGHT);
+            
             RenderSystem.setShaderTexture(0, GAUGE_SMALL);
             guiGraphics.blit(GAUGE_SMALL, x, y, 0, 0, SMALL_SLOT_WIDTH, SMALL_SLOT_HEIGHT, SMALL_SLOT_WIDTH, SMALL_SLOT_HEIGHT);
         }
@@ -169,10 +174,12 @@ public class RecipePreviewRenderer {
         RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
         RenderSystem.setShaderTexture(0, sprite.atlasLocation());
         
-        int x = slot.x + 1;
-        int y = slot.y + 1;
-        int width = SMALL_SLOT_WIDTH - 2;
-        int height = SMALL_SLOT_HEIGHT - 2;
+        int x = slot.x;
+        int y = slot.y;
+        int width = SMALL_SLOT_WIDTH;
+        int fullHeight = SMALL_SLOT_HEIGHT;
+        int height = (int) (fullHeight * 0.75);
+        int yOffset = fullHeight - height;
         
         int textureWidth = 16;
         int textureHeight = 16;
@@ -181,7 +188,7 @@ public class RecipePreviewRenderer {
         int xRemainder = width - (xTileCount * textureWidth);
         int yTileCount = height / textureHeight;
         int yRemainder = height - (yTileCount * textureHeight);
-        int yStart = y + height;
+        int yStart = y + yOffset + height;
         
         float uMin = sprite.getU0();
         float uMax = sprite.getU1();
@@ -241,6 +248,8 @@ public class RecipePreviewRenderer {
             ResourceLocation texture = getChemicalTexture(chemicalId, slot.type);
             ResourceLocation fallbackTexture = getFallbackTexture(chemicalId, slot.type);
             
+            com.mojang.logging.LogUtils.getLogger().info("renderChemicalSlot: chemicalId={}, color={:#x}, texture={}, type={}", chemicalId, color, texture, slot.type);
+            
             float r = ((color >> 16) & 0xFF) / 255.0f;
             float g = ((color >> 8) & 0xFF) / 255.0f;
             float b = (color & 0xFF) / 255.0f;
@@ -250,7 +259,9 @@ public class RecipePreviewRenderer {
             
             TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(texture);
             
-            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+            boolean useFallback = sprite == null || sprite.contents().name().toString().contains("missingno");
+            if (useFallback) {
+                com.mojang.logging.LogUtils.getLogger().warn("RecipePreviewRenderer: Using fallback texture for {}, primary={}, fallback={}", chemicalId, texture, fallbackTexture);
                 if (fallbackTexture != null) {
                     sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(fallbackTexture);
                 } else {
@@ -260,10 +271,12 @@ public class RecipePreviewRenderer {
             
             RenderSystem.setShaderTexture(0, sprite.atlasLocation());
             
-            int x = slot.x + 1;
-            int y = slot.y + 1;
-            int width = SMALL_SLOT_WIDTH - 2;
-            int height = SMALL_SLOT_HEIGHT - 2;
+            int x = slot.x;
+            int y = slot.y;
+            int width = SMALL_SLOT_WIDTH;
+            int fullHeight = SMALL_SLOT_HEIGHT;
+            int height = (int) (fullHeight * 0.75);
+            int yOffset = fullHeight - height;
             
             int textureWidth = 16;
             int textureHeight = 16;
@@ -272,7 +285,7 @@ public class RecipePreviewRenderer {
             int xRemainder = width - (xTileCount * textureWidth);
             int yTileCount = height / textureHeight;
             int yRemainder = height - (yTileCount * textureHeight);
-            int yStart = y + height;
+            int yStart = y + yOffset + height;
             
             float uMin = sprite.getU0();
             float uMax = sprite.getU1();
@@ -328,13 +341,13 @@ public class RecipePreviewRenderer {
     }
     
     private static void renderEnergySlot(GuiGraphics guiGraphics, PreviewSlot slot) {
-        if (slot.amount > 0) {
-            int x = slot.x;
-            int y = slot.y;
-            
-            RenderSystem.setShaderTexture(0, OVERLAY_POWER);
-            guiGraphics.blit(OVERLAY_POWER, x + 1, y + 1, 0, 0, 16, 16, 16, 16);
-        }
+        int x = slot.x;
+        int y = slot.y;
+        
+        com.mojang.logging.LogUtils.getLogger().info("renderEnergySlot: Rendering overlay at x={}, y={}", x, y);
+        // 渲染满电状态（16像素高的能量条）
+        RenderSystem.setShaderTexture(0, OVERLAY_POWER);
+        guiGraphics.blit(OVERLAY_POWER, x + 1, y + 1, 0, 0, 16, 16, 16, 16);
     }
     
     private static int colorFromType(ContentType type) {
@@ -391,24 +404,28 @@ public class RecipePreviewRenderer {
             ResourceLocation location = new ResourceLocation(chemicalId);
             String path = location.getPath();
             
-            Gas gas = MekanismAPI.gasRegistry().getValue(location);
-            if (gas != null && !gas.isEmptyType()) {
-                return new ResourceLocation("registerhelper", "liquid/liquid");
-            }
-            
-            InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
-            if (infuseType != null && !infuseType.isEmptyType()) {
-                return new ResourceLocation("registerhelper", "infuse_type/" + path);
-            }
-            
-            Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
-            if (pigment != null && !pigment.isEmptyType()) {
-                return new ResourceLocation("registerhelper", "pigment/" + path);
-            }
-            
-            Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
-            if (slurry != null && !slurry.isEmptyType()) {
-                return new ResourceLocation("registerhelper", "slurry/" + path);
+            // 根据类型返回对应贴图路径
+            switch (type) {
+                case GAS -> {
+                    return new ResourceLocation("registerhelper", "liquid/liquid");
+                }
+                case INFUSE_TYPE -> {
+                    // 只有bio和fungi有专门贴图，其他使用base
+                    if (path.equals("bio") || path.equals("fungi")) {
+                        return new ResourceLocation("registerhelper", "infuse_type/" + path);
+                    } else {
+                        return new ResourceLocation("registerhelper", "infuse_type/base");
+                    }
+                }
+                case PIGMENT -> {
+                    return new ResourceLocation("registerhelper", "pigment/base");
+                }
+                case SLURRY -> {
+                    return new ResourceLocation("registerhelper", "slurry/base");
+                }
+                default -> {
+                    return new ResourceLocation("registerhelper", "liquid/liquid");
+                }
             }
         } catch (Exception e) {
         }
