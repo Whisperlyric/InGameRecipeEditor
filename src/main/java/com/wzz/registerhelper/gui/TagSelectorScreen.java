@@ -414,28 +414,104 @@ public class TagSelectorScreen extends Screen {
         }
     }
     
+    /**
+     * 渲染流体（JEI样式）
+     */
     private void renderFluid(GuiGraphics guiGraphics, Fluid fluid, int x, int y, int width, int height) {
         if (fluid == null) return;
         
         FluidStack fluidStack = new FluidStack(fluid, 1000);
         IClientFluidTypeExtensions fluidExtensions = IClientFluidTypeExtensions.of(fluid);
         
-        ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
-        if (stillTexture == null) return;
-        
-        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
-        
         int tintColor = fluidExtensions.getTintColor(fluidStack);
         float r = ((tintColor >> 16) & 0xFF) / 255.0f;
         float g = ((tintColor >> 8) & 0xFF) / 255.0f;
         float b = (tintColor & 0xFF) / 255.0f;
         
-        RenderSystem.setShaderColor(r, g, b, 1.0f);
-        RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+        // 获取静止纹理（参考JEI实现）
+        ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
+        TextureAtlasSprite sprite = null;
         
-        guiGraphics.blit(x, y, 0, width, height, sprite);
+        if (stillTexture != null) {
+            try {
+                sprite = Minecraft.getInstance().getTextureAtlas(net.minecraft.world.inventory.InventoryMenu.BLOCK_ATLAS).apply(stillTexture);
+                // 检查是否为缺失纹理
+                if (sprite != null && sprite.atlasLocation().equals(net.minecraft.client.renderer.texture.MissingTextureAtlasSprite.getLocation())) {
+                    sprite = null;
+                }
+            } catch (Exception e) {
+                // 纹理加载失败
+                sprite = null;
+            }
+        }
         
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        if (sprite != null) {
+            // 使用JEI样式的瓦片式渲染
+            RenderSystem.setShaderTexture(0, net.minecraft.world.inventory.InventoryMenu.BLOCK_ATLAS);
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            int textureWidth = 16;
+            int textureHeight = 16;
+            
+            int xTileCount = width / textureWidth;
+            int xRemainder = width - (xTileCount * textureWidth);
+            int yTileCount = height / textureHeight;
+            int yRemainder = height - (yTileCount * textureHeight);
+            int yStart = y + height;
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            float uDif = uMax - uMin;
+            float vDif = vMax - vMin;
+            
+            RenderSystem.enableBlend();
+            
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                if (tileWidth == 0) {
+                    break;
+                }
+                int tileX = x + (xTile * textureWidth);
+                int maskRight = textureWidth - tileWidth;
+                int shiftedX = tileX + textureWidth - maskRight;
+                float uLocalDif = uDif * maskRight / textureWidth;
+                float uLocalMin = uMin;
+                float uLocalMax = uMax - uLocalDif;
+                
+                for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                    if (tileHeight == 0) {
+                        break;
+                    }
+                    int tileY = yStart - ((yTile + 1) * textureHeight);
+                    int maskTop = textureHeight - tileHeight;
+                    float vLocalDif = vDif * maskTop / textureHeight;
+                    float vLocalMin = vMin + vLocalDif;
+                    float vLocalMax = vMax;
+                    
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                }
+            }
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } else {
+            // 当纹理不可用时，使用颜色填充
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + width, y + height, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        }
     }
     
     private void renderTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {

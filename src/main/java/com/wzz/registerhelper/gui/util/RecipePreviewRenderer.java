@@ -163,27 +163,20 @@ public class RecipePreviewRenderer {
         float g = ((tintColor >> 8) & 0xFF) / 255.0f;
         float b = (tintColor & 0xFF) / 255.0f;
         
-        // 尝试获取静止纹理
+        // 获取静止纹理（参考JEI实现）
         ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
         TextureAtlasSprite sprite = null;
         
         if (stillTexture != null) {
             try {
                 sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+                // 检查是否为缺失纹理
+                if (sprite != null && sprite.contents().name().toString().contains("missingno")) {
+                    sprite = null;
+                }
             } catch (Exception e) {
                 // 纹理加载失败
-            }
-        }
-        
-        // 如果静止纹理不可用，尝试使用流动纹理
-        if (sprite == null) {
-            ResourceLocation flowingTexture = fluidExtensions.getFlowingTexture(fluidStack);
-            if (flowingTexture != null) {
-                try {
-                    sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(flowingTexture);
-                } catch (Exception e) {
-                    // 流动纹理也加载失败
-                }
+                sprite = null;
             }
         }
         
@@ -195,11 +188,10 @@ public class RecipePreviewRenderer {
         int yOffset = fullHeight - height;
         
         if (sprite != null) {
-            // 正常渲染流体纹理
-            RenderSystem.enableDepthTest();
+            // 正常渲染流体纹理（JEI方式）
+            RenderSystem.setShaderTexture(0, TextureAtlas.LOCATION_BLOCKS);
             RenderSystem.setShaderColor(r, g, b, 1.0f);
             RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
-            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
             
             int textureWidth = 16;
             int textureHeight = 16;
@@ -255,9 +247,8 @@ public class RecipePreviewRenderer {
             
             com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
             RenderSystem.disableBlend();
-            RenderSystem.disableDepthTest();
         } else {
-            // 当纹理完全不可用时，使用颜色填充
+            // 当纹理不可用时，使用颜色填充
             RenderSystem.setShaderColor(r, g, b, 1.0f);
             guiGraphics.fill(x, y + yOffset, x + width, y + yOffset + height, 0xFFFFFFFF);
         }
@@ -272,9 +263,12 @@ public class RecipePreviewRenderer {
             ResourceLocation location = new ResourceLocation(chemicalId);
             int color = getChemicalColor(chemicalId, slot.type);
             ResourceLocation texture = getChemicalTexture(chemicalId, slot.type);
-            ResourceLocation fallbackTexture = getFallbackTexture(chemicalId, slot.type);
             
             com.mojang.logging.LogUtils.getLogger().info("renderChemicalSlot: chemicalId={}, color={:#x}, texture={}, type={}", chemicalId, color, texture, slot.type);
+            
+            if (texture == null) {
+                return;
+            }
             
             float r = ((color >> 16) & 0xFF) / 255.0f;
             float g = ((color >> 8) & 0xFF) / 255.0f;
@@ -285,14 +279,9 @@ public class RecipePreviewRenderer {
             
             TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(texture);
             
-            boolean useFallback = sprite == null || sprite.contents().name().toString().contains("missingno");
-            if (useFallback) {
-                com.mojang.logging.LogUtils.getLogger().warn("RecipePreviewRenderer: Using fallback texture for {}, primary={}, fallback={}", chemicalId, texture, fallbackTexture);
-                if (fallbackTexture != null) {
-                    sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(fallbackTexture);
-                } else {
-                    sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(new ResourceLocation("registerhelper", "liquid/liquid"));
-                }
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
             }
             
             RenderSystem.setShaderTexture(0, sprite.atlasLocation());
@@ -423,61 +412,37 @@ public class RecipePreviewRenderer {
     
     private static ResourceLocation getChemicalTexture(String chemicalId, ContentType type) {
         if (chemicalId == null || chemicalId.isEmpty()) {
-            return new ResourceLocation("registerhelper", "liquid/liquid");
+            return null;
         }
         
         try {
             ResourceLocation location = new ResourceLocation(chemicalId);
-            String path = location.getPath();
             
-            // 根据类型返回对应贴图路径
-            switch (type) {
-                case GAS -> {
-                    return new ResourceLocation("registerhelper", "liquid/liquid");
+            if (type == ContentType.GAS) {
+                Gas gas = MekanismAPI.gasRegistry().getValue(location);
+                if (gas != null && !gas.isEmptyType()) {
+                    return gas.getIcon();
                 }
-                case INFUSE_TYPE -> {
-                    // 只有bio和fungi有专门贴图，其他使用base
-                    if (path.equals("bio") || path.equals("fungi")) {
-                        return new ResourceLocation("registerhelper", "infuse_type/" + path);
-                    } else {
-                        return new ResourceLocation("registerhelper", "infuse_type/base");
-                    }
+            } else if (type == ContentType.INFUSE_TYPE) {
+                InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
+                if (infuseType != null && !infuseType.isEmptyType()) {
+                    return infuseType.getIcon();
                 }
-                case PIGMENT -> {
-                    return new ResourceLocation("registerhelper", "pigment/base");
+            } else if (type == ContentType.PIGMENT) {
+                Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
+                if (pigment != null && !pigment.isEmptyType()) {
+                    return pigment.getIcon();
                 }
-                case SLURRY -> {
-                    return new ResourceLocation("registerhelper", "slurry/base");
-                }
-                default -> {
-                    return new ResourceLocation("registerhelper", "liquid/liquid");
+            } else if (type == ContentType.SLURRY) {
+                Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
+                if (slurry != null && !slurry.isEmptyType()) {
+                    return slurry.getIcon();
                 }
             }
         } catch (Exception e) {
         }
         
-        return new ResourceLocation("registerhelper", "liquid/liquid");
-    }
-    
-    private static ResourceLocation getFallbackTexture(String chemicalId, ContentType type) {
-        if (chemicalId == null || chemicalId.isEmpty()) {
-            return null;
-        }
-        
-        switch (type) {
-            case INFUSE_TYPE -> {
-                return new ResourceLocation("registerhelper", "infuse_type/base");
-            }
-            case PIGMENT -> {
-                return new ResourceLocation("registerhelper", "pigment/base");
-            }
-            case SLURRY -> {
-                return new ResourceLocation("registerhelper", "slurry/base");
-            }
-            default -> {
-                return null;
-            }
-        }
+        return null;
     }
     
     public static List<Component> getTooltip(PreviewSlot slot) {

@@ -30,12 +30,6 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
     
     private static final ResourceLocation ELEMENT_HOLDER = new ResourceLocation("registerhelper", "textures/gui/element_holder.png");
     private static final ResourceLocation GAUGE_STANDARD = new ResourceLocation("registerhelper", "textures/gui/gauge/standard.png");
-    private static final ResourceLocation GAS_TEXTURE = new ResourceLocation("registerhelper", "liquid/liquid");
-    private static final ResourceLocation INFUSE_TYPE_BASE = new ResourceLocation("registerhelper", "infuse_type/base");
-    private static final ResourceLocation INFUSE_TYPE_BIO = new ResourceLocation("registerhelper", "infuse_type/bio");
-    private static final ResourceLocation INFUSE_TYPE_FUNGI = new ResourceLocation("registerhelper", "infuse_type/fungi");
-    private static final ResourceLocation PIGMENT_BASE = new ResourceLocation("registerhelper", "pigment/base");
-    private static final ResourceLocation SLURRY_BASE = new ResourceLocation("registerhelper", "slurry/base");
     
     public ChemicalSlotRenderer(ChemicalSlotComponent component, Consumer<ChemicalSlotComponent> onClick) {
         this.component = component;
@@ -72,13 +66,12 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
             try {
                 int color = getChemicalColor(chemicalId);
                 ResourceLocation texture = getChemicalTexture(chemicalId);
-                ResourceLocation fallbackTexture = getFallbackTexture(chemicalId);
                 
                 double fillRatio = (double) amount / maxAmount;
                 int fillHeight = (int) (fillRatio * height);
                 
                 if (fillHeight > 0) {
-                    renderChemical(guiGraphics, color, x, y + height - fillHeight, width, fillHeight, texture, fallbackTexture);
+                    renderChemical(guiGraphics, color, x, y + height - fillHeight, width, fillHeight, texture);
                 }
                 
                 String amountText = formatAmount(amount);
@@ -137,7 +130,11 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
         guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
     }
     
-    private void renderChemical(GuiGraphics guiGraphics, int color, int x, int y, int width, int height, ResourceLocation textureLocation, ResourceLocation fallbackTexture) {
+    private void renderChemical(GuiGraphics guiGraphics, int color, int x, int y, int width, int height, ResourceLocation textureLocation) {
+        if (textureLocation == null) {
+            return;
+        }
+        
         float r = ((color >> 16) & 0xFF) / 255.0f;
         float g = ((color >> 8) & 0xFF) / 255.0f;
         float b = (color & 0xFF) / 255.0f;
@@ -148,7 +145,8 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
         TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(textureLocation);
         
         if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
-            sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(fallbackTexture != null ? fallbackTexture : GAS_TEXTURE);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            return;
         }
         
         RenderSystem.setShaderTexture(0, sprite.atlasLocation());
@@ -246,59 +244,30 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
     
     private ResourceLocation getChemicalTexture(String chemicalId) {
         if (chemicalId == null || chemicalId.isEmpty()) {
-            return GAS_TEXTURE;
-        }
-        
-        try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
-            String path = location.getPath();
-            
-            Gas gas = MekanismAPI.gasRegistry().getValue(location);
-            if (gas != null && !gas.isEmptyType()) {
-                return GAS_TEXTURE;
-            }
-            
-            InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
-            if (infuseType != null && !infuseType.isEmptyType()) {
-                return new ResourceLocation("registerhelper", "infuse_type/" + path);
-            }
-            
-            Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
-            if (pigment != null && !pigment.isEmptyType()) {
-                return new ResourceLocation("registerhelper", "pigment/" + path);
-            }
-            
-            Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
-            if (slurry != null && !slurry.isEmptyType()) {
-                return new ResourceLocation("registerhelper", "slurry/" + path);
-            }
-        } catch (Exception e) {
-        }
-        
-        return GAS_TEXTURE;
-    }
-    
-    private ResourceLocation getFallbackTexture(String chemicalId) {
-        if (chemicalId == null || chemicalId.isEmpty()) {
             return null;
         }
         
         try {
             ResourceLocation location = new ResourceLocation(chemicalId);
             
+            Gas gas = MekanismAPI.gasRegistry().getValue(location);
+            if (gas != null && !gas.isEmptyType()) {
+                return gas.getIcon();
+            }
+            
             InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
             if (infuseType != null && !infuseType.isEmptyType()) {
-                return INFUSE_TYPE_BASE;
+                return infuseType.getIcon();
             }
             
             Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
             if (pigment != null && !pigment.isEmptyType()) {
-                return PIGMENT_BASE;
+                return pigment.getIcon();
             }
             
             Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
             if (slurry != null && !slurry.isEmptyType()) {
-                return SLURRY_BASE;
+                return slurry.getIcon();
             }
         } catch (Exception e) {
         }

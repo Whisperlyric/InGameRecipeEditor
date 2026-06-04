@@ -148,35 +148,28 @@ public class FluidSlotRenderer implements ComponentRenderer {
         float g = ((tintColor >> 8) & 0xFF) / 255.0f;
         float b = (tintColor & 0xFF) / 255.0f;
         
-        // 尝试获取静止纹理
+        // 获取静止纹理（参考JEI实现）
         ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
         TextureAtlasSprite sprite = null;
         
         if (stillTexture != null) {
             try {
-                sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+                sprite = Minecraft.getInstance().getTextureAtlas(net.minecraft.world.inventory.InventoryMenu.BLOCK_ATLAS).apply(stillTexture);
+                // 检查是否为缺失纹理
+                if (sprite != null && sprite.atlasLocation().equals(net.minecraft.client.renderer.texture.MissingTextureAtlasSprite.getLocation())) {
+                    sprite = null;
+                }
             } catch (Exception e) {
                 // 纹理加载失败
-            }
-        }
-        
-        // 如果静止纹理不可用，尝试使用流动纹理
-        if (sprite == null) {
-            ResourceLocation flowingTexture = fluidExtensions.getFlowingTexture(fluidStack);
-            if (flowingTexture != null) {
-                try {
-                    sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(flowingTexture);
-                } catch (Exception e) {
-                    // 流动纹理也加载失败
-                }
+                sprite = null;
             }
         }
         
         if (sprite != null) {
-            // 正常渲染流体纹理
+            // 正常渲染流体纹理（JEI方式）
+            RenderSystem.setShaderTexture(0, net.minecraft.world.inventory.InventoryMenu.BLOCK_ATLAS);
             RenderSystem.setShaderColor(r, g, b, 1.0f);
             RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
-            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
             
             int textureWidth = 16;
             int textureHeight = 16;
@@ -233,7 +226,7 @@ public class FluidSlotRenderer implements ComponentRenderer {
             com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
             RenderSystem.disableBlend();
         } else {
-            // 当纹理完全不可用时，使用颜色填充
+            // 当纹理不可用时，使用颜色填充
             RenderSystem.setShaderColor(r, g, b, 1.0f);
             guiGraphics.fill(x, y, x + width, y + height, 0xFFFFFFFF);
         }
