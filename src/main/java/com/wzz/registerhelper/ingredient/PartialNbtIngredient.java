@@ -42,8 +42,7 @@ import java.util.stream.Stream;
  * }</pre>
  */
 public class PartialNbtIngredient extends AbstractIngredient {
-
-    public static final ResourceLocation ID = new ResourceLocation(RecipeHelper.MODID, "partial_nbt");
+    public static final ResourceLocation ID = ResourceLocation.tryParse(RecipeHelper.MODID + ":partial_nbt");
     public static final Serializer SERIALIZER = new Serializer();
 
     /** 要求的物品类型 */
@@ -168,7 +167,7 @@ public class PartialNbtIngredient extends AbstractIngredient {
         public PartialNbtIngredient parse(JsonObject json) {
             // 解析 item
             String itemId = json.get("item").getAsString();
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
             if (item == null) {
                 throw new IllegalArgumentException("[RegisterHelper] PartialNbtIngredient: 找不到物品 " + itemId);
             }
@@ -193,7 +192,7 @@ public class PartialNbtIngredient extends AbstractIngredient {
         @Override
         public PartialNbtIngredient parse(FriendlyByteBuf buffer) {
             String itemId = buffer.readUtf();
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
             boolean hasNbt = buffer.readBoolean();
             CompoundTag nbt = hasNbt ? buffer.readNbt() : null;
             int size = buffer.readVarInt();

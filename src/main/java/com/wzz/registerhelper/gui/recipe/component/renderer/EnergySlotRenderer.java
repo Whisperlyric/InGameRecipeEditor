@@ -17,8 +17,8 @@ public class EnergySlotRenderer implements ComponentRenderer {
     private final EnergySlotComponent component;
     private boolean active = true;
     
-    private static final ResourceLocation POWER_SLOT = new ResourceLocation("registerhelper", "textures/gui/slot/power.png");
-    private static final ResourceLocation OVERLAY_POWER = new ResourceLocation("registerhelper", "textures/gui/slot/overlay_power.png");
+    private static final ResourceLocation POWER_SLOT = ResourceLocation.parse("registerhelper:textures/gui/slot/power.png");
+    private static final ResourceLocation OVERLAY_POWER = ResourceLocation.parse("registerhelper:textures/gui/slot/overlay_power.png");
     
     public EnergySlotRenderer(EnergySlotComponent component) {
         this.component = component;

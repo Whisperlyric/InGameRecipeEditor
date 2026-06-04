@@ -178,7 +178,7 @@ public class CustomTagManager {
                         .substring(baseDir.getAbsolutePath().length() + 1)
                         .replace(File.separatorChar, '/')
                         .replace(".json", "");
-                tags.add(new ResourceLocation(namespace, relativePath));
+                tags.add(ResourceLocation.parse(namespace + ":" + relativePath));
             }
         }
     }

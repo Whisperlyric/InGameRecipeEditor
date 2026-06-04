@@ -321,7 +321,7 @@ public class RecipeSelectorScreen extends Screen {
                                     if (outputObj.has("item")) {
                                         String itemId = outputObj.get("item").getAsString();
                                         net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                                                .getValue(new ResourceLocation(itemId));
+                                                .getValue(ResourceLocation.parse(itemId));
                                         if (item != null) {
                                             int itemCount = outputObj.has("count") ? outputObj.get("count").getAsInt() : 1;
                                             outputStack = new ItemStack(item, itemCount);
@@ -337,7 +337,7 @@ public class RecipeSelectorScreen extends Screen {
                             // 创建RecipeEntry，使用文件路径作为ID
                             String fileName = jsonFile.getFileName().toString().replace(".json", "");
                             String category = dir.getFileName().toString(); // brewing 或 anvil
-                            ResourceLocation id = new ResourceLocation("registerhelper", "custom_" + category + "/" + fileName);
+                            ResourceLocation id = ResourceLocation.tryParse("registerhelper:custom_" + category + "/" + fileName);
 
                             RecipeEntry entry = new RecipeEntry(id, outputStack, recipeType, null, outputStack);
                             allRecipes.add(entry);
@@ -1028,8 +1028,8 @@ public class RecipeSelectorScreen extends Screen {
      * 渲染满电能量预览（16x16）
      */
     private void renderEnergyPreview(GuiGraphics guiGraphics, int x, int y) {
-        ResourceLocation POWER_SLOT = new ResourceLocation("registerhelper", "textures/gui/slot/power.png");
-        ResourceLocation OVERLAY_POWER = new ResourceLocation("registerhelper", "textures/gui/slot/overlay_power.png");
+        ResourceLocation POWER_SLOT = ResourceLocation.parse("registerhelper:textures/gui/slot/power.png");
+        ResourceLocation OVERLAY_POWER = ResourceLocation.parse("registerhelper:textures/gui/slot/overlay_power.png");
         
         RenderSystem.setShaderTexture(0, POWER_SLOT);
         guiGraphics.blit(POWER_SLOT, x - 1, y - 1, 0, 0, 18, 18, 18, 18);
@@ -1758,7 +1758,7 @@ public class RecipeSelectorScreen extends Screen {
             
             if (obj.has("item")) {
                 String itemId = obj.get("item").getAsString();
-                net.minecraft.world.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+                net.minecraft.world.item.Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
                 if (item != null) {
                     int count = obj.has("count") ? obj.get("count").getAsInt() : 1;
                     return new PreviewSlot(x, y, new ItemStack(item, count));
@@ -1777,7 +1777,7 @@ public class RecipeSelectorScreen extends Screen {
             if (obj.has("item")) {
                 String itemId = obj.get("item").getAsString();
                 net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                        .getValue(new ResourceLocation(itemId));
+                        .getValue(ResourceLocation.parse(itemId));
                 if (item != null) {
                     int count = obj.has("count") ? obj.get("count").getAsInt() : 1;
                     return new ItemStack(item, count);

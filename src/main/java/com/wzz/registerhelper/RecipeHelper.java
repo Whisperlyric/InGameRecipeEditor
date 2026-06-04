@@ -9,6 +9,7 @@ import com.wzz.registerhelper.init.ModNetwork;
 import com.wzz.registerhelper.init.ProcessorLoader;
 import com.wzz.registerhelper.recipe.CustomRecipeLoader;
 import dev.whisperlyric_fork.gui.ModContainers;
+import dev.whisperlyric_fork.PlaceholderInit;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.crafting.CraftingHelper;
@@ -38,6 +39,7 @@ public class RecipeHelper {
         ModNetwork.register();
         ModIntegrations.registerAll();
         ModConfig.register();
+        PlaceholderInit.init(modEventBus);
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {

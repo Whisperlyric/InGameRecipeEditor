@@ -15,7 +15,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 public class ModNetwork {
     private static final String PROTOCOL_VERSION = "3";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            new ResourceLocation(RecipeHelper.MODID, "main"),
+            ResourceLocation.parse(RecipeHelper.MODID + ":main"),
             () -> PROTOCOL_VERSION, PROTOCOL_VERSION::equals, PROTOCOL_VERSION::equals
     );
 

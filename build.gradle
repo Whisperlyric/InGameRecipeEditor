@@ -129,8 +129,8 @@ tasks.named('jar', Jar).configure {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
-    // options.compilerArgs << '-Xlint:-deprecation' // 忽略deprecation警告
-    options.compilerArgs << '-Xlint:-removal' // 忽略removal警告
+//     options.compilerArgs << '-Xlint:-deprecation' // 忽略deprecation警告
+//    options.compilerArgs << '-Xlint:-removal' // 忽略removal警告
 }
 
 //task sourcesJar(type: Jar, dependsOn: classes) {

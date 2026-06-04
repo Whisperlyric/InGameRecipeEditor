@@ -183,7 +183,7 @@ public class CustomRecipeLoader {
 
             // 解析物品ID
             String itemId = obj.get("item").getAsString();
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
             if (item == null || item == Items.AIR) {
                 LOGGER.warn("未知物品: {}", itemId);
                 return null;
@@ -207,7 +207,7 @@ public class CustomRecipeLoader {
             // 解析药水类型（快捷方式）
             if (obj.has("potion")) {
                 String potionId = obj.get("potion").getAsString();
-                Potion potion = BuiltInRegistries.POTION.get(new ResourceLocation(potionId));
+                Potion potion = BuiltInRegistries.POTION.get(ResourceLocation.parse(potionId));
                 if (potion != null && potion != Potions.EMPTY) {
                     PotionUtils.setPotion(stack, potion);
                 }

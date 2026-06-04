@@ -29,8 +29,8 @@ public class FluidSlotRenderer implements ComponentRenderer {
     private boolean active = true;
     private boolean isOutput = false;
     
-    private static final ResourceLocation ELEMENT_HOLDER = new ResourceLocation("registerhelper", "textures/gui/element_holder.png");
-    private static final ResourceLocation GAUGE_STANDARD = new ResourceLocation("registerhelper", "textures/gui/gauge/standard.png");
+    private static final ResourceLocation ELEMENT_HOLDER = ResourceLocation.parse("registerhelper:textures/gui/element_holder.png");
+    private static final ResourceLocation GAUGE_STANDARD = ResourceLocation.parse("registerhelper:textures/gui/gauge/standard.png");
     
     public FluidSlotRenderer(FluidSlotComponent component, Consumer<FluidSlotComponent> onClick) {
         this.component = component;
@@ -116,7 +116,7 @@ public class FluidSlotRenderer implements ComponentRenderer {
             tooltip.add(Component.literal("§e点击选择流体"));
         } else {
             try {
-                ResourceLocation fluidLoc = new ResourceLocation(fluidId);
+                ResourceLocation fluidLoc = ResourceLocation.parse(fluidId);
                 Fluid fluid = ForgeRegistries.FLUIDS.getValue(fluidLoc);
                 if (fluid != null && fluid != Fluids.EMPTY) {
                     String fluidName = fluid.defaultFluidState().createLegacyBlock().getBlock().getName().getString();
@@ -237,9 +237,9 @@ public class FluidSlotRenderer implements ComponentRenderer {
     private int getFluidColor(Fluid fluid) {
         ResourceLocation fluidLoc = fluid.builtInRegistryHolder().key().location();
         
-        if (fluidLoc.equals(new ResourceLocation("minecraft", "water"))) {
+        if (fluidLoc.equals(ResourceLocation.parse("minecraft:water"))) {
             return 0x3F76E4;
-        } else if (fluidLoc.equals(new ResourceLocation("minecraft", "lava"))) {
+        } else if (fluidLoc.equals(ResourceLocation.parse("minecraft:lava"))) {
             return 0xFF4500;
         } else if (fluidLoc.getNamespace().equals("mekanism")) {
             String path = fluidLoc.getPath();

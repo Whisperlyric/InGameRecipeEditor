@@ -140,7 +140,7 @@ public class RecipeManagerMixin {
         for (File recipeFile : recipeFiles) {
             try {
                 String recipeId = getRecipeIdFromFile(modDir, recipeFile);
-                ResourceLocation resourceLocation = new ResourceLocation(modId, recipeId);
+                ResourceLocation resourceLocation = ResourceLocation.parse(modId + ":" + recipeId);
 
                 // 检查是否在黑名单中
                 if (RecipeBlacklistManager.isBlacklisted(resourceLocation)) {

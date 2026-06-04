@@ -9,7 +9,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
@@ -61,19 +60,22 @@ public class PlaceholderInit {
                 pOutput.accept(PLACEHOLDER_9.get());
             }).build());
     
-    static {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+    /**
+     * 初始化占位符物品和整合
+     * @param modEventBus 模组事件总线
+     */
+    public static void init(IEventBus modEventBus) {
         ITEMS.register(modEventBus);
         CREATIVE_MODE_TABS.register(modEventBus);
         
         try {
-            MekanismIntegration.init();
+            MekanismIntegration.init(modEventBus);
         } catch (Throwable e) {
             System.err.println("Failed to initialize Mekanism integration: " + e.getMessage());
         }
         
         try {
-            CreateIntegration.init();
+            CreateIntegration.init(modEventBus);
         } catch (Throwable e) {
             System.err.println("Failed to initialize Create integration: " + e.getMessage());
         }

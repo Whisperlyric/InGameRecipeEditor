@@ -113,7 +113,7 @@ public class IngredientData {
     public static IngredientData fromFluid(String fluidId, int amount) {
         IngredientData data = new IngredientData(Type.ITEM);
         data.itemStack = ItemStack.EMPTY;
-        data.tagId = new ResourceLocation(fluidId);
+        data.tagId = ResourceLocation.parse(fluidId);
         return data;
     }
     
@@ -123,7 +123,7 @@ public class IngredientData {
     public static IngredientData fromGas(String gasId, int amount) {
         IngredientData data = new IngredientData(Type.ITEM);
         data.itemStack = ItemStack.EMPTY;
-        data.tagId = new ResourceLocation(gasId);
+        data.tagId = ResourceLocation.parse(gasId);
         return data;
     }
     

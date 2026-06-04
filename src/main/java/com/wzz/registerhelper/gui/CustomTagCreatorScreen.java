@@ -311,7 +311,7 @@ public class CustomTagCreatorScreen extends Screen {
         isCreating = true;
 
         try {
-            ResourceLocation tagId = new ResourceLocation(namespace, path);
+            ResourceLocation tagId = ResourceLocation.parse(namespace + ":" + path);
 
             if (onTagCreated != null) {
                 if (currentMode == Mode.ITEM) {

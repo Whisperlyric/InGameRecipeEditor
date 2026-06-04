@@ -131,7 +131,7 @@ public class TagLoaderMixin {
         for (File tagFile : tagFiles) {
             try {
                 String tagPath = getTagPathFromFile(directory, tagFile);
-                ResourceLocation tagId = new ResourceLocation(namespace, tagPath);
+                ResourceLocation tagId = ResourceLocation.tryParse(namespace + ":" + tagPath);
                 String source = "registerhelper:custom/" + namespace + "/" + type + "/" + tagPath;
 
                 try (FileReader reader = new FileReader(tagFile)) {
@@ -198,11 +198,11 @@ public class TagLoaderMixin {
 
         if (value.startsWith("#")) {
             // 标签引用: #minecraft:planks
-            ResourceLocation tagRef = new ResourceLocation(value.substring(1));
+            ResourceLocation tagRef = ResourceLocation.parse(value.substring(1));
             entry = required ? TagEntry.tag(tagRef) : TagEntry.optionalTag(tagRef);
         } else {
             // 普通条目: minecraft:diamond
-            ResourceLocation itemId = new ResourceLocation(value);
+            ResourceLocation itemId = ResourceLocation.parse(value);
             // 默认设置为可选，避免加载错误
             entry = required ? TagEntry.element(itemId) : TagEntry.optionalElement(itemId);
         }

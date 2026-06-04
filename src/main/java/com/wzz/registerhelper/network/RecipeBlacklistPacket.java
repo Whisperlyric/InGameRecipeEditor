@@ -84,7 +84,7 @@ public class RecipeBlacklistPacket {
         }
         
         try {
-            ResourceLocation id = new ResourceLocation(recipeId);
+            ResourceLocation id = ResourceLocation.tryParse(recipeId);
             boolean success = RecipeBlacklistManager.addToBlacklist(id);
             
             if (success) {
@@ -106,7 +106,7 @@ public class RecipeBlacklistPacket {
         }
         
         try {
-            ResourceLocation id = new ResourceLocation(recipeId);
+            ResourceLocation id = ResourceLocation.tryParse(recipeId);
             boolean success = RecipeBlacklistManager.removeFromBlacklist(id);
             
             if (success) {
