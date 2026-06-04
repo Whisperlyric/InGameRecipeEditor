@@ -28,8 +28,8 @@ public class GasSlotRenderer implements ComponentRenderer {
     private boolean active = true;
     private boolean isOutput = false;
     
-    private static final ResourceLocation ELEMENT_HOLDER = new ResourceLocation("registerhelper", "textures/gui/element_holder.png");
-    private static final ResourceLocation GAUGE_STANDARD = new ResourceLocation("registerhelper", "textures/gui/gauge/standard.png");
+    private static final ResourceLocation ELEMENT_HOLDER = ResourceLocation.parse("registerhelper:textures/gui/element_holder.png");
+    private static final ResourceLocation GAUGE_STANDARD = ResourceLocation.parse("registerhelper:textures/gui/gauge/standard.png");
     
     public GasSlotRenderer(GasSlotComponent component, Consumer<GasSlotComponent> onClick) {
         this.component = component;
@@ -146,7 +146,7 @@ public class GasSlotRenderer implements ComponentRenderer {
         }
         
         try {
-            ResourceLocation gasLocation = new ResourceLocation(gasId);
+            ResourceLocation gasLocation = ResourceLocation.parse(gasId);
             Gas gas = MekanismAPI.gasRegistry().getValue(gasLocation);
             if (gas != null && !gas.isEmptyType()) {
                 return 0xFF000000 | gas.getTint();
@@ -178,7 +178,7 @@ public class GasSlotRenderer implements ComponentRenderer {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(gasId);
+            ResourceLocation location = ResourceLocation.parse(gasId);
             
             Gas gas = MekanismAPI.gasRegistry().getValue(location);
             if (gas != null && !gas.isEmptyType()) {
@@ -290,7 +290,7 @@ public class GasSlotRenderer implements ComponentRenderer {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(gasId);
+            ResourceLocation location = ResourceLocation.parse(gasId);
             
             Gas gas = MekanismAPI.gasRegistry().getValue(location);
             if (gas != null && !gas.isEmptyType()) {

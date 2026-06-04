@@ -651,14 +651,14 @@ public class RecipeLoader {
         try {
             // 标签型
             if (j.has("tag")) {
-                return IngredientData.fromTag(new ResourceLocation(j.get("tag").getAsString()));
+                return IngredientData.fromTag(ResourceLocation.parse(j.get("tag").getAsString()));
             }
 
             String type = j.has("type") ? j.get("type").getAsString() : "";
 
             if ("registerhelper:partial_nbt".equals(type)) {
                 // 解析 item
-                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(j.get("item").getAsString()));
+                Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(j.get("item").getAsString()));
                 if (item == null) return IngredientData.fromItem(fallbackStack);
 
                 // 解析 nbt

@@ -259,7 +259,7 @@ public class UnifiedRecipeOverrideManager {
             if (overrideMap != null) {
                 for (Map.Entry<String, JsonObject> entry : overrideMap.entrySet()) {
                     try {
-                        ResourceLocation recipeId = new ResourceLocation(entry.getKey());
+                        ResourceLocation recipeId = ResourceLocation.parse(entry.getKey());
                         recipeOverrides.put(recipeId, entry.getValue());
                     } catch (Exception e) {
                         LOGGER.warn("无效的配方ID格式: {}", entry.getKey());

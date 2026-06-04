@@ -30,10 +30,10 @@ public class RecipePreviewRenderer {
     public static final int SMALL_SLOT_WIDTH = 16;
     public static final int SMALL_SLOT_HEIGHT = 28;
     
-    private static final ResourceLocation ELEMENT_HOLDER = new ResourceLocation("registerhelper", "textures/gui/element_holder.png");
-    private static final ResourceLocation GAUGE_SMALL = new ResourceLocation("registerhelper", "textures/gui/gauge/small.png");
-    private static final ResourceLocation POWER_SLOT = new ResourceLocation("registerhelper", "textures/gui/slot/power.png");
-    private static final ResourceLocation OVERLAY_POWER = new ResourceLocation("registerhelper", "textures/gui/slot/overlay_power.png");
+    private static final ResourceLocation ELEMENT_HOLDER = ResourceLocation.parse("registerhelper:textures/gui/element_holder.png");
+    private static final ResourceLocation GAUGE_SMALL = ResourceLocation.parse("registerhelper:textures/gui/gauge/small.png");
+    private static final ResourceLocation POWER_SLOT = ResourceLocation.parse("registerhelper:textures/gui/slot/power.png");
+    private static final ResourceLocation OVERLAY_POWER = ResourceLocation.parse("registerhelper:textures/gui/slot/overlay_power.png");
     
     public enum ContentType {
         ITEM,
@@ -260,7 +260,7 @@ public class RecipePreviewRenderer {
         String chemicalId = (String) slot.content;
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             int color = getChemicalColor(chemicalId, slot.type);
             ResourceLocation texture = getChemicalTexture(chemicalId, slot.type);
             
@@ -381,7 +381,7 @@ public class RecipePreviewRenderer {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             
             if (type == ContentType.GAS) {
                 Gas gas = MekanismAPI.gasRegistry().getValue(location);
@@ -416,7 +416,7 @@ public class RecipePreviewRenderer {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             
             if (type == ContentType.GAS) {
                 Gas gas = MekanismAPI.gasRegistry().getValue(location);
@@ -481,7 +481,7 @@ public class RecipePreviewRenderer {
     
     private static String getChemicalDisplayName(String chemicalId, ContentType type) {
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             
             if (type == ContentType.GAS) {
                 Gas gas = MekanismAPI.gasRegistry().getValue(location);

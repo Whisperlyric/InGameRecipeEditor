@@ -388,6 +388,6 @@ public class RecipeUtil {
 
     public static ResourceLocation getItemResourceLocation(Item item) {
         ResourceLocation location = ForgeRegistries.ITEMS.getKey(item);
-        return location != null ? location : new ResourceLocation("minecraft", "air");
+        return location != null ? location : ResourceLocation.parse("minecraft:air");
     }
 }

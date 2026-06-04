@@ -30,15 +30,15 @@ import dev.whisperlyric_fork.mekanism.layout.PigmentMixingLayout;
 import dev.whisperlyric_fork.mekanism.layout.PigmentExtractingLayout;
 import dev.whisperlyric_fork.mekanism.layout.GasConversionLayout;
 import dev.whisperlyric_fork.mekanism.layout.InfusionConversionLayout;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 public class MekanismIntegration {
     
     private static boolean initialized = false;
     
-    public static void init() {
+    public static void init(IEventBus modEventBus) {
         if (initialized) return;
         initialized = true;
         
@@ -46,8 +46,7 @@ public class MekanismIntegration {
             return;
         }
         
-        FMLJavaModLoadingContext.get().getModEventBus()
-            .addListener(MekanismIntegration::onCommonSetup);
+        modEventBus.addListener(MekanismIntegration::onCommonSetup);
     }
     
     private static void onCommonSetup(FMLCommonSetupEvent event) {

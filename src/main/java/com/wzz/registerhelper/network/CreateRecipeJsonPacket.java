@@ -69,7 +69,7 @@ public class CreateRecipeJsonPacket {
                     return;
                 }
 
-                ResourceLocation recipeIdLoc = new ResourceLocation(packet.recipeId);
+                ResourceLocation recipeIdLoc = ResourceLocation.parse(packet.recipeId);
                 boolean success;
 
                 if (packet.isOverride) {

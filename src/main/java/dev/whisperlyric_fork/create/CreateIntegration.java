@@ -3,15 +3,15 @@ package dev.whisperlyric_fork.create;
 import com.wzz.registerhelper.gui.recipe.layout.LayoutManager;
 import com.wzz.registerhelper.util.RegisterHelper;
 import dev.whisperlyric_fork.create.layout.*;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 public class CreateIntegration {
     
     private static boolean initialized = false;
     
-    public static void init() {
+    public static void init(IEventBus modEventBus) {
         if (initialized) return;
         initialized = true;
         
@@ -19,8 +19,7 @@ public class CreateIntegration {
             return;
         }
         
-        FMLJavaModLoadingContext.get().getModEventBus()
-            .addListener(CreateIntegration::onCommonSetup);
+        modEventBus.addListener(CreateIntegration::onCommonSetup);
     }
     
     private static void onCommonSetup(FMLCommonSetupEvent event) {

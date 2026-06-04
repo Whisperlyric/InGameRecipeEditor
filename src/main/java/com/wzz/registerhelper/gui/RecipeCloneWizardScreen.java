@@ -1092,7 +1092,7 @@ public class RecipeCloneWizardScreen extends Screen {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             
             if (type == RecipePreviewRenderer.ContentType.GAS) {
                 mekanism.api.chemical.gas.Gas gas = mekanism.api.MekanismAPI.gasRegistry().getValue(location);

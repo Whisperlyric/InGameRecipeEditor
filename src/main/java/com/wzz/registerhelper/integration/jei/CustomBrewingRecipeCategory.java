@@ -23,7 +23,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public class CustomBrewingRecipeCategory extends AbstractRecipeCategory<JEIBrewingRecipe> {
 
-    public static final ResourceLocation UID = new ResourceLocation("registerhelper", "custom_brewing");
+    public static final ResourceLocation UID = ResourceLocation.parse("registerhelper:custom_brewing");
     public static final RecipeType<JEIBrewingRecipe> RECIPE_TYPE =
             new RecipeType<>(UID, JEIBrewingRecipe.class);
 
@@ -82,6 +82,6 @@ public class CustomBrewingRecipeCategory extends AbstractRecipeCategory<JEIBrewi
 
     @Override
     public @Nullable ResourceLocation getRegistryName(JEIBrewingRecipe recipe) {
-        return new ResourceLocation("registerhelper", "brewing_" + recipe.hashCode());
+        return ResourceLocation.parse("registerhelper:brewing_" + recipe.hashCode());
     }
 }

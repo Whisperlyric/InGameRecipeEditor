@@ -220,7 +220,7 @@ public class RecipeBlacklistManager {
             if (recipeStrings != null) {
                 for (String recipeString : recipeStrings) {
                     try {
-                        ResourceLocation recipeId = new ResourceLocation(recipeString);
+                        ResourceLocation recipeId = ResourceLocation.parse(recipeString);
                         blacklistedRecipes.add(recipeId);
                     } catch (Exception e) {
                         LOGGER.warn("无效的配方ID格式: {}", recipeString);

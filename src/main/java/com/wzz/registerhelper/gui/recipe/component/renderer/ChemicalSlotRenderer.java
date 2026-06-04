@@ -28,8 +28,8 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
     private boolean active = true;
     private boolean isOutput = false;
     
-    private static final ResourceLocation ELEMENT_HOLDER = new ResourceLocation("registerhelper", "textures/gui/element_holder.png");
-    private static final ResourceLocation GAUGE_STANDARD = new ResourceLocation("registerhelper", "textures/gui/gauge/standard.png");
+    private static final ResourceLocation ELEMENT_HOLDER = ResourceLocation.parse("registerhelper:textures/gui/element_holder.png");
+    private static final ResourceLocation GAUGE_STANDARD = ResourceLocation.parse("registerhelper:textures/gui/gauge/standard.png");
     
     public ChemicalSlotRenderer(ChemicalSlotComponent component, Consumer<ChemicalSlotComponent> onClick) {
         this.component = component;
@@ -215,7 +215,7 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             
             Gas gas = MekanismAPI.gasRegistry().getValue(location);
             if (gas != null && !gas.isEmptyType()) {
@@ -248,7 +248,7 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             
             Gas gas = MekanismAPI.gasRegistry().getValue(location);
             if (gas != null && !gas.isEmptyType()) {
@@ -291,7 +291,7 @@ public class ChemicalSlotRenderer implements ComponentRenderer {
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = ResourceLocation.parse(chemicalId);
             
             Gas gas = MekanismAPI.gasRegistry().getValue(location);
             if (gas != null && !gas.isEmptyType()) {
