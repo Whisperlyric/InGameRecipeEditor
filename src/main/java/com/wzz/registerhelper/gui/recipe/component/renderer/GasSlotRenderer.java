@@ -30,7 +30,6 @@ public class GasSlotRenderer implements ComponentRenderer {
     
     private static final ResourceLocation ELEMENT_HOLDER = new ResourceLocation("registerhelper", "textures/gui/element_holder.png");
     private static final ResourceLocation GAUGE_STANDARD = new ResourceLocation("registerhelper", "textures/gui/gauge/standard.png");
-    private static final ResourceLocation GAS_STILL_TEXTURE = new ResourceLocation("registerhelper", "liquid/liquid");
     
     public GasSlotRenderer(GasSlotComponent component, Consumer<GasSlotComponent> onClick) {
         this.component = component;
@@ -69,17 +68,13 @@ public class GasSlotRenderer implements ComponentRenderer {
         if (gasId != null && !gasId.isEmpty()) {
             try {
                 int color = getGasColor(gasId);
-                boolean isPureGas = isPureGas(gasId);
+                ResourceLocation texture = getGasTexture(gasId);
                 
                 double fillRatio = (double) amount / maxAmount;
                 int fillHeight = (int) (fillRatio * height);
                 
-                if (fillHeight > 0) {
-                    if (isPureGas) {
-                        renderGasWithFlow(guiGraphics, color, x, y + height - fillHeight, width, fillHeight);
-                    } else {
-                        renderGasStatic(guiGraphics, color, x, y + height - fillHeight, width, fillHeight);
-                    }
+                if (fillHeight > 0 && texture != null) {
+                    renderGasStatic(guiGraphics, color, x, y + height - fillHeight, width, fillHeight, texture);
                 }
                 
                 String amountText = displayDivisor > 1 ? String.valueOf(displayAmount) : formatAmount(amount);
@@ -145,75 +140,6 @@ public class GasSlotRenderer implements ComponentRenderer {
         guiGraphics.renderTooltip(font, formattedTooltip, mouseX, mouseY);
     }
     
-    private void renderGasWithFlow(GuiGraphics guiGraphics, int color, int x, int y, int width, int height) {
-        float r = ((color >> 16) & 0xFF) / 255.0f;
-        float g = ((color >> 8) & 0xFF) / 255.0f;
-        float b = (color & 0xFF) / 255.0f;
-        
-        RenderSystem.setShaderColor(r, g, b, 1.0f);
-        RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
-        
-        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(GAS_STILL_TEXTURE);
-        RenderSystem.setShaderTexture(0, sprite.atlasLocation());
-        
-        int textureWidth = 16;
-        int textureHeight = 16;
-        
-        int xTileCount = width / textureWidth;
-        int xRemainder = width - (xTileCount * textureWidth);
-        int yTileCount = height / textureHeight;
-        int yRemainder = height - (yTileCount * textureHeight);
-        int yStart = y + height;
-        
-        float uMin = sprite.getU0();
-        float uMax = sprite.getU1();
-        float vMin = sprite.getV0();
-        float vMax = sprite.getV1();
-        float uDif = uMax - uMin;
-        float vDif = vMax - vMin;
-        
-        RenderSystem.enableBlend();
-        
-        com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
-        vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
-        org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
-        
-        for (int xTile = 0; xTile <= xTileCount; xTile++) {
-            int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
-            if (tileWidth == 0) {
-                break;
-            }
-            int tileX = x + (xTile * textureWidth);
-            int maskRight = textureWidth - tileWidth;
-            int shiftedX = tileX + textureWidth - maskRight;
-            float uLocalDif = uDif * maskRight / textureWidth;
-            float uLocalMin = uMin;
-            float uLocalMax = uMax - uLocalDif;
-            
-            for (int yTile = 0; yTile <= yTileCount; yTile++) {
-                int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
-                if (tileHeight == 0) {
-                    break;
-                }
-                int tileY = yStart - ((yTile + 1) * textureHeight);
-                int maskTop = textureHeight - tileHeight;
-                float vLocalDif = vDif * maskTop / textureHeight;
-                float vLocalMin = vMin + vLocalDif;
-                float vLocalMax = vMax;
-                
-                vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
-                vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
-                vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
-                vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
-            }
-        }
-        
-        BufferUploader.drawWithShader(vertexBuffer.end());
-        RenderSystem.disableBlend();
-        
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-    }
-    
     private int getGasColor(String gasId) {
         if (gasId == null || gasId.isEmpty()) {
             return 0xFFFFFFFF;
@@ -246,40 +172,40 @@ public class GasSlotRenderer implements ComponentRenderer {
         return 0xFFFFFFFF;
     }
     
-    private boolean isPureGas(String chemicalId) {
-        if (chemicalId == null || chemicalId.isEmpty()) {
-            return false;
+    private ResourceLocation getGasTexture(String gasId) {
+        if (gasId == null || gasId.isEmpty()) {
+            return null;
         }
         
         try {
-            ResourceLocation location = new ResourceLocation(chemicalId);
+            ResourceLocation location = new ResourceLocation(gasId);
             
             Gas gas = MekanismAPI.gasRegistry().getValue(location);
             if (gas != null && !gas.isEmptyType()) {
-                return true;
+                return gas.getIcon();
             }
             
             InfuseType infuseType = MekanismAPI.infuseTypeRegistry().getValue(location);
             if (infuseType != null && !infuseType.isEmptyType()) {
-                return false;
+                return infuseType.getIcon();
             }
             
             Pigment pigment = MekanismAPI.pigmentRegistry().getValue(location);
             if (pigment != null && !pigment.isEmptyType()) {
-                return false;
+                return pigment.getIcon();
             }
             
             Slurry slurry = MekanismAPI.slurryRegistry().getValue(location);
             if (slurry != null && !slurry.isEmptyType()) {
-                return true;
+                return slurry.getIcon();
             }
         } catch (Exception e) {
         }
         
-        return false;
+        return null;
     }
     
-    private void renderGasStatic(GuiGraphics guiGraphics, int color, int x, int y, int width, int height) {
+    private void renderGasStatic(GuiGraphics guiGraphics, int color, int x, int y, int width, int height, ResourceLocation textureLocation) {
         float r = ((color >> 16) & 0xFF) / 255.0f;
         float g = ((color >> 8) & 0xFF) / 255.0f;
         float b = (color & 0xFF) / 255.0f;
@@ -287,7 +213,7 @@ public class GasSlotRenderer implements ComponentRenderer {
         RenderSystem.setShaderColor(r, g, b, 1.0f);
         RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
         
-        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(GAS_STILL_TEXTURE);
+        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(textureLocation);
         RenderSystem.setShaderTexture(0, sprite.atlasLocation());
         
         int textureWidth = 16;

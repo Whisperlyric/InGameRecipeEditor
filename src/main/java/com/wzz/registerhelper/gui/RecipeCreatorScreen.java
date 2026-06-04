@@ -3,6 +3,9 @@ package com.wzz.registerhelper.gui;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.wzz.registerhelper.gui.recipe.*;
 import com.wzz.registerhelper.gui.recipe.component.*;
+import com.wzz.registerhelper.gui.recipe.component.renderer.ChemicalSlotRenderer;
+import com.wzz.registerhelper.gui.recipe.component.renderer.FluidSlotRenderer;
+import com.wzz.registerhelper.gui.recipe.component.renderer.GasSlotRenderer;
 import com.wzz.registerhelper.gui.recipe.component.renderer.SlotRenderer;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeBuilder;
 import com.wzz.registerhelper.gui.recipe.dynamic.DynamicRecipeTypeConfig;
@@ -2118,17 +2121,8 @@ public class RecipeCreatorScreen extends Screen {
             if (!stackToRender.isEmpty()) {
                 guiGraphics.renderItem(stackToRender, slot.x() + 1, slot.y() + 1);
                 
-                boolean isBulkSlot = false;
-                if (slotManager != null) {
-                    for (RecipeComponent component : slotManager.getComponents()) {
-                        if (component instanceof SlotComponent slotComp && slotComp.getSlotIndex() == slotIndex) {
-                            isBulkSlot = slotComp.isBulkSlot();
-                            break;
-                        }
-                    }
-                }
-                
-                if (isBulkSlot && stackToRender.getCount() > 1) {
+                // 如果物品数量大于1，总是显示数量
+                if (stackToRender.getCount() > 1) {
                     guiGraphics.renderItemDecorations(this.font, stackToRender, slot.x() + 1, slot.y() + 1, null);
                 }
             }
@@ -2172,7 +2166,8 @@ public class RecipeCreatorScreen extends Screen {
             
             guiGraphics.renderItem(displayItem, slot.x() + 1, slot.y() + 1);
             
-            if (isBulkSlot && displayItem.getCount() > 1) {
+            // 如果物品数量大于1，总是显示数量
+            if (displayItem.getCount() > 1) {
                 guiGraphics.renderItemDecorations(this.font, displayItem, slot.x() + 1, slot.y() + 1, null);
             }
         }
@@ -2303,6 +2298,42 @@ public class RecipeCreatorScreen extends Screen {
                         guiGraphics.renderTooltip(this.font, slotManager.getResultItem(), mouseX, mouseY);
                     } else {
                         guiGraphics.renderTooltip(this.font, Component.literal("点击选择结果物品"), mouseX, mouseY);
+                    }
+                }
+            } else {
+                // 有输出组件时，检查是否悬浮在输出组件上
+                if (componentRenderManager != null) {
+                    ComponentRenderer renderer = componentRenderManager.createRenderer(outputComponent);
+                    if (renderer != null) {
+                        // 使用instanceof检查来调用特定渲染器的renderTooltip方法
+                        if (renderer instanceof SlotRenderer slotRenderer) {
+                            slotRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        } else if (renderer instanceof ChemicalSlotRenderer chemicalRenderer) {
+                            chemicalRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        } else if (renderer instanceof FluidSlotRenderer fluidRenderer) {
+                            fluidRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        } else if (renderer instanceof GasSlotRenderer gasRenderer) {
+                            gasRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        }
+                    }
+                }
+            }
+        } else {
+            // 有多个输出组件时，检查是否悬浮在某个输出组件上
+            if (componentRenderManager != null) {
+                for (RecipeComponent outputComp : outputComponents) {
+                    ComponentRenderer renderer = componentRenderManager.createRenderer(outputComp);
+                    if (renderer != null) {
+                        // 使用instanceof检查来调用特定渲染器的renderTooltip方法
+                        if (renderer instanceof SlotRenderer slotRenderer) {
+                            slotRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        } else if (renderer instanceof ChemicalSlotRenderer chemicalRenderer) {
+                            chemicalRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        } else if (renderer instanceof FluidSlotRenderer fluidRenderer) {
+                            fluidRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        } else if (renderer instanceof GasSlotRenderer gasRenderer) {
+                            gasRenderer.renderTooltip(guiGraphics, this.font, mouseX, mouseY);
+                        }
                     }
                 }
             }

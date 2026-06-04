@@ -202,19 +202,16 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
     }
     
     private int getFluidColor(FluidStack fluidStack) {
-        try {
-            net.minecraft.world.level.material.Fluid fluid = fluidStack.getFluid();
-            net.minecraft.resources.ResourceLocation fluidId = net.minecraftforge.registries.ForgeRegistries.FLUIDS.getKey(fluid);
-            if (fluidId != null) {
-                String idStr = fluidId.toString();
-                if (idStr.contains("water")) return 0xFF3F76E4;
-                if (idStr.contains("lava")) return 0xFFE05000;
-                if (idStr.contains("oil")) return 0xFF333333;
-                if (idStr.contains("fuel")) return 0xFFCC6600;
-                if (idStr.contains("acid")) return 0xFF00AA00;
-                if (idStr.contains("uranium")) return 0xFF00FF00;
-            }
-        } catch (Exception e) {
+        net.minecraft.world.level.material.Fluid fluid = fluidStack.getFluid();
+        net.minecraft.resources.ResourceLocation fluidId = net.minecraftforge.registries.ForgeRegistries.FLUIDS.getKey(fluid);
+        if (fluidId != null) {
+            String idStr = fluidId.toString();
+            if (idStr.contains("water")) return 0xFF3F76E4;
+            if (idStr.contains("lava")) return 0xFFE05000;
+            if (idStr.contains("oil")) return 0xFF333333;
+            if (idStr.contains("fuel")) return 0xFFCC6600;
+            if (idStr.contains("acid")) return 0xFF00AA00;
+            if (idStr.contains("uranium")) return 0xFF00FF00;
         }
         return 0xFF5555FF;
     }

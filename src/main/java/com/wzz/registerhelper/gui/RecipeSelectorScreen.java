@@ -21,10 +21,9 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.level.material.Fluid;
-import net.minecraft.world.level.material.Fluids;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
@@ -821,68 +820,208 @@ public class RecipeSelectorScreen extends Screen {
      * 渲染流体预览（16x16）- JEI样式
      */
     private void renderFluidPreview(GuiGraphics guiGraphics, FluidStack fluidStack, int x, int y) {
-        try {
-            net.minecraft.world.level.material.Fluid fluid = fluidStack.getFluid();
-            if (fluid != null && !fluidStack.isEmpty()) {
-                // 获取流体贴图
-                net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
-                    Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS)
-                        .apply(new ResourceLocation("minecraft", "block/water_still"));
-                
-                // 获取流体颜色（使用默认颜色）
-                int tintColor = 0xFFFFFFFF;
-                
-                float r = ((tintColor >> 16) & 0xFF) / 255.0f;
-                float g = ((tintColor >> 8) & 0xFF) / 255.0f;
-                float b = (tintColor & 0xFF) / 255.0f;
-                
-                RenderSystem.setShaderColor(r, g, b, 1.0f);
-                RenderSystem.setShaderTexture(0, sprite.atlasLocation());
-                
-                // 绘制流体
-                guiGraphics.blit(x, y, 0, 16, 16, sprite);
-                
-                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-                return;
+        if (fluidStack.isEmpty()) return;
+        
+        net.minecraft.world.level.material.Fluid fluid = fluidStack.getFluid();
+        IClientFluidTypeExtensions fluidExt = IClientFluidTypeExtensions.of(fluid);
+        
+        int tintColor = fluidExt.getTintColor(fluidStack);
+        float r = ((tintColor >> 16) & 0xFF) / 255.0f;
+        float g = ((tintColor >> 8) & 0xFF) / 255.0f;
+        float b = (tintColor & 0xFF) / 255.0f;
+        
+        // 获取静止纹理（参考JEI实现）
+        ResourceLocation stillTexture = fluidExt.getStillTexture(fluidStack);
+        net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = null;
+        
+        if (stillTexture != null) {
+            try {
+                sprite = Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+                // 检查是否为缺失纹理
+                if (sprite != null && sprite.contents().name().toString().contains("missingno")) {
+                    sprite = null;
+                }
+            } catch (Exception e) {
+                // 纹理加载失败
+                sprite = null;
             }
-        } catch (Exception e) {
         }
         
-        // Fallback: 简单颜色块
-        guiGraphics.fill(x, y, x + 16, y + 16, 0xFF333333);
-        int color = 0xFF0066CC;
-        guiGraphics.fill(x + 1, y + 1, x + 15, y + 15, color);
+        if (sprite != null) {
+            // 使用JEI样式的瓦片式渲染
+            RenderSystem.setShaderTexture(0, net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS);
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            int width = 16;
+            int height = 16;
+            
+            int textureWidth = 16;
+            int textureHeight = 16;
+            
+            int xTileCount = width / textureWidth;
+            int xRemainder = width - (xTileCount * textureWidth);
+            int yTileCount = height / textureHeight;
+            int yRemainder = height - (yTileCount * textureHeight);
+            int yStart = y + height;
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            float uDif = uMax - uMin;
+            float vDif = vMax - vMin;
+            
+            RenderSystem.enableBlend();
+            
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                if (tileWidth == 0) {
+                    break;
+                }
+                int tileX = x + (xTile * textureWidth);
+                int maskRight = textureWidth - tileWidth;
+                int shiftedX = tileX + textureWidth - maskRight;
+                float uLocalDif = uDif * maskRight / textureWidth;
+                float uLocalMin = uMin;
+                float uLocalMax = uMax - uLocalDif;
+                
+                for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                    if (tileHeight == 0) {
+                        break;
+                    }
+                    int tileY = yStart - ((yTile + 1) * textureHeight);
+                    int maskTop = textureHeight - tileHeight;
+                    float vLocalDif = vDif * maskTop / textureHeight;
+                    float vLocalMin = vMin + vLocalDif;
+                    float vLocalMax = vMax;
+                    
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                }
+            }
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } else {
+            // 当纹理不可用时，使用颜色填充
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        }
     }
     
     /**
-     * 渲染气体预览（16x16）
+     * 渲染气体预览（16x16）- JEI样式
      */
     private void renderGasPreview(GuiGraphics guiGraphics, mekanism.api.chemical.gas.GasStack gasStack, int x, int y) {
-        // 绘制背景
-        guiGraphics.fill(x, y, x + 16, y + 16, 0xFF333333);
+        if (gasStack.isEmpty()) return;
         
-        // 绘制气体颜色
-        int color = 0xFF00DDFF;
         try {
             mekanism.api.chemical.gas.Gas gas = gasStack.getType();
-            if (gas != null) {
-                ResourceLocation gasId = mekanism.api.MekanismAPI.gasRegistry().getKey(gas);
-                if (gasId != null) {
-                    // 根据气体类型设置颜色
-                    String path = gasId.getPath();
-                    if (path.contains("oxygen")) {
-                        color = 0xFF66CCFF;
-                    } else if (path.contains("hydrogen")) {
-                        color = 0xFFCCFFFF;
-                    } else if (path.contains("sulfuric")) {
-                        color = 0xFFFFFF00;
+            if (gas == null || gas.isEmptyType()) return;
+            
+            int color = gas.getTint();
+            ResourceLocation texture = gas.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            int width = 16;
+            int height = 16;
+            
+            int textureWidth = 16;
+            int textureHeight = 16;
+            
+            int xTileCount = width / textureWidth;
+            int xRemainder = width - (xTileCount * textureWidth);
+            int yTileCount = height / textureHeight;
+            int yRemainder = height - (yTileCount * textureHeight);
+            int yStart = y + height;
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            float uDif = uMax - uMin;
+            float vDif = vMax - vMin;
+            
+            RenderSystem.enableBlend();
+            
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                if (tileWidth == 0) {
+                    break;
+                }
+                int tileX = x + (xTile * textureWidth);
+                int maskRight = textureWidth - tileWidth;
+                int shiftedX = tileX + textureWidth - maskRight;
+                float uLocalDif = uDif * maskRight / textureWidth;
+                float uLocalMin = uMin;
+                float uLocalMax = uMax - uLocalDif;
+                
+                for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                    if (tileHeight == 0) {
+                        break;
                     }
+                    int tileY = yStart - ((yTile + 1) * textureHeight);
+                    int maskTop = textureHeight - tileHeight;
+                    float vLocalDif = vDif * maskTop / textureHeight;
+                    float vLocalMin = vMin + vLocalDif;
+                    float vLocalMax = vMax;
+                    
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
                 }
             }
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            
         } catch (Exception e) {
+            // 渲染失败，使用简单的颜色填充
+            int color = 0xFF00DDFF;
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
-        
-        guiGraphics.fill(x + 1, y + 1, x + 15, y + 15, color);
     }
     
     /**
@@ -900,54 +1039,309 @@ public class RecipeSelectorScreen extends Screen {
     }
     
     /**
-     * 渲染灌注类型预览（16x16）
+     * 渲染灌注类型预览（16x16）- JEI样式
      */
     private void renderInfuseTypePreview(GuiGraphics guiGraphics, mekanism.api.chemical.infuse.InfuseType infuseType, int x, int y) {
-        ResourceLocation gauge = new ResourceLocation("registerhelper", "textures/gui/gauge/small.png");
-        RenderSystem.setShaderTexture(0, gauge);
-        guiGraphics.blit(gauge, x - 1, y - 1, 0, 0, 18, 18, 18, 18);
+        if (infuseType == null || infuseType.isEmptyType()) return;
         
-        int color = 0xFFDDDD00;
         try {
-            color = 0xFF000000 | infuseType.getTint();
+            int color = infuseType.getTint();
+            ResourceLocation texture = infuseType.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            int width = 16;
+            int height = 16;
+            
+            int textureWidth = 16;
+            int textureHeight = 16;
+            
+            int xTileCount = width / textureWidth;
+            int xRemainder = width - (xTileCount * textureWidth);
+            int yTileCount = height / textureHeight;
+            int yRemainder = height - (yTileCount * textureHeight);
+            int yStart = y + height;
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            float uDif = uMax - uMin;
+            float vDif = vMax - vMin;
+            
+            RenderSystem.enableBlend();
+            
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                if (tileWidth == 0) {
+                    break;
+                }
+                int tileX = x + (xTile * textureWidth);
+                int maskRight = textureWidth - tileWidth;
+                int shiftedX = tileX + textureWidth - maskRight;
+                float uLocalDif = uDif * maskRight / textureWidth;
+                float uLocalMin = uMin;
+                float uLocalMax = uMax - uLocalDif;
+                
+                for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                    if (tileHeight == 0) {
+                        break;
+                    }
+                    int tileY = yStart - ((yTile + 1) * textureHeight);
+                    int maskTop = textureHeight - tileHeight;
+                    float vLocalDif = vDif * maskTop / textureHeight;
+                    float vLocalMin = vMin + vLocalDif;
+                    float vLocalMax = vMax;
+                    
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                }
+            }
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            
         } catch (Exception e) {
+            // 渲染失败，使用简单的颜色填充
+            int color = 0xFFDDDD00;
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
-        
-        guiGraphics.fill(x, y, x + 16, y + 16, color);
     }
     
     /**
-     * 渲染颜料预览（16x16）
+     * 渲染颜料预览（16x16）- JEI样式
      */
     private void renderPigmentPreview(GuiGraphics guiGraphics, mekanism.api.chemical.pigment.Pigment pigment, int x, int y) {
-        ResourceLocation gauge = new ResourceLocation("registerhelper", "textures/gui/gauge/small.png");
-        RenderSystem.setShaderTexture(0, gauge);
-        guiGraphics.blit(gauge, x - 1, y - 1, 0, 0, 18, 18, 18, 18);
+        if (pigment == null || pigment.isEmptyType()) return;
         
-        int color = 0xFFFF00FF;
         try {
-            color = 0xFF000000 | pigment.getTint();
+            int color = pigment.getTint();
+            ResourceLocation texture = pigment.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            int width = 16;
+            int height = 16;
+            
+            int textureWidth = 16;
+            int textureHeight = 16;
+            
+            int xTileCount = width / textureWidth;
+            int xRemainder = width - (xTileCount * textureWidth);
+            int yTileCount = height / textureHeight;
+            int yRemainder = height - (yTileCount * textureHeight);
+            int yStart = y + height;
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            float uDif = uMax - uMin;
+            float vDif = vMax - vMin;
+            
+            RenderSystem.enableBlend();
+            
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                if (tileWidth == 0) {
+                    break;
+                }
+                int tileX = x + (xTile * textureWidth);
+                int maskRight = textureWidth - tileWidth;
+                int shiftedX = tileX + textureWidth - maskRight;
+                float uLocalDif = uDif * maskRight / textureWidth;
+                float uLocalMin = uMin;
+                float uLocalMax = uMax - uLocalDif;
+                
+                for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                    if (tileHeight == 0) {
+                        break;
+                    }
+                    int tileY = yStart - ((yTile + 1) * textureHeight);
+                    int maskTop = textureHeight - tileHeight;
+                    float vLocalDif = vDif * maskTop / textureHeight;
+                    float vLocalMin = vMin + vLocalDif;
+                    float vLocalMax = vMax;
+                    
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                }
+            }
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            
         } catch (Exception e) {
+            // 渲染失败，使用简单的颜色填充
+            int color = 0xFFFF00FF;
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
-        
-        guiGraphics.fill(x, y, x + 16, y + 16, color);
     }
     
     /**
-     * 渲染浆液预览（16x16）
+     * 渲染浆液预览（16x16）- JEI样式
      */
     private void renderSlurryPreview(GuiGraphics guiGraphics, mekanism.api.chemical.slurry.Slurry slurry, int x, int y) {
-        ResourceLocation gauge = new ResourceLocation("registerhelper", "textures/gui/gauge/small.png");
-        RenderSystem.setShaderTexture(0, gauge);
-        guiGraphics.blit(gauge, x - 1, y - 1, 0, 0, 18, 18, 18, 18);
+        if (slurry == null || slurry.isEmptyType()) return;
         
-        int color = 0xFF00FF00;
         try {
-            color = 0xFF000000 | slurry.getTint();
+            int color = slurry.getTint();
+            ResourceLocation texture = slurry.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            int width = 16;
+            int height = 16;
+            
+            int textureWidth = 16;
+            int textureHeight = 16;
+            
+            int xTileCount = width / textureWidth;
+            int xRemainder = width - (xTileCount * textureWidth);
+            int yTileCount = height / textureHeight;
+            int yRemainder = height - (yTileCount * textureHeight);
+            int yStart = y + height;
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            float uDif = uMax - uMin;
+            float vDif = vMax - vMin;
+            
+            RenderSystem.enableBlend();
+            
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                if (tileWidth == 0) {
+                    break;
+                }
+                int tileX = x + (xTile * textureWidth);
+                int maskRight = textureWidth - tileWidth;
+                int shiftedX = tileX + textureWidth - maskRight;
+                float uLocalDif = uDif * maskRight / textureWidth;
+                float uLocalMin = uMin;
+                float uLocalMax = uMax - uLocalDif;
+                
+                for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                    if (tileHeight == 0) {
+                        break;
+                    }
+                    int tileY = yStart - ((yTile + 1) * textureHeight);
+                    int maskTop = textureHeight - tileHeight;
+                    float vLocalDif = vDif * maskTop / textureHeight;
+                    float vLocalMin = vMin + vLocalDif;
+                    float vLocalMax = vMax;
+                    
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                }
+            }
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            
         } catch (Exception e) {
+            // 渲染失败，使用简单的颜色填充
+            int color = 0xFF00FF00;
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
-        
-        guiGraphics.fill(x, y, x + 16, y + 16, color);
     }
 
     private void renderRecipeList(GuiGraphics guiGraphics, int mouseX, int mouseY, int listTop, int listAreaX, int listRight) {
@@ -2340,83 +2734,6 @@ public class RecipeSelectorScreen extends Screen {
             
             // 回旋式气液转换器：可逆模式，显示输出
             if (recipeTypeName.contains("rotary") || recipeTypeName.contains("condensentrator")) {
-                try {
-                    java.lang.reflect.Method getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
-                    Object outputDef = getOutputDefinition.invoke(recipe);
-                    if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
-                        Object output = outputList.get(0);
-                        if (output instanceof FluidStack fluidStack) {
-                            return fluidStack;
-                        } else if (output instanceof mekanism.api.chemical.gas.GasStack gasStack) {
-                            return gasStack;
-                        }
-                    }
-                } catch (Exception e) {
-                }
-            }
-            
-            // 电解分离器：显示输入槽流体
-            if (recipeTypeName.contains("electrolytic")) {
-                try {
-                    java.lang.reflect.Method getInput = recipe.getClass().getMethod("getInput");
-                    Object input = getInput.invoke(recipe);
-                    if (input instanceof FluidStack fluidStack) {
-                        return fluidStack;
-                    }
-                } catch (Exception e) {
-                }
-            }
-            
-            // 加压反应室：显示物品槽输出或气体槽输出
-            if (recipeTypeName.contains("pressurized")) {
-                try {
-                    java.lang.reflect.Method getItemOutput = recipe.getClass().getMethod("getItemOutput");
-                    Object itemOutput = getItemOutput.invoke(recipe);
-                    if (itemOutput instanceof List<?> itemList && !itemList.isEmpty()) {
-                        Object output = itemList.get(0);
-                        if (output instanceof ItemStack itemStack && !itemStack.isEmpty()) {
-                            return itemStack;
-                        }
-                    }
-                    
-                    java.lang.reflect.Method getGasOutput = recipe.getClass().getMethod("getGasOutput");
-                    Object gasOutput = getGasOutput.invoke(recipe);
-                    if (gasOutput instanceof List<?> gasList && !gasList.isEmpty()) {
-                        Object output = gasList.get(0);
-                        if (output instanceof mekanism.api.chemical.gas.GasStack gasStack) {
-                            return gasStack;
-                        }
-                    }
-                } catch (Exception e) {
-                }
-            }
-            
-            // 精密锯木机：显示主输出或副输出
-            if (recipeTypeName.contains("sawmill")) {
-                try {
-                    java.lang.reflect.Method getMainOutput = recipe.getClass().getMethod("getMainOutput");
-                    Object mainOutput = getMainOutput.invoke(recipe);
-                    if (mainOutput instanceof List<?> mainList && !mainList.isEmpty()) {
-                        Object output = mainList.get(0);
-                        if (output instanceof ItemStack itemStack && !itemStack.isEmpty()) {
-                            return itemStack;
-                        }
-                    }
-                    
-                    java.lang.reflect.Method getSecondaryOutput = recipe.getClass().getMethod("getSecondaryOutput");
-                    Object secondaryOutput = getSecondaryOutput.invoke(recipe);
-                    if (secondaryOutput instanceof List<?> secondaryList && !secondaryList.isEmpty()) {
-                        Object output = secondaryList.get(0);
-                        if (output instanceof ItemStack itemStack && !itemStack.isEmpty()) {
-                            return itemStack;
-                        }
-                    }
-                } catch (Exception e) {
-                }
-            }
-            
-            // 流体或化学品为主要输出的配方
-            try {
                 java.lang.reflect.Method getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
                 Object outputDef = getOutputDefinition.invoke(recipe);
                 if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
@@ -2425,15 +2742,89 @@ public class RecipeSelectorScreen extends Screen {
                         return fluidStack;
                     } else if (output instanceof mekanism.api.chemical.gas.GasStack gasStack) {
                         return gasStack;
-                    } else if (output instanceof mekanism.api.chemical.infuse.InfuseType infuseType) {
-                        return infuseType;
-                    } else if (output instanceof mekanism.api.chemical.pigment.Pigment pigment) {
-                        return pigment;
-                    } else if (output instanceof mekanism.api.chemical.slurry.Slurry slurry) {
-                        return slurry;
                     }
                 }
-            } catch (Exception e) {
+            }
+            
+            // 电解分离器：显示输入槽流体
+            if (recipeTypeName.contains("electrolytic")) {
+                java.lang.reflect.Method getInput = recipe.getClass().getMethod("getInput");
+                Object input = getInput.invoke(recipe);
+                if (input instanceof FluidStack fluidStack) {
+                    return fluidStack;
+                }
+            }
+            
+            // 加压反应室：显示物品槽输出或气体槽输出
+            if (recipeTypeName.contains("pressurized")) {
+                java.lang.reflect.Method getItemOutput = recipe.getClass().getMethod("getItemOutput");
+                Object itemOutput = getItemOutput.invoke(recipe);
+                if (itemOutput instanceof List<?> itemList && !itemList.isEmpty()) {
+                    Object output = itemList.get(0);
+                    if (output instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                        return itemStack;
+                    }
+                }
+                
+                java.lang.reflect.Method getGasOutput = recipe.getClass().getMethod("getGasOutput");
+                Object gasOutput = getGasOutput.invoke(recipe);
+                if (gasOutput instanceof List<?> gasList && !gasList.isEmpty()) {
+                    Object output = gasList.get(0);
+                    if (output instanceof mekanism.api.chemical.gas.GasStack gasStack) {
+                        return gasStack;
+                    }
+                }
+            }
+            
+            // 精密锯木机：显示主输出或副输出
+            if (recipeTypeName.contains("sawmill")) {
+                java.lang.reflect.Method getMainOutput = recipe.getClass().getMethod("getMainOutput");
+                Object mainOutput = getMainOutput.invoke(recipe);
+                if (mainOutput instanceof List<?> mainList && !mainList.isEmpty()) {
+                    Object output = mainList.get(0);
+                    if (output instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                        return itemStack;
+                    }
+                }
+                
+                java.lang.reflect.Method getSecondaryOutput = recipe.getClass().getMethod("getSecondaryOutput");
+                Object secondaryOutput = getSecondaryOutput.invoke(recipe);
+                if (secondaryOutput instanceof List<?> secondaryList && !secondaryList.isEmpty()) {
+                    Object output = secondaryList.get(0);
+                    if (output instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                        return itemStack;
+                    }
+                }
+            }
+            
+            // 流体或化学品为主要输出的配方
+            java.lang.reflect.Method getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
+            Object outputDef = getOutputDefinition.invoke(recipe);
+            if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                Object output = outputList.get(0);
+                if (output instanceof FluidStack fluidStack) {
+                    return fluidStack;
+                } else if (output instanceof mekanism.api.chemical.ChemicalStack<?> chemicalStack) {
+                    // 处理ChemicalStack，返回其类型
+                    Object chemical = chemicalStack.getType();
+                    if (chemical instanceof mekanism.api.chemical.gas.Gas gas) {
+                        return gas;
+                    } else if (chemical instanceof mekanism.api.chemical.infuse.InfuseType infuseType) {
+                        return infuseType;
+                    } else if (chemical instanceof mekanism.api.chemical.pigment.Pigment pigment) {
+                        return pigment;
+                    } else if (chemical instanceof mekanism.api.chemical.slurry.Slurry slurry) {
+                        return slurry;
+                    }
+                } else if (output instanceof mekanism.api.chemical.gas.GasStack gasStack) {
+                    return gasStack.getType();
+                } else if (output instanceof mekanism.api.chemical.infuse.InfuseType infuseType) {
+                    return infuseType;
+                } else if (output instanceof mekanism.api.chemical.pigment.Pigment pigment) {
+                    return pigment;
+                } else if (output instanceof mekanism.api.chemical.slurry.Slurry slurry) {
+                    return slurry;
+                }
             }
             
             // 默认返回物品输出

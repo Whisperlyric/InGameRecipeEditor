@@ -53,11 +53,13 @@ public class TagPreviewScreen extends Screen {
         collectTagContents();
     }
     
+    @SuppressWarnings("null")
     private void collectTagContents() {
         items.clear();
         fluids.clear();
         
         if (tagType == TagSelectorScreen.TagType.ITEMS) {
+            @SuppressWarnings("null")
             TagKey<Item> tag = TagKey.create(ForgeRegistries.ITEMS.getRegistryKey(), tagId);
             for (Item item : ForgeRegistries.ITEMS.getValues()) {
                 if (item.builtInRegistryHolder().is(tag)) {
@@ -65,6 +67,7 @@ public class TagPreviewScreen extends Screen {
                 }
             }
         } else if (tagType == TagSelectorScreen.TagType.BLOCKS) {
+            @SuppressWarnings("null")
             TagKey<Block> tag = TagKey.create(ForgeRegistries.BLOCKS.getRegistryKey(), tagId);
             for (Block block : ForgeRegistries.BLOCKS.getValues()) {
                 if (block.builtInRegistryHolder().is(tag)) {
@@ -72,6 +75,7 @@ public class TagPreviewScreen extends Screen {
                 }
             }
         } else if (tagType == TagSelectorScreen.TagType.FLUIDS) {
+            @SuppressWarnings("null")
             TagKey<Fluid> tag = TagKey.create(ForgeRegistries.FLUIDS.getRegistryKey(), tagId);
             for (Fluid fluid : ForgeRegistries.FLUIDS.getValues()) {
                 if (fluid.builtInRegistryHolder().is(tag)) {
@@ -84,6 +88,7 @@ public class TagPreviewScreen extends Screen {
         maxPage = Math.max(0, (totalItems - 1) / ITEMS_PER_PAGE);
     }
     
+    @SuppressWarnings("null")
     @Override
     protected void init() {
         this.leftPos = (this.width - GUI_WIDTH) / 2;
@@ -133,8 +138,9 @@ public class TagPreviewScreen extends Screen {
         }
     }
     
+    @SuppressWarnings("null")
     @Override
-    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void render(@SuppressWarnings("null") @NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics);
         
         guiGraphics.fill(leftPos, topPos, leftPos + GUI_WIDTH, topPos + GUI_HEIGHT, 0xFFC6C6C6);
@@ -156,6 +162,7 @@ public class TagPreviewScreen extends Screen {
         renderTooltips(guiGraphics, mouseX, mouseY);
     }
     
+    @SuppressWarnings("null")
     private void renderItems(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         int startIndex = currentPage * ITEMS_PER_PAGE;
         int cols = 9;
@@ -199,6 +206,7 @@ public class TagPreviewScreen extends Screen {
         }
     }
     
+    @SuppressWarnings("null")
     private void renderFluid(GuiGraphics guiGraphics, Fluid fluid, int x, int y, int width, int height) {
         if (fluid == null) return;
         
@@ -208,6 +216,7 @@ public class TagPreviewScreen extends Screen {
         ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
         if (stillTexture == null) return;
         
+        @SuppressWarnings("null")
         net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
             Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
         
@@ -224,6 +233,7 @@ public class TagPreviewScreen extends Screen {
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
     }
     
+    @SuppressWarnings("null")
     private void renderTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         int startIndex = currentPage * ITEMS_PER_PAGE;
         int cols = 9;

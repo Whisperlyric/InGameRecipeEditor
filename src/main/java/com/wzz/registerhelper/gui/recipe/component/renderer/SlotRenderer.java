@@ -61,7 +61,8 @@ public class SlotRenderer implements ComponentRenderer {
         if (!item.isEmpty()) {
             guiGraphics.renderItem(item, x + 1, y + 1);
             
-            if (component.isBulkSlot() && item.getCount() > 1) {
+            // 如果物品数量大于1，总是显示数量
+            if (item.getCount() > 1) {
                 guiGraphics.renderItemDecorations(font, item, x + 1, y + 1, null);
             }
         }
@@ -111,5 +112,24 @@ public class SlotRenderer implements ComponentRenderer {
     
     public ItemStack getItem() {
         return itemSupplier.get();
+    }
+    
+    public void renderTooltip(GuiGraphics guiGraphics, Font font, int mouseX, int mouseY) {
+        if (!active) return;
+        
+        int x = component.getX();
+        int y = component.getY();
+        
+        boolean isMouseOver = mouseX >= x && mouseX < x + 18 &&
+                             mouseY >= y && mouseY < y + 18;
+        
+        if (isMouseOver) {
+            ItemStack item = itemSupplier.get();
+            if (!item.isEmpty()) {
+                guiGraphics.renderTooltip(font, item, mouseX, mouseY);
+            } else {
+                guiGraphics.renderTooltip(font, net.minecraft.network.chat.Component.literal("点击选择结果物品"), mouseX, mouseY);
+            }
+        }
     }
 }

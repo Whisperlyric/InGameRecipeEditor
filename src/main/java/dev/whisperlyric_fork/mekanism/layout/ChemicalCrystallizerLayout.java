@@ -2,6 +2,7 @@ package dev.whisperlyric_fork.mekanism.layout;
 
 import com.wzz.registerhelper.gui.recipe.component.ChemicalSlotComponent;
 import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
+import com.wzz.registerhelper.gui.recipe.component.SlotComponent;
 import com.wzz.registerhelper.gui.recipe.layout.RecipeLayout;
 
 import java.awt.*;
@@ -57,6 +58,16 @@ public class ChemicalCrystallizerLayout implements RecipeLayout {
         ));
         
         return components;
+    }
+    
+    @Override
+    public List<RecipeComponent> generateOutputComponents(int outputX, int outputY) {
+        List<RecipeComponent> outputs = new ArrayList<>();
+        
+        // 输出物品槽，位置在输入槽下方
+        outputs.add(new SlotComponent(outputX, outputY + 36, "item_output", 1));
+        
+        return outputs;
     }
     
     public int getOutputSlotIndex() {

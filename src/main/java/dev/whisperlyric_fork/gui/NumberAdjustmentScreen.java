@@ -151,33 +151,27 @@ public class NumberAdjustmentScreen extends Screen {
         renderSlider(guiGraphics, mouseX, mouseY);
         
         if (isEnergyMode) {
-            try {
-                long value = Long.parseLong(valueInput.getValue());
-                long fe = (long)(value * 0.4);
-                String conversion = String.format("x 0.4 = %,d FE", fe);
-                guiGraphics.drawCenteredString(
-                    Minecraft.getInstance().font,
-                    Component.literal(conversion),
-                    this.width / 2,
-                    this.height / 2 + 5,
-                    0xFFFF00
-                );
-            } catch (NumberFormatException e) {
-            }
+            long value = Long.parseLong(valueInput.getValue());
+            long fe = (long)(value * 0.4);
+            String conversion = String.format("x 0.4 = %,d FE", fe);
+            guiGraphics.drawCenteredString(
+                Minecraft.getInstance().font,
+                Component.literal(conversion),
+                this.width / 2,
+                this.height / 2 + 5,
+                0xFFFF00
+            );
         } else if (displayDivisor > 1) {
-            try {
-                long value = Long.parseLong(valueInput.getValue());
-                long actualMB = value * displayDivisor;
-                String conversion = String.format("×%d = %,d mB", displayDivisor, actualMB);
-                guiGraphics.drawCenteredString(
-                    Minecraft.getInstance().font,
-                    Component.literal(conversion),
-                    this.width / 2,
-                    this.height / 2 + 5,
-                    0xFFFF00
-                );
-            } catch (NumberFormatException e) {
-            }
+            long value = Long.parseLong(valueInput.getValue());
+            long actualMB = value * displayDivisor;
+            String conversion = String.format("×%d = %,d mB", displayDivisor, actualMB);
+            guiGraphics.drawCenteredString(
+                Minecraft.getInstance().font,
+                Component.literal(conversion),
+                this.width / 2,
+                this.height / 2 + 5,
+                0xFFFF00
+            );
         }
         
         super.render(guiGraphics, mouseX, mouseY, partialTick);
