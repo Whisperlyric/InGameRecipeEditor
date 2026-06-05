@@ -109,6 +109,8 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
             title = "选择颜料(PigmentOnly)";
         } else if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) {
             title = "选择灌注类型(InfuseTypeOnly)";
+        } else if (slotType == SlotSelectionScreen.SlotType.CHEMICAL) {
+            title = "选择化学品(任意类型)";
         } else {
             title = "选择化学品";
         }
@@ -334,6 +336,9 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
                     return isMekanismChemicalStack(ingredient, "PigmentStack");
                 } else if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) {
                     return isMekanismChemicalStack(ingredient, "InfusionStack");
+                } else if (slotType == SlotSelectionScreen.SlotType.CHEMICAL) {
+                    // 通用化学品类型：接受任何化学品
+                    return isMekanismChemicalStack(ingredient, null);
                 }
                 return false;
             }
@@ -417,6 +422,7 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
         if (slotType == SlotSelectionScreen.SlotType.SLURRY) return "浆液(Slurry)";
         if (slotType == SlotSelectionScreen.SlotType.PIGMENT) return "颜料(Pigment)";
         if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) return "灌注类型(InfuseType)";
+        if (slotType == SlotSelectionScreen.SlotType.CHEMICAL) return "化学品(任意)";
         return null;
     }
     
@@ -432,6 +438,12 @@ public class JEISelectionScreen extends AbstractContainerScreen<JEISelectionCont
             return className.contains("PigmentStack");
         } else if (slotType == SlotSelectionScreen.SlotType.INFUSE_TYPE) {
             return className.contains("InfusionStack");
+        } else if (slotType == SlotSelectionScreen.SlotType.CHEMICAL) {
+            // 通用化学品类型：接受所有化学品
+            return className.contains("GasStack") || 
+                   className.contains("SlurryStack") || 
+                   className.contains("PigmentStack") || 
+                   className.contains("InfusionStack");
         }
         return false;
     }

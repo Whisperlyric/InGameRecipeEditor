@@ -139,6 +139,7 @@ public class ComponentRenderManager {
             case SLURRY_SLOT:
             case PIGMENT_SLOT:
             case INFUSE_TYPE_SLOT:
+            case CHEMICAL_SLOT:  // 通用化学品槽位
                 if (component instanceof ChemicalSlotComponent chemicalComp) {
                     ChemicalSlotRenderer renderer = new ChemicalSlotRenderer(chemicalComp, onChemicalSlotClick);
                     renderer.setOutput(chemicalComp.getId().contains("output"));

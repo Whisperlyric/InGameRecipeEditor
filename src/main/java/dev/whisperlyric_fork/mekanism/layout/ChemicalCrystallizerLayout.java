@@ -51,7 +51,7 @@ public class ChemicalCrystallizerLayout implements RecipeLayout {
             baseX, baseY,
             "chemical_input",
             0,
-            currentInputType.getChemicalType(),
+            ChemicalSlotComponent.ChemicalType.ANY,
             "",
             0,
             10000

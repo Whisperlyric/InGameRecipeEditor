@@ -143,6 +143,7 @@ public class ChemicalSelectionScreen extends Screen {
             case SLURRY -> SlotSelectionScreen.SlotType.SLURRY;
             case PIGMENT -> SlotSelectionScreen.SlotType.PIGMENT;
             case INFUSE_TYPE -> SlotSelectionScreen.SlotType.INFUSE_TYPE;
+            case ANY -> SlotSelectionScreen.SlotType.CHEMICAL;
         };
     }
     

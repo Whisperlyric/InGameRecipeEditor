@@ -36,7 +36,8 @@ public class SlotSelectionScreen extends Screen {
         GAS,
         SLURRY,
         PIGMENT,
-        INFUSE_TYPE
+        INFUSE_TYPE,
+        CHEMICAL  // 通用化学品类型
     }
     
     public static class SlotSelectionResult {

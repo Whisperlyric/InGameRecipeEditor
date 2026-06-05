@@ -266,25 +266,9 @@ public class RecipePreviewRenderer {
             
             com.mojang.logging.LogUtils.getLogger().info("renderChemicalSlot: chemicalId={}, color={:#x}, texture={}, type={}", chemicalId, color, texture, slot.type);
             
-            if (texture == null) {
-                return;
-            }
-            
             float r = ((color >> 16) & 0xFF) / 255.0f;
             float g = ((color >> 8) & 0xFF) / 255.0f;
             float b = (color & 0xFF) / 255.0f;
-            
-            RenderSystem.setShaderColor(r, g, b, 1.0f);
-            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
-            
-            TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(texture);
-            
-            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
-                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-                return;
-            }
-            
-            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
             
             int x = slot.x;
             int y = slot.y;
@@ -293,60 +277,82 @@ public class RecipePreviewRenderer {
             int height = (int) (fullHeight * 0.75);
             int yOffset = fullHeight - height;
             
-            int textureWidth = 16;
-            int textureHeight = 16;
-            
-            int xTileCount = width / textureWidth;
-            int xRemainder = width - (xTileCount * textureWidth);
-            int yTileCount = height / textureHeight;
-            int yRemainder = height - (yTileCount * textureHeight);
-            int yStart = y + yOffset + height;
-            
-            float uMin = sprite.getU0();
-            float uMax = sprite.getU1();
-            float vMin = sprite.getV0();
-            float vMax = sprite.getV1();
-            float uDif = uMax - uMin;
-            float vDif = vMax - vMin;
-            
-            RenderSystem.enableBlend();
-            
-            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
-            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
-            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
-            
-            for (int xTile = 0; xTile <= xTileCount; xTile++) {
-                int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
-                if (tileWidth == 0) {
-                    break;
-                }
-                int tileX = x + (xTile * textureWidth);
-                int maskRight = textureWidth - tileWidth;
-                int shiftedX = tileX + textureWidth - maskRight;
-                float uLocalDif = uDif * maskRight / textureWidth;
-                float uLocalMin = uMin;
-                float uLocalMax = uMax - uLocalDif;
+            if (texture != null) {
+                // 有纹理：使用纹理渲染
+                RenderSystem.setShaderColor(r, g, b, 1.0f);
+                RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
                 
-                for (int yTile = 0; yTile <= yTileCount; yTile++) {
-                    int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
-                    if (tileHeight == 0) {
-                        break;
-                    }
-                    int tileY = yStart - ((yTile + 1) * textureHeight);
-                    int maskTop = textureHeight - tileHeight;
-                    float vLocalDif = vDif * maskTop / textureHeight;
-                    float vLocalMin = vMin + vLocalDif;
-                    float vLocalMax = vMax;
+                TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(texture);
+                
+                if (sprite != null && !sprite.contents().name().toString().contains("missingno")) {
+                    RenderSystem.setShaderTexture(0, sprite.atlasLocation());
                     
-                    vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
-                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
-                    vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
-                    vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                    int textureWidth = 16;
+                    int textureHeight = 16;
+                    
+                    int xTileCount = width / textureWidth;
+                    int xRemainder = width - (xTileCount * textureWidth);
+                    int yTileCount = height / textureHeight;
+                    int yRemainder = height - (yTileCount * textureHeight);
+                    int yStart = y + yOffset + height;
+                    
+                    float uMin = sprite.getU0();
+                    float uMax = sprite.getU1();
+                    float vMin = sprite.getV0();
+                    float vMax = sprite.getV1();
+                    float uDif = uMax - uMin;
+                    float vDif = vMax - vMin;
+                    
+                    RenderSystem.enableBlend();
+                    
+                    com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+                    vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+                    org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+                    
+                    for (int xTile = 0; xTile <= xTileCount; xTile++) {
+                        int tileWidth = (xTile == xTileCount) ? xRemainder : textureWidth;
+                        if (tileWidth == 0) {
+                            break;
+                        }
+                        int tileX = x + (xTile * textureWidth);
+                        int maskRight = textureWidth - tileWidth;
+                        int shiftedX = tileX + textureWidth - maskRight;
+                        float uLocalDif = uDif * maskRight / textureWidth;
+                        float uLocalMin = uMin;
+                        float uLocalMax = uMax - uLocalDif;
+                        
+                        for (int yTile = 0; yTile <= yTileCount; yTile++) {
+                            int tileHeight = (yTile == yTileCount) ? yRemainder : textureHeight;
+                            if (tileHeight == 0) {
+                                break;
+                            }
+                            int tileY = yStart - ((yTile + 1) * textureHeight);
+                            int maskTop = textureHeight - tileHeight;
+                            float vLocalDif = vDif * maskTop / textureHeight;
+                            float vLocalMin = vMin + vLocalDif;
+                            float vLocalMax = vMax;
+                            
+                            vertexBuffer.vertex(matrix4f, tileX, tileY + textureHeight, 0).uv(uLocalMin, vLocalMax).endVertex();
+                            vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureHeight, 0).uv(uLocalMax, vLocalMax).endVertex();
+                            vertexBuffer.vertex(matrix4f, shiftedX, tileY + maskTop, 0).uv(uLocalMax, vLocalMin).endVertex();
+                            vertexBuffer.vertex(matrix4f, tileX, tileY + maskTop, 0).uv(uLocalMin, vLocalMin).endVertex();
+                        }
+                    }
+                    
+                    com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+                    RenderSystem.disableBlend();
+                } else {
+                    // 纹理缺失：使用颜色填充
+                    RenderSystem.setShaderColor(r, g, b, 1.0f);
+                    guiGraphics.fill(x, y + yOffset, x + width, y + yOffset + height, 0xFFFFFFFF);
                 }
+            } else {
+                // 无纹理：使用颜色填充
+                RenderSystem.setShaderColor(r, g, b, 1.0f);
+                guiGraphics.fill(x, y + yOffset, x + width, y + yOffset + height, 0xFFFFFFFF);
             }
             
-            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
-            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             
