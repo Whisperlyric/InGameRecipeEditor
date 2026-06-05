@@ -5,7 +5,8 @@ public class ChemicalSlotComponent extends RecipeComponent {
         GAS("gas", "气体"),
         SLURRY("slurry", "污泥"),
         PIGMENT("pigment", "颜料"),
-        INFUSE_TYPE("infuse_type", "灌注类型");
+        INFUSE_TYPE("infuse_type", "灌注类型"),
+        ANY("any", "化学品");
         
         private final String id;
         private final String displayName;
@@ -27,7 +28,7 @@ public class ChemicalSlotComponent extends RecipeComponent {
     }
     
     private final int slotIndex;
-    private final ChemicalType chemicalType;
+    private ChemicalType chemicalType;
     private String chemicalId;
     private long amount;
     private final long maxAmount;
@@ -52,11 +53,13 @@ public class ChemicalSlotComponent extends RecipeComponent {
             case SLURRY -> ComponentType.SLURRY_SLOT;
             case PIGMENT -> ComponentType.PIGMENT_SLOT;
             case INFUSE_TYPE -> ComponentType.INFUSE_TYPE_SLOT;
+            case ANY -> ComponentType.CHEMICAL_SLOT;
         };
     }
     
     public int getSlotIndex() { return slotIndex; }
     public ChemicalType getChemicalType() { return chemicalType; }
+    public void setChemicalType(ChemicalType chemicalType) { this.chemicalType = chemicalType; }
     public String getChemicalId() { return chemicalId; }
     public void setChemicalId(String chemicalId) { this.chemicalId = chemicalId; }
     public long getAmount() { return amount; }

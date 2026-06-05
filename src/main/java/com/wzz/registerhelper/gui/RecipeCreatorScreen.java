@@ -2761,6 +2761,7 @@ public class RecipeCreatorScreen extends Screen {
                     case SLURRY -> dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.SLURRY;
                     case PIGMENT -> dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.PIGMENT;
                     case INFUSE_TYPE -> dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.INFUSE_TYPE;
+                    case ANY -> dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.CHEMICAL;
                 };
             } else if (selectedOutputSlot != null) {
                 slotType = dev.whisperlyric_fork.gui.SlotSelectionScreen.SlotType.ITEM;

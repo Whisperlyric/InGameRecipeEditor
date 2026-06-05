@@ -107,7 +107,24 @@ public class MekanismProcessor implements ModRecipeProcessor {
     
     private JsonObject createChemicalInputJson(String chemicalKey, String chemicalId, int amount) {
         JsonObject input = new JsonObject();
-        input.addProperty(chemicalKey, chemicalId);
+        
+        // 如果是any类型，根据chemicalId自动识别实际类型
+        String actualKey = chemicalKey;
+        if ("any".equals(chemicalKey) && chemicalId != null) {
+            String lowerId = chemicalId.toLowerCase();
+            if (lowerId.contains("slurry")) {
+                actualKey = "slurry";
+            } else if (lowerId.contains("pigment")) {
+                actualKey = "pigment";
+            } else if (lowerId.contains("infuse")) {
+                actualKey = "infuse_type";
+            } else {
+                // 默认为gas
+                actualKey = "gas";
+            }
+        }
+        
+        input.addProperty(actualKey, chemicalId);
         input.addProperty("amount", amount);
         return input;
     }
@@ -317,13 +334,28 @@ public class MekanismProcessor implements ModRecipeProcessor {
     }
 
     private void createCrystallizingRecipe(JsonObject recipe, RecipeRequest request) {
-        if (request.properties.containsKey("chemicalType")) {
-            recipe.addProperty("chemicalType", (String) request.properties.get("chemicalType"));
-        }
         String chemicalType = (String) request.properties.getOrDefault("chemicalType", "gas");
-        if (request.properties.containsKey("inputGas") && request.properties.containsKey("inputAmount")) {
+        String inputGas = (String) request.properties.get("inputGas");
+        
+        // 如果是any类型，根据inputGas自动识别实际类型
+        if ("any".equals(chemicalType) && inputGas != null) {
+            String lowerId = inputGas.toLowerCase();
+            if (lowerId.contains("slurry")) {
+                chemicalType = "slurry";
+            } else if (lowerId.contains("pigment")) {
+                chemicalType = "pigment";
+            } else if (lowerId.contains("infuse")) {
+                chemicalType = "infuse_type";
+            } else {
+                chemicalType = "gas";
+            }
+        }
+        
+        recipe.addProperty("chemicalType", chemicalType);
+        
+        if (inputGas != null && request.properties.containsKey("inputAmount")) {
             recipe.add("input", createChemicalInputJson(chemicalType,
-                (String) request.properties.get("inputGas"),
+                inputGas,
                 getIntValue(request.properties.get("inputAmount"), 100)));
         }
         addItemOutput(recipe, "output", request, 1);

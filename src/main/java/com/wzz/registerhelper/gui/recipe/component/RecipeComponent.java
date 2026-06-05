@@ -43,6 +43,7 @@ public abstract class RecipeComponent {
         SLURRY_SLOT,    // 污泥槽位
         PIGMENT_SLOT,   // 颜料槽位
         INFUSE_TYPE_SLOT, // 灌注类型槽位
+        CHEMICAL_SLOT,  // 通用化学品槽位
         ENERGY_SLOT,    // 能量槽位
         NUMBER_INPUT,   // 数值输入框
         STRING_INPUT,   // 文本输入框

@@ -144,6 +144,7 @@ public class ChemicalAmountAdjustmentScreen extends Screen {
             case SLURRY -> "单位: mB (污泥单位)";
             case PIGMENT -> "单位: mB (颜料单位)";
             case INFUSE_TYPE -> "单位: mB (灌注单位)";
+            case ANY -> "单位: mB";
         };
     }
     
