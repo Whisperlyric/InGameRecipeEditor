@@ -754,10 +754,24 @@ public class RecipeSelectorScreen extends Screen {
             }
 
             if (!currentRecipeSlots.isEmpty()) {
-                guiGraphics.drawString(this.font, "材料:", detailX + 10, detailY + 85, 0xCCCCCC, false);
+                boolean hasGasSlots = currentRecipeSlots.stream()
+                        .anyMatch(s -> s.type == RecipePreviewRenderer.ContentType.GAS);
+                
+                if (!hasGasSlots) {
+                    guiGraphics.drawString(this.font, "材料:", detailX + 10, detailY + 85, 0xCCCCCC, false);
+                }
 
                 for (PreviewSlot slot : currentRecipeSlots) {
                     renderRecipeSlot(guiGraphics, slot, false);
+                }
+                
+                if (hasGasSlots && currentRecipeSlots.size() >= 3) {
+                    PreviewSlot inputSlot = currentRecipeSlots.get(0);
+                    PreviewSlot firstOutputSlot = currentRecipeSlots.get(1);
+                    
+                    int arrowX = inputSlot.x + SLOT_SIZE + 4;
+                    int arrowY = inputSlot.y + SLOT_SIZE / 2 - 4;
+                    guiGraphics.drawString(this.font, "§e→", arrowX, arrowY, 0xFFAA00, false);
                 }
 
                 if (currentRecipeTypeDisplay.contains("熔炼") || currentRecipeTypeDisplay.contains("高炉") ||
@@ -2058,12 +2072,11 @@ public class RecipeSelectorScreen extends Screen {
                         currentRecipeSlots.add(new PreviewSlot(slotX, slotY, fluidStack));
                     }
                     
-                    int detailX = leftPos + 10;
-                    int detailY = topPos + 60;
-                    
-                    // 计算输出槽位置（右侧）
-                    int outputX = detailX + RECIPE_DETAIL_WIDTH - 50 - SLOT_SPACING;
-                    int outputY = detailY + 20;
+                    // 输入槽 + 间距 + 箭头(10) + 间距 = 输出槽
+                    int arrowWidth = 10;
+                    int spacing = 4;
+                    int outputX = slotX + SLOT_SIZE + spacing + arrowWidth + spacing;
+                    int outputY = slotY;
                     
                     // 获取气体输出定义
                     java.lang.reflect.Method getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
