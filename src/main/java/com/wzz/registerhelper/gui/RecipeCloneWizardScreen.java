@@ -1071,12 +1071,6 @@ public class RecipeCloneWizardScreen extends Screen {
                         currentRecipeSlots.add(new PreviewSlot(slotX, slotY, fluidStack));
                     }
                     
-                    // 输入槽 + 间距 + 箭头(10) + 间距 = 输出槽
-                    int arrowWidth = 10;
-                    int spacing = 4;
-                    int outputX = slotX + SLOT + spacing + arrowWidth + spacing;
-                    int outputY = slotY;
-                    
                     // 获取气体输出定义
                     java.lang.reflect.Method getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition");
                     Object outputDef = getOutputDefinition.invoke(recipe);
@@ -1091,29 +1085,29 @@ public class RecipeCloneWizardScreen extends Screen {
                             Object leftGas = getLeft.invoke(outputObj);
                             Object rightGas = getRight.invoke(outputObj);
                             
-                            // 左侧气体输出槽
-                            if (leftGas instanceof mekanism.api.chemical.gas.GasStack leftGasStack) {
+                            // 左侧气体输出槽 - 使用特殊标记(-3, -3)
+                            if (leftGas instanceof mekanism.api.chemical.gas.GasStack leftGasStack && !leftGasStack.isEmpty()) {
                                 ResourceLocation leftGasId = mekanism.api.MekanismAPI.gasRegistry().getKey(leftGasStack.getType());
                                 if (leftGasId != null) {
-                                    currentRecipeSlots.add(new PreviewSlot(outputX, outputY, leftGasId.toString(), 
+                                    currentRecipeSlots.add(new PreviewSlot(-3, -3, leftGasId.toString(), 
                                             RecipePreviewRenderer.ContentType.GAS, leftGasStack.getAmount()));
                                 }
                             }
                             
-                            // 右侧气体输出槽
-                            if (rightGas instanceof mekanism.api.chemical.gas.GasStack rightGasStack) {
+                            // 右侧气体输出槽 - 使用特殊标记(-4, -4)
+                            if (rightGas instanceof mekanism.api.chemical.gas.GasStack rightGasStack && !rightGasStack.isEmpty()) {
                                 ResourceLocation rightGasId = mekanism.api.MekanismAPI.gasRegistry().getKey(rightGasStack.getType());
                                 if (rightGasId != null) {
-                                    currentRecipeSlots.add(new PreviewSlot(outputX + SLOT_SPACING, outputY, rightGasId.toString(), 
+                                    currentRecipeSlots.add(new PreviewSlot(-4, -4, rightGasId.toString(), 
                                             RecipePreviewRenderer.ContentType.GAS, rightGasStack.getAmount()));
                                 }
                             }
                         } catch (NoSuchMethodException e) {
                             // 如果不是ChemicalPair，尝试直接作为GasStack处理
-                            if (outputObj instanceof mekanism.api.chemical.gas.GasStack gasStack) {
+                            if (outputObj instanceof mekanism.api.chemical.gas.GasStack gasStack && !gasStack.isEmpty()) {
                                 ResourceLocation gasId = mekanism.api.MekanismAPI.gasRegistry().getKey(gasStack.getType());
                                 if (gasId != null) {
-                                    currentRecipeSlots.add(new PreviewSlot(outputX, outputY, gasId.toString(), 
+                                    currentRecipeSlots.add(new PreviewSlot(-3, -3, gasId.toString(), 
                                             RecipePreviewRenderer.ContentType.GAS, gasStack.getAmount()));
                                 }
                             }
@@ -2466,11 +2460,36 @@ public class RecipeCloneWizardScreen extends Screen {
             g.fill(c2x, ry, c2x+3, ry+ROW_H-1,
                     e.asResult ? 0xFF4488FF : 0xFFFFCC44);
 
-            // 产物图标
-            if (!e.result.isEmpty()) {
-                RenderSystem.enableDepthTest();
-                g.renderItem(e.result, c2x+5, ry+1);
-                RenderSystem.disableDepthTest();
+            // 产物图标（支持多种类型）
+            try {
+                Object preview = e.outputPreview;
+                
+                if (preview instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                    RenderSystem.enableDepthTest();
+                    g.renderItem(itemStack, c2x+5, ry+1);
+                    RenderSystem.disableDepthTest();
+                } else if (preview instanceof FluidStack fluidStack && !fluidStack.isEmpty()) {
+                    renderFluidPreview(g, fluidStack, c2x+5, ry+1);
+                } else if (preview instanceof mekanism.api.chemical.gas.GasStack gasStack) {
+                    renderGasPreview(g, gasStack, c2x+5, ry+1);
+                } else if (preview instanceof mekanism.api.chemical.ChemicalStack<?> chemicalStack) {
+                    renderChemicalStackPreview(g, chemicalStack, c2x+5, ry+1);
+                } else if (preview instanceof mekanism.api.chemical.infuse.InfuseType infuseType) {
+                    renderInfuseTypePreview(g, infuseType, c2x+5, ry+1);
+                } else if (preview instanceof mekanism.api.chemical.pigment.Pigment pigment) {
+                    renderPigmentPreview(g, pigment, c2x+5, ry+1);
+                } else if (preview instanceof mekanism.api.chemical.slurry.Slurry slurry) {
+                    renderSlurryPreview(g, slurry, c2x+5, ry+1);
+                } else if (!e.result.isEmpty()) {
+                    RenderSystem.enableDepthTest();
+                    g.renderItem(e.result, c2x+5, ry+1);
+                    RenderSystem.disableDepthTest();
+                } else {
+                    // 空槽背景
+                    g.fill(c2x+5, ry+1, c2x+21, ry+17, 0xFF333333);
+                }
+            } catch (Exception ex) {
+                g.fill(c2x+5, ry+1, c2x+21, ry+17, 0xFFAA3333);
             }
 
             // 配方ID（截断）
@@ -2517,11 +2536,17 @@ public class RecipeCloneWizardScreen extends Screen {
         List<PreviewSlot> normalInputSlots = new ArrayList<>();
         PreviewSlot itemSecondaryOutputSlot = null;  // 物品副输出槽
         PreviewSlot gasSecondaryOutputSlot = null;   // 气体副输出槽
+        PreviewSlot electrolyticLeftOutputSlot = null;  // 电解分离器左侧输出槽
+        PreviewSlot electrolyticRightOutputSlot = null; // 电解分离器右侧输出槽
         for (PreviewSlot slot : currentRecipeSlots) {
             if (slot.x == -1 && slot.y == -1) {
                 itemSecondaryOutputSlot = slot;
             } else if (slot.x == -2 && slot.y == -2) {
                 gasSecondaryOutputSlot = slot;
+            } else if (slot.x == -3 && slot.y == -3) {
+                electrolyticLeftOutputSlot = slot;
+            } else if (slot.x == -4 && slot.y == -4) {
+                electrolyticRightOutputSlot = slot;
             } else {
                 normalInputSlots.add(slot);
             }
@@ -2532,12 +2557,10 @@ public class RecipeCloneWizardScreen extends Screen {
             RecipePreviewRenderer.renderSlot(g, slot, false);
         }
         
-        // 检测是否是电解分离器（有两个气体输出槽，currentResultSlot为null）
-        boolean isElectrolyticSeparator = currentResultSlot == null && 
-                normalInputSlots.stream().anyMatch(s -> s.type == RecipePreviewRenderer.ContentType.GAS);
+        // 检测是否是电解分离器（有电解分离器输出槽标记）
+        boolean isElectrolyticSeparator = electrolyticLeftOutputSlot != null || electrolyticRightOutputSlot != null;
         
         // 渲染箭头和输出槽（输出槽紧挨着箭头）
-        // 电解分离器不需要渲染箭头，因为输出槽已经在正确位置
         if (!isElectrolyticSeparator && !normalInputSlots.isEmpty()) {
             int lastInputX = getLastInputX();
             int inputY = getInputCenterY();
@@ -2566,6 +2589,11 @@ public class RecipeCloneWizardScreen extends Screen {
                     PreviewSlot gasSlotAtPos = createSlotAtPosition(gasSecondaryOutputSlot, gasOutputX, outputPos[1]);
                     RecipePreviewRenderer.renderSlot(g, gasSlotAtPos, true);
                 }
+            } else if (gasSecondaryOutputSlot != null) {
+                // 加压反应室：如果物品输出为空但有气体输出，渲染气体输出
+                int[] outputPos = calculateOutputPosition(lastInputX, inputY);
+                PreviewSlot gasSlotAtPos = createSlotAtPosition(gasSecondaryOutputSlot, outputPos[0], outputPos[1]);
+                RecipePreviewRenderer.renderSlot(g, gasSlotAtPos, true);
             }
         } else if (!isElectrolyticSeparator && currentResultSlot != null) {
             // 只有输出槽的情况（如能量转换）- 使用默认位置
@@ -2586,6 +2614,32 @@ public class RecipeCloneWizardScreen extends Screen {
                 int gasOutputX = defaultX + SLOT + 2;
                 PreviewSlot gasSlotAtPos = createSlotAtPosition(gasSecondaryOutputSlot, gasOutputX, defaultY);
                 RecipePreviewRenderer.renderSlot(g, gasSlotAtPos, true);
+            }
+        } else if (isElectrolyticSeparator) {
+            // 电解分离器特殊渲染：渲染箭头和两个输出槽
+            if (!normalInputSlots.isEmpty()) {
+                int lastInputX = getLastInputX();
+                int inputY = getInputCenterY();
+                
+                // 渲染箭头
+                int[] arrowPos = calculateArrowPosition(lastInputX, inputY);
+                g.drawString(font, "§e→", arrowPos[0], arrowPos[1], 0xFFAA00, false);
+                
+                // 计算输出位置
+                int[] outputPos = calculateOutputPosition(lastInputX, inputY);
+                
+                // 渲染左侧气体输出槽
+                if (electrolyticLeftOutputSlot != null) {
+                    PreviewSlot leftSlotAtPos = createSlotAtPosition(electrolyticLeftOutputSlot, outputPos[0], outputPos[1]);
+                    RecipePreviewRenderer.renderSlot(g, leftSlotAtPos, true);
+                }
+                
+                // 渲染右侧气体输出槽（紧贴左侧输出槽）
+                if (electrolyticRightOutputSlot != null) {
+                    int rightOutputX = outputPos[0] + SLOT + 2;
+                    PreviewSlot rightSlotAtPos = createSlotAtPosition(electrolyticRightOutputSlot, rightOutputX, outputPos[1]);
+                    RecipePreviewRenderer.renderSlot(g, rightSlotAtPos, true);
+                }
             }
         }
 
@@ -2955,6 +3009,7 @@ public class RecipeCloneWizardScreen extends Screen {
         final ResourceLocation id;
         final Recipe<?>        recipe;
         final ItemStack        result;
+        final Object           outputPreview;  // 输出预览（可以是ItemStack、FluidStack、GasStack等）
         final String           typeName;
         final boolean          asIngredient, asResult;
 
@@ -2968,6 +3023,134 @@ public class RecipeCloneWizardScreen extends Screen {
             try { res = r.getResultItem(Minecraft.getInstance().level.registryAccess()).copy(); }
             catch (Exception ignored) {}
             this.result = res;
+            this.outputPreview = parseOutputPreview(r);
+        }
+        
+        /**
+         * 解析配方的输出预览
+         */
+        private static Object parseOutputPreview(Recipe<?> recipe) {
+            String recipeTypeName = recipe.getType().toString().toLowerCase();
+            
+            // Mekanism配方特殊处理
+            if (recipeTypeName.contains("mekanism") || recipeTypeName.contains("rotary") ||
+                recipeTypeName.contains("condensentrator") || recipeTypeName.contains("separating") ||
+                recipeTypeName.contains("reaction") || recipeTypeName.contains("pressurized") ||
+                recipeTypeName.contains("energy_conversion") || recipeTypeName.contains("injecting") ||
+                recipeTypeName.contains("nucleosynthesizing") || recipeTypeName.contains("compressing") ||
+                recipeTypeName.contains("painting") || recipeTypeName.contains("enriching") ||
+                recipeTypeName.contains("purifying") || recipeTypeName.contains("crushing") ||
+                recipeTypeName.contains("smelting") || recipeTypeName.contains("sawing") ||
+                recipeTypeName.contains("evaporating")) {
+                
+                try {
+                    // 特殊处理电解分离器 - 返回输入流体作为代表物
+                    if (recipeTypeName.contains("separating")) {
+                        try {
+                            java.lang.reflect.Method getInput = recipe.getClass().getMethod("getInput");
+                            Object input = getInput.invoke(recipe);
+                            
+                            // 返回输入流体
+                            if (input instanceof mekanism.api.recipes.ingredients.FluidStackIngredient fluidIngredient) {
+                                List<FluidStack> matchingStacks = fluidIngredient.getRepresentations();
+                                if (!matchingStacks.isEmpty()) {
+                                    return matchingStacks.get(0);
+                                }
+                            } else if (input instanceof FluidStack fluidStack && !fluidStack.isEmpty()) {
+                                return fluidStack;
+                            }
+                        } catch (Exception e) {}
+                        // 如果电解分离器特殊处理失败，返回默认的result
+                        return recipe.getResultItem(Minecraft.getInstance().level.registryAccess());
+                    }
+                    
+                    // 特殊处理加压反应室 - 优先物品输出，再气体输出
+                    if (recipeTypeName.contains("reaction") || recipeTypeName.contains("pressurized")) {
+                        try {
+                            java.lang.reflect.Method getOutputDef = recipe.getClass().getMethod("getOutputDefinition");
+                            Object outputDef = getOutputDef.invoke(recipe);
+                            if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                                Object outputObj = outputList.get(0);
+                                try {
+                                    java.lang.reflect.Method gasMethod = outputObj.getClass().getMethod("gas");
+                                    java.lang.reflect.Method itemMethod = outputObj.getClass().getMethod("item");
+                                    
+                                    Object gasOutput = gasMethod.invoke(outputObj);
+                                    Object itemOutput = itemMethod.invoke(outputObj);
+                                    
+                                    // 优先返回物品输出
+                                    if (itemOutput instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                                        return itemStack;
+                                    }
+                                    // 如果物品为空，返回气体输出
+                                    if (gasOutput instanceof mekanism.api.chemical.gas.GasStack gasStack && !gasStack.isEmpty()) {
+                                        return gasStack;
+                                    }
+                                    
+                                    // 如果都为空，不继续执行通用处理，直接返回默认的result
+                                    return recipe.getResultItem(Minecraft.getInstance().level.registryAccess());
+                                } catch (Exception e) {}
+                            }
+                        } catch (Exception e) {}
+                        // 如果加压反应室特殊处理失败，返回默认的result
+                        return recipe.getResultItem(Minecraft.getInstance().level.registryAccess());
+                    }
+                    
+                    // 特殊处理回旋式气液转换器 - 优先处理
+                    if (recipeTypeName.contains("rotary") || recipeTypeName.contains("condensentrator")) {
+                        try {
+                            java.lang.reflect.Method hasFluidToGas = recipe.getClass().getMethod("hasFluidToGas");
+                            boolean canFluidToGas = (boolean) hasFluidToGas.invoke(recipe);
+                            
+                            if (canFluidToGas) {
+                                java.lang.reflect.Method getGasOutputDef = recipe.getClass().getMethod("getGasOutputDefinition");
+                                Object gasOutputDef = getGasOutputDef.invoke(recipe);
+                                if (gasOutputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                                    return outputList.get(0);
+                                } else if (gasOutputDef instanceof mekanism.api.chemical.gas.GasStack gasStack) {
+                                    return gasStack;
+                                }
+                                return gasOutputDef;
+                            } else {
+                                java.lang.reflect.Method getFluidOutputDef = recipe.getClass().getMethod("getFluidOutputDefinition");
+                                Object fluidOutputDef = getFluidOutputDef.invoke(recipe);
+                                if (fluidOutputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                                    return outputList.get(0);
+                                } else if (fluidOutputDef instanceof FluidStack fluidStack) {
+                                    return fluidStack;
+                                }
+                                return fluidOutputDef;
+                            }
+                        } catch (Exception e) {}
+                    }
+                    
+                    // 通用处理 - 尝试获取输出定义
+                    java.lang.reflect.Method getOutputDefinition = null;
+                    try { getOutputDefinition = recipe.getClass().getMethod("getOutputDefinition"); } catch (Exception e) {}
+                    java.lang.reflect.Method getOutput = null;
+                    try { getOutput = recipe.getClass().getMethod("getOutput"); } catch (Exception e) {}
+                    
+                    if (getOutputDefinition != null) {
+                        Object outputDef = getOutputDefinition.invoke(recipe);
+                        if (outputDef instanceof List<?> outputList && !outputList.isEmpty()) {
+                            return outputList.get(0);
+                        } else if (outputDef != null) {
+                            return outputDef;
+                        }
+                    }
+                    
+                    if (getOutput != null) {
+                        Object output = getOutput.invoke(recipe);
+                        if (output != null) {
+                            return output;
+                        }
+                    }
+                    
+                } catch (Exception e) {}
+            }
+            
+            // 默认返回物品结果
+            return recipe.getResultItem(Minecraft.getInstance().level.registryAccess());
         }
 
         private static String classify(Recipe<?> r) {
@@ -2983,4 +3166,281 @@ public class RecipeCloneWizardScreen extends Screen {
     }
 
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
+    
+    // ── 渲染预览辅助方法 ────────────────────────────────────────────
+    private void renderFluidPreview(GuiGraphics guiGraphics, FluidStack fluidStack, int x, int y) {
+        if (fluidStack.isEmpty()) return;
+        
+        net.minecraft.world.level.material.Fluid fluid = fluidStack.getFluid();
+        IClientFluidTypeExtensions fluidExt = IClientFluidTypeExtensions.of(fluid);
+        
+        int tintColor = fluidExt.getTintColor(fluidStack);
+        float r = ((tintColor >> 16) & 0xFF) / 255.0f;
+        float g = ((tintColor >> 8) & 0xFF) / 255.0f;
+        float b = (tintColor & 0xFF) / 255.0f;
+        
+        ResourceLocation stillTexture = fluidExt.getStillTexture(fluidStack);
+        net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = null;
+        
+        if (stillTexture != null) {
+            try {
+                sprite = Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+                if (sprite != null && sprite.contents().name().toString().contains("missingno")) {
+                    sprite = null;
+                }
+            } catch (Exception e) {
+                sprite = null;
+            }
+        }
+        
+        if (sprite != null) {
+            RenderSystem.setShaderTexture(0, net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS);
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            RenderSystem.enableBlend();
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            
+            vertexBuffer.vertex(matrix4f, x, y + 16, 0).uv(uMin, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y + 16, 0).uv(uMax, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y, 0).uv(uMax, vMin).endVertex();
+            vertexBuffer.vertex(matrix4f, x, y, 0).uv(uMin, vMin).endVertex();
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } else {
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+    }
+    
+    private void renderGasPreview(GuiGraphics guiGraphics, mekanism.api.chemical.gas.GasStack gasStack, int x, int y) {
+        if (gasStack.isEmpty()) return;
+        
+        try {
+            mekanism.api.chemical.gas.Gas gas = gasStack.getType();
+            if (gas == null || gas.isEmptyType()) return;
+            
+            int color = gas.getTint();
+            ResourceLocation texture = gas.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            RenderSystem.enableBlend();
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            
+            vertexBuffer.vertex(matrix4f, x, y + 16, 0).uv(uMin, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y + 16, 0).uv(uMax, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y, 0).uv(uMax, vMin).endVertex();
+            vertexBuffer.vertex(matrix4f, x, y, 0).uv(uMin, vMin).endVertex();
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } catch (Exception e) {
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFF00DDFF);
+        }
+    }
+    
+    private void renderChemicalStackPreview(GuiGraphics guiGraphics, mekanism.api.chemical.ChemicalStack<?> chemicalStack, int x, int y) {
+        if (chemicalStack.isEmpty()) return;
+        
+        try {
+            Object chemical = chemicalStack.getType();
+            
+            if (chemical instanceof mekanism.api.chemical.gas.Gas gas) {
+                renderGasPreview(guiGraphics, (mekanism.api.chemical.gas.GasStack) chemicalStack, x, y);
+            } else if (chemical instanceof mekanism.api.chemical.slurry.Slurry slurry) {
+                renderSlurryPreview(guiGraphics, slurry, x, y);
+            } else if (chemical instanceof mekanism.api.chemical.pigment.Pigment pigment) {
+                renderPigmentPreview(guiGraphics, pigment, x, y);
+            } else if (chemical instanceof mekanism.api.chemical.infuse.InfuseType infuseType) {
+                renderInfuseTypePreview(guiGraphics, infuseType, x, y);
+            } else {
+                guiGraphics.fill(x, y, x + 16, y + 16, 0xFF00DDFF);
+            }
+        } catch (Exception e) {
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFAA3333);
+        }
+    }
+    
+    private void renderInfuseTypePreview(GuiGraphics guiGraphics, mekanism.api.chemical.infuse.InfuseType infuseType, int x, int y) {
+        if (infuseType == null || infuseType.isEmptyType()) return;
+        
+        try {
+            int color = infuseType.getTint();
+            ResourceLocation texture = infuseType.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            RenderSystem.enableBlend();
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            
+            vertexBuffer.vertex(matrix4f, x, y + 16, 0).uv(uMin, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y + 16, 0).uv(uMax, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y, 0).uv(uMax, vMin).endVertex();
+            vertexBuffer.vertex(matrix4f, x, y, 0).uv(uMin, vMin).endVertex();
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } catch (Exception e) {
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFDDDD00);
+        }
+    }
+    
+    private void renderPigmentPreview(GuiGraphics guiGraphics, mekanism.api.chemical.pigment.Pigment pigment, int x, int y) {
+        if (pigment == null || pigment.isEmptyType()) return;
+        
+        try {
+            int color = pigment.getTint();
+            ResourceLocation texture = pigment.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            RenderSystem.enableBlend();
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            
+            vertexBuffer.vertex(matrix4f, x, y + 16, 0).uv(uMin, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y + 16, 0).uv(uMax, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y, 0).uv(uMax, vMin).endVertex();
+            vertexBuffer.vertex(matrix4f, x, y, 0).uv(uMin, vMin).endVertex();
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } catch (Exception e) {
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFF00FF);
+        }
+    }
+    
+    private void renderSlurryPreview(GuiGraphics guiGraphics, mekanism.api.chemical.slurry.Slurry slurry, int x, int y) {
+        if (slurry == null || slurry.isEmptyType()) return;
+        
+        try {
+            int color = slurry.getTint();
+            ResourceLocation texture = slurry.getIcon();
+            
+            if (texture == null) return;
+            
+            float r = ((color >> 16) & 0xFF) / 255.0f;
+            float g = ((color >> 8) & 0xFF) / 255.0f;
+            float b = (color & 0xFF) / 255.0f;
+            
+            RenderSystem.setShaderColor(r, g, b, 1.0f);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+            
+            net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
+                Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(texture);
+            
+            if (sprite == null || sprite.contents().name().toString().contains("missingno")) {
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                return;
+            }
+            
+            RenderSystem.setShaderTexture(0, sprite.atlasLocation());
+            
+            RenderSystem.enableBlend();
+            com.mojang.blaze3d.vertex.BufferBuilder vertexBuffer = com.mojang.blaze3d.vertex.Tesselator.getInstance().getBuilder();
+            vertexBuffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX);
+            org.joml.Matrix4f matrix4f = guiGraphics.pose().last().pose();
+            
+            float uMin = sprite.getU0();
+            float uMax = sprite.getU1();
+            float vMin = sprite.getV0();
+            float vMax = sprite.getV1();
+            
+            vertexBuffer.vertex(matrix4f, x, y + 16, 0).uv(uMin, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y + 16, 0).uv(uMax, vMax).endVertex();
+            vertexBuffer.vertex(matrix4f, x + 16, y, 0).uv(uMax, vMin).endVertex();
+            vertexBuffer.vertex(matrix4f, x, y, 0).uv(uMin, vMin).endVertex();
+            
+            com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(vertexBuffer.end());
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        } catch (Exception e) {
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFF555555);
+        }
+    }
 }
