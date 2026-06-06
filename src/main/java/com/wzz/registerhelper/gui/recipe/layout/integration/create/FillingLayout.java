@@ -11,24 +11,19 @@ public class FillingLayout implements RecipeLayout {
     @Override
     public List<RecipeComponent> generateComponents(int baseX, int baseY, int tier) {
         List<RecipeComponent> components = new ArrayList<>();
-        
+
         components.add(new SlotComponent(
             baseX + 72, baseY + 126,
             "filling",
             0
         ));
-        components.add(new StringInputComponent(
-            baseX + 50, baseY + 90,
-            80, "fluid",
-                "文本", "minecraft:lava",
-                "value", false
-        ));
-        components.add(new NumberInputComponent(
-            baseX + 126, baseY + 90,
-            60, "amount",
-            "amount", 100,
-            0, 1000,
-            "value", false
+        components.add(new FluidSlotComponent(
+            baseX + 50, baseY + 70,
+            "fluid_input",
+            1,
+            "",
+            0,
+            1000
         ));
         
         return components;
@@ -46,6 +41,6 @@ public class FillingLayout implements RecipeLayout {
     
     @Override
     public String getLayoutName() {
-        return "FillingLayout";
+        return "Filling (填充)";
     }
 }

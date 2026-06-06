@@ -7,6 +7,7 @@ import com.wzz.registerhelper.gui.recipe.layout.integration.builtin.*;
 import com.wzz.registerhelper.gui.recipe.layout.integration.create.CompactingLayout;
 import com.wzz.registerhelper.gui.recipe.layout.integration.create.EmptyingLayout;
 import com.wzz.registerhelper.gui.recipe.layout.integration.create.FillingLayout;
+import com.wzz.registerhelper.gui.recipe.layout.integration.create.MixingLayout;
 import com.wzz.registerhelper.gui.recipe.layout.integration.create.PressingLayout;
 import com.wzz.registerhelper.gui.recipe.layout.integration.farmersdelight.CookingLayout;
 import com.wzz.registerhelper.gui.recipe.layout.integration.farmersdelight.CuttingLayout;
@@ -45,6 +46,7 @@ public class LayoutManager {
         registerLayout("emptying", new EmptyingLayout());
         registerLayout("create_cutting", new com.wzz.registerhelper.gui.recipe.layout.integration.create.CuttingLayout());
         registerLayout("compacting", new CompactingLayout());
+        registerLayout("mixing", new MixingLayout());
         registerLayout("filling", new FillingLayout());
         registerLayout("pressing", new PressingLayout());
         registerLayout("path_ascension", new PathAscension());

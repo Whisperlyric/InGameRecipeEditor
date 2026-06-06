@@ -636,6 +636,98 @@ public class DynamicRecipeBuilder {
             return false;
         }
 
+        String recipeTypeId = params.recipeType.getId();
+        boolean isMixing = "create:mixing".equals(recipeTypeId);
+        boolean isCompacting = "create:compacting".equals(recipeTypeId);
+        
+        // mixing和compacting的特殊验证：输入、输出各存在一个不为空的槽即可
+        if (isMixing || isCompacting) {
+            // 检查输入：至少有一个物品或流体不为空
+            boolean hasInput = false;
+            
+            // 检查物品输入
+            if (params.ingredientsData != null && !params.ingredientsData.isEmpty()) {
+                hasInput = params.ingredientsData.stream()
+                        .anyMatch(data -> !data.isEmpty());
+            } else if (params.ingredients != null && !params.ingredients.isEmpty()) {
+                hasInput = params.ingredients.stream()
+                        .anyMatch(item -> !item.isEmpty());
+            }
+            
+            // 检查流体输入
+            if (!hasInput && params.extraProperties != null) {
+                for (String key : params.extraProperties.keySet()) {
+                    if (key.startsWith("fluid_input_") && key.endsWith("_id")) {
+                        String fluidId = (String) params.extraProperties.get(key);
+                        if (fluidId != null && !fluidId.isEmpty()) {
+                            hasInput = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasInput) {
+                    String fluidInput = (String) params.extraProperties.get("fluidInput");
+                    if (fluidInput != null && !fluidInput.isEmpty()) {
+                        hasInput = true;
+                    }
+                }
+            }
+            
+            if (!hasInput) {
+                showError("请至少添加一个输入（物品或流体）！");
+                return false;
+            }
+            
+            // 检查输出：至少有一个物品或流体不为空
+            boolean hasOutput = false;
+            
+            // 检查物品输出
+            if (params.resultItem != null && !params.resultItem.isEmpty()) {
+                hasOutput = true;
+            } else if (params.outputSlotItems != null && !params.outputSlotItems.isEmpty()) {
+                hasOutput = params.outputSlotItems.values().stream()
+                        .anyMatch(stack -> !stack.isEmpty());
+            }
+            
+            // 检查流体输出
+            if (!hasOutput && params.outputComponent instanceof FluidSlotComponent fluidComp) {
+                if (fluidComp.getFluidId() != null && !fluidComp.getFluidId().isEmpty() && fluidComp.getAmount() > 0) {
+                    hasOutput = true;
+                }
+            }
+            
+            if (!hasOutput && params.extraProperties != null) {
+                for (String key : params.extraProperties.keySet()) {
+                    if (key.startsWith("fluid_output_") && key.endsWith("_id")) {
+                        String fluidId = (String) params.extraProperties.get(key);
+                        if (fluidId != null && !fluidId.isEmpty()) {
+                            hasOutput = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasOutput) {
+                    String fluidOutput = (String) params.extraProperties.get("fluidOutput");
+                    if (fluidOutput != null && !fluidOutput.isEmpty()) {
+                        hasOutput = true;
+                    }
+                }
+            }
+            
+            if (!hasOutput) {
+                showError("请至少添加一个输出（物品或流体）！");
+                return false;
+            }
+            
+            ModRecipeProcessor processor = params.recipeType.getProcessor();
+            if (processor != null && !processor.isModLoaded()) {
+                showError("所需的mod未加载: " + params.recipeType.getModId());
+                return false;
+            }
+            
+            return true;
+        }
+
         if (params.outputComponent != null) {
             if (params.outputComponent instanceof EnergySlotComponent energyComp) {
                 if (energyComp.getEnergy() <= 0) {
@@ -670,7 +762,6 @@ public class DynamicRecipeBuilder {
             }
         }
 
-        String recipeTypeId = params.recipeType.getId();
         boolean isRotary = "mekanism:rotary".equals(recipeTypeId);
         boolean isCrystallizing = "mekanism:crystallizing".equals(recipeTypeId);
         boolean isWashing = "mekanism:washing".equals(recipeTypeId);

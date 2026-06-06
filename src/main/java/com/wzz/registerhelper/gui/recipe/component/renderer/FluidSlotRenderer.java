@@ -31,6 +31,7 @@ public class FluidSlotRenderer implements ComponentRenderer {
     
     private static final ResourceLocation ELEMENT_HOLDER = ResourceLocation.parse("registerhelper:textures/gui/element_holder.png");
     private static final ResourceLocation GAUGE_STANDARD = ResourceLocation.parse("registerhelper:textures/gui/gauge/standard.png");
+    private static final ResourceLocation GAUGE_SMALL = ResourceLocation.parse("registerhelper:textures/gui/gauge/small.png");
     
     public FluidSlotRenderer(FluidSlotComponent component, Consumer<FluidSlotComponent> onClick) {
         this.component = component;
@@ -47,8 +48,8 @@ public class FluidSlotRenderer implements ComponentRenderer {
         
         int x = component.getX();
         int y = component.getY();
-        int width = 16;
-        int height = 58;
+        int width = component.isUseSmallSlot() ? FluidSlotComponent.SMALL_WIDTH : FluidSlotComponent.STANDARD_WIDTH;
+        int height = component.isUseSmallSlot() ? FluidSlotComponent.SMALL_HEIGHT : FluidSlotComponent.STANDARD_HEIGHT;
         
         boolean isMouseOver = mouseX >= x && mouseX < x + width &&
                              mouseY >= y && mouseY < y + height;
@@ -56,8 +57,10 @@ public class FluidSlotRenderer implements ComponentRenderer {
         RenderSystem.setShaderTexture(0, ELEMENT_HOLDER);
         guiGraphics.blit(ELEMENT_HOLDER, x, y, 0, 0, width, height, width, height);
         
-        RenderSystem.setShaderTexture(0, GAUGE_STANDARD);
-        guiGraphics.blit(GAUGE_STANDARD, x, y, 0, 0, width, height, width, height);
+        // 根据槽位大小选择不同的gauge纹理
+        ResourceLocation gaugeTexture = component.isUseSmallSlot() ? GAUGE_SMALL : GAUGE_STANDARD;
+        RenderSystem.setShaderTexture(0, gaugeTexture);
+        guiGraphics.blit(gaugeTexture, x, y, 0, 0, width, height, width, height);
         
         String fluidId = component.getFluidId();
         long amount = component.getAmount();
@@ -94,8 +97,8 @@ public class FluidSlotRenderer implements ComponentRenderer {
         
         int x = component.getX();
         int y = component.getY();
-        int width = 16;
-        int height = 58;
+        int width = component.isUseSmallSlot() ? FluidSlotComponent.SMALL_WIDTH : FluidSlotComponent.STANDARD_WIDTH;
+        int height = component.isUseSmallSlot() ? FluidSlotComponent.SMALL_HEIGHT : FluidSlotComponent.STANDARD_HEIGHT;
         
         boolean isMouseOver = mouseX >= x && mouseX < x + width &&
                              mouseY >= y && mouseY < y + height;

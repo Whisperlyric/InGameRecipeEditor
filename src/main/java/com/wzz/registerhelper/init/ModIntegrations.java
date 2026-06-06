@@ -30,11 +30,11 @@ public class ModIntegrations {
         RegisterHelper.registerRecipeTypeWithLayout("create", "cutting",
                 "机械动力:切削", createRecipeProcessor, "create_cutting");
         RegisterHelper.registerRecipeTypeWithLayout("create", "compacting",
-                "机械动力:塑形", createRecipeProcessor, "compacting");
+                "机械动力:压块塑形", createRecipeProcessor, "compacting");
         RegisterHelper.registerRecipeTypeWithLayout("create", "pressing",
                 "机械动力:冲压", createRecipeProcessor, "pressing");
         RegisterHelper.registerRecipeTypeWithLayout("create", "mixing",
-                "机械动力:混合搅拌", createRecipeProcessor, "compacting");
+                "机械动力:混合搅拌", createRecipeProcessor, "mixing");
         RegisterHelper.registerRecipeTypeWithLayout("create", "filling",
                 "机械动力:注液", createRecipeProcessor, "filling");
         RegisterHelper.registerRecipeType("arcanevortex", "van_sh_workbench_shaped",
