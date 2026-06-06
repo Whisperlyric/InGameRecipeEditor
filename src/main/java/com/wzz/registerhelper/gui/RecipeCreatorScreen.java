@@ -782,10 +782,27 @@ public class RecipeCreatorScreen extends Screen {
         }
         
         btnChangeAmount.visible = hasSelection && isBulkSlotSelected;
-        btnSelectFromCreative.visible = hasSelection && (selectedSlotIndex >= 0 || isResultSlotSelected || selectedOutputComponent != null || selectedOutputSlot != null);
-        btnSelectFromInventory.visible = hasSelection && (selectedSlotIndex >= 0 || isResultSlotSelected || selectedOutputComponent != null || selectedOutputSlot != null);
+        
+        // 对化学品槽和流体槽显示"从创造物品栏选择"按钮，对化学品槽隐藏"从玩家物品栏选择"
+        boolean isItemSlotSelected = selectedSlotIndex >= 0 || isResultSlotSelected || 
+            (selectedOutputSlot != null) || 
+            (selectedOutputComponent instanceof SlotComponent);
+        boolean isFluidSlotSelected = selectedFluidSlot != null;
+        boolean isChemicalSlotSelected = selectedGasSlot != null || selectedChemicalSlot != null;
+        
+        btnSelectFromCreative.visible = hasSelection && (isItemSlotSelected || isFluidSlotSelected || isChemicalSlotSelected);
+        btnSelectFromInventory.visible = hasSelection && isItemSlotSelected;
+        
         btnSelectFromJEI.visible = hasSelection;
-        btnAddTagGroup.visible = hasSelection;
+        
+        // 对结果槽隐藏"添加标签组"按钮
+        boolean isOutputSlotSelected = isResultSlotSelected || 
+            (selectedOutputComponent != null) || 
+            (selectedOutputSlot != null) ||
+            (selectedFluidSlot != null && selectedFluidSlot.getId().contains("output")) ||
+            (selectedGasSlot != null && selectedGasSlot.getId().contains("output")) ||
+            (selectedChemicalSlot != null && selectedChemicalSlot.getId().contains("output"));
+        btnAddTagGroup.visible = hasSelection && !isOutputSlotSelected;
     }
 
     /**
@@ -1692,14 +1709,25 @@ public class RecipeCreatorScreen extends Screen {
                     String id = fluidComp.getId();
                     String fluidId = fluidComp.getFluidId();
                     if (fluidId != null && !fluidId.isEmpty()) {
-                        if (id.contains("input")) {
+                        // 支持多流体输入槽（fluid_input_1, fluid_input_2等）
+                        if (id.startsWith("fluid_input_")) {
+                            componentData.put(id + "_id", fluidId);
+                            componentData.put(id + "_amount", (int) fluidComp.getAmount());
+                            // 同时设置默认的fluidInput（用于兼容旧逻辑）
+                            if (!componentData.containsKey("fluidInput")) {
+                                componentData.put("fluidInput", fluidId);
+                                componentData.put("fluidInputAmount", (int) fluidComp.getAmount());
+                            }
+                        } else if (id.equals("fluid_input")) {
                             componentData.put("fluidInput", fluidId);
                             componentData.put("fluidInputAmount", (int) fluidComp.getAmount());
                             componentData.put("fluid", fluidId);
                             componentData.put("fluidAmount", (int) fluidComp.getAmount());
-                        } else if (id.contains("output")) {
-                            componentData.put("fluidOutput", fluidId);
-                            componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
+                        } else if (id.contains("input")) {
+                            componentData.put("fluidInput", fluidId);
+                            componentData.put("fluidInputAmount", (int) fluidComp.getAmount());
+                            componentData.put("fluid", fluidId);
+                            componentData.put("fluidAmount", (int) fluidComp.getAmount());
                         }
                     }
                 } else if (component instanceof GasSlotComponent gasComp) {
@@ -1765,6 +1793,32 @@ public class RecipeCreatorScreen extends Screen {
                                 componentData.put("chemicalOutputAmount", (int) chemicalComp.getAmount());
                                 componentData.put("chemicalType", type.getId());
                             }
+                        }
+                    }
+                }
+            }
+            
+            // 处理输出组件中的流体槽
+            for (RecipeComponent outputComp : slotManager.getOutputComponents()) {
+                if (outputComp instanceof FluidSlotComponent fluidComp) {
+                    String id = fluidComp.getId();
+                    String fluidId = fluidComp.getFluidId();
+                    if (fluidId != null && !fluidId.isEmpty()) {
+                        // 支持多流体输出槽（fluid_output_1, fluid_output_2等）
+                        if (id.startsWith("fluid_output_")) {
+                            componentData.put(id + "_id", fluidId);
+                            componentData.put(id + "_amount", (int) fluidComp.getAmount());
+                            // 同时设置默认的fluidOutput（用于兼容旧逻辑）
+                            if (!componentData.containsKey("fluidOutput")) {
+                                componentData.put("fluidOutput", fluidId);
+                                componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
+                            }
+                        } else if (id.equals("fluid_output")) {
+                            componentData.put("fluidOutput", fluidId);
+                            componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
+                        } else if (id.contains("output")) {
+                            componentData.put("fluidOutput", fluidId);
+                            componentData.put("fluidOutputAmount", (int) fluidComp.getAmount());
                         }
                     }
                 }
@@ -2640,14 +2694,113 @@ public class RecipeCreatorScreen extends Screen {
      */
     private void onSelectFromCreativeClicked() {
         if (minecraft != null) {
-            minecraft.setScreen(new ItemSelectorScreen(
-                this,
-                stack -> {
-                    if (stack != null && !stack.isEmpty()) {
-                        applySelectedItem(stack);
+            // 如果是流体槽被选中，打开流体网格选择界面
+            if (selectedFluidSlot != null) {
+                minecraft.setScreen(new dev.whisperlyric_fork.gui.FluidGridSelectionScreen(
+                    this,
+                    fluidStack -> {
+                        if (fluidStack != null && !fluidStack.isEmpty()) {
+                            String newFluidId = fluidStack.getFluid().builtInRegistryHolder().key().location().toString();
+                            
+                            // 检查compacting和mixing的流体槽重复
+                            String layoutId = currentRecipeType != null ? currentRecipeType.getProperty("layout", String.class) : null;
+                            if (layoutId != null && (layoutId.equals("compacting") || layoutId.equals("mixing"))) {
+                                String slotId = selectedFluidSlot.getId();
+                                boolean isInputSlot = slotId.contains("input");
+                                boolean isOutputSlot = slotId.contains("output");
+                                
+                                // 检查同类型槽位是否有重复流体
+                                for (RecipeComponent component : slotManager.getComponents()) {
+                                    if (component instanceof FluidSlotComponent otherFluidSlot && otherFluidSlot != selectedFluidSlot) {
+                                        String otherSlotId = otherFluidSlot.getId();
+                                        boolean otherIsInput = otherSlotId.contains("input");
+                                        boolean otherIsOutput = otherSlotId.contains("output");
+                                        
+                                        // 同类型槽位（输入槽之间、输出槽之间）
+                                        if ((isInputSlot && otherIsInput) || (isOutputSlot && otherIsOutput)) {
+                                            String otherFluidId = otherFluidSlot.getFluidId();
+                                            if (otherFluidId != null && !otherFluidId.isEmpty() && otherFluidId.equals(newFluidId)) {
+                                                displayError("同一类型的两个流体槽不能使用相同的流体！");
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // 检查输出槽位
+                                for (RecipeComponent component : slotManager.getOutputComponents()) {
+                                    if (component instanceof FluidSlotComponent otherFluidSlot && otherFluidSlot != selectedFluidSlot) {
+                                        String otherSlotId = otherFluidSlot.getId();
+                                        boolean otherIsOutput = otherSlotId.contains("output");
+                                        
+                                        if (isOutputSlot && otherIsOutput) {
+                                            String otherFluidId = otherFluidSlot.getFluidId();
+                                            if (otherFluidId != null && !otherFluidId.isEmpty() && otherFluidId.equals(newFluidId)) {
+                                                displayError("两个输出流体槽不能使用相同的流体！");
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            selectedFluidSlot.setFluidId(newFluidId);
+                            long amount = fluidStack.getAmount();
+                            if (amount <= 0) amount = 1000;
+                            selectedFluidSlot.setAmount(amount);
+                            if (componentRenderManager != null && slotManager != null) {
+                                componentRenderManager.initializeRenderers(slotManager.getComponents());
+                            }
+                            displayInfo("已设置流体: " + fluidStack.getDisplayName().getString() + " (" + amount + "mB)");
+                            clearAllSelections();
+                        }
                     }
-                }
-            ));
+                ));
+            } else if (selectedGasSlot != null) {
+                // 气体槽选择
+                minecraft.setScreen(new dev.whisperlyric_fork.gui.ChemicalGridSelectionScreen(
+                    this,
+                    com.wzz.registerhelper.gui.recipe.component.ChemicalSlotComponent.ChemicalType.GAS,
+                    result -> {
+                        if (result.chemicalId != null && !result.chemicalId.isEmpty()) {
+                            selectedGasSlot.setGasId(result.chemicalId);
+                            selectedGasSlot.setAmount(result.amount > 0 ? (int)result.amount : 1000);
+                            if (componentRenderManager != null && slotManager != null) {
+                                componentRenderManager.initializeRenderers(slotManager.getComponents());
+                            }
+                            displayInfo("已设置气体: " + result.chemicalId);
+                            clearAllSelections();
+                        }
+                    }
+                ));
+            } else if (selectedChemicalSlot != null) {
+                // 化学品槽选择（根据类型）
+                minecraft.setScreen(new dev.whisperlyric_fork.gui.ChemicalGridSelectionScreen(
+                    this,
+                    selectedChemicalSlot.getChemicalType(),
+                    result -> {
+                        if (result.chemicalId != null && !result.chemicalId.isEmpty()) {
+                            selectedChemicalSlot.setChemicalId(result.chemicalId);
+                            selectedChemicalSlot.setAmount(result.amount > 0 ? result.amount : 1000);
+                            if (componentRenderManager != null && slotManager != null) {
+                                componentRenderManager.initializeRenderers(slotManager.getComponents());
+                            }
+                            displayInfo("已设置化学品: " + result.chemicalId);
+                            clearAllSelections();
+                        }
+                    }
+                ));
+            } else {
+                // 物品槽选择
+                minecraft.setScreen(new ItemSelectorScreen(
+                    this,
+                    stack -> {
+                        if (stack != null && !stack.isEmpty()) {
+                            applySelectedItem(stack);
+                        }
+                    }
+                ));
+            }
         }
     }
     
@@ -2772,7 +2925,51 @@ public class RecipeCreatorScreen extends Screen {
                 slotType,
                 result -> {
                     if (selectedFluidSlot != null && result.value instanceof net.minecraftforge.fluids.FluidStack fluidStack) {
-                        selectedFluidSlot.setFluidId(fluidStack.getFluid().builtInRegistryHolder().key().location().toString());
+                        String newFluidId = fluidStack.getFluid().builtInRegistryHolder().key().location().toString();
+                        
+                        // 检查compacting和mixing的流体槽重复
+                        String layoutId = currentRecipeType != null ? currentRecipeType.getProperty("layout", String.class) : null;
+                        if (layoutId != null && (layoutId.equals("compacting") || layoutId.equals("mixing"))) {
+                            String slotId = selectedFluidSlot.getId();
+                            boolean isInputSlot = slotId.contains("input");
+                            boolean isOutputSlot = slotId.contains("output");
+                            
+                            // 检查同类型槽位是否有重复流体
+                            for (RecipeComponent component : slotManager.getComponents()) {
+                                if (component instanceof FluidSlotComponent otherFluidSlot && otherFluidSlot != selectedFluidSlot) {
+                                    String otherSlotId = otherFluidSlot.getId();
+                                    boolean otherIsInput = otherSlotId.contains("input");
+                                    boolean otherIsOutput = otherSlotId.contains("output");
+                                    
+                                    // 同类型槽位（输入槽之间或输出槽之间）
+                                    if ((isInputSlot && otherIsInput) || (isOutputSlot && otherIsOutput)) {
+                                        String otherFluidId = otherFluidSlot.getFluidId();
+                                        if (otherFluidId != null && !otherFluidId.isEmpty() && otherFluidId.equals(newFluidId)) {
+                                            displayError("同一类型的两个流体槽不能使用相同的流体！");
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 检查输出槽位
+                            for (RecipeComponent component : slotManager.getOutputComponents()) {
+                                if (component instanceof FluidSlotComponent otherFluidSlot && otherFluidSlot != selectedFluidSlot) {
+                                    String otherSlotId = otherFluidSlot.getId();
+                                    boolean otherIsOutput = otherSlotId.contains("output");
+                                    
+                                    if (isOutputSlot && otherIsOutput) {
+                                        String otherFluidId = otherFluidSlot.getFluidId();
+                                        if (otherFluidId != null && !otherFluidId.isEmpty() && otherFluidId.equals(newFluidId)) {
+                                            displayError("两个输出流体槽不能使用相同的流体！");
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        selectedFluidSlot.setFluidId(newFluidId);
                         long amount = fluidStack.getAmount();
                         if (amount <= 0) amount = 1;
                         selectedFluidSlot.setAmount(amount);

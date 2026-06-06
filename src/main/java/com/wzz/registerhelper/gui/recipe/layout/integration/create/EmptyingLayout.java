@@ -11,31 +11,34 @@ public class EmptyingLayout implements RecipeLayout {
     @Override
     public List<RecipeComponent> generateComponents(int baseX, int baseY, int tier) {
         List<RecipeComponent> components = new ArrayList<>();
-        
         components.add(new SlotComponent(
             baseX + 66, baseY + 66,
-            "comp_0",
+            "input_item",
             0
         ));
-        components.add(new SlotComponent(
-            baseX + 132, baseY + 154,
-            "comp_1",
-            1
-        ));
-        components.add(new StringInputComponent(
-            baseX + 132, baseY + 66,
-            80, "fluid",
-            "液体", "create:tea",
-            "fluidOutput", false
-        ));
-        components.add(new NumberInputComponent(
-                baseX + 154, baseY + 110,
-                60, "fluidAmount",
-                "数值", 250,
-                0, 10000,
-                "value", false
-        ));
         return components;
+    }
+    
+    @Override
+    public List<RecipeComponent> generateOutputComponents(int outputX, int outputY) {
+        List<RecipeComponent> outputs = new ArrayList<>();
+        
+        outputs.add(new SlotComponent(
+            outputX, outputY + 18,
+            "output_item",
+            0
+        ));
+        
+        outputs.add(new FluidSlotComponent(
+            outputX + 26, outputY + 18,
+            "fluid_output",
+            1,
+            "",
+            0,
+            1500
+        ));
+        
+        return outputs;
     }
     
     @Override
@@ -50,6 +53,6 @@ public class EmptyingLayout implements RecipeLayout {
     
     @Override
     public String getLayoutName() {
-        return "EmptyingLayout";
+        return "Emptying (倒空)";
     }
 }

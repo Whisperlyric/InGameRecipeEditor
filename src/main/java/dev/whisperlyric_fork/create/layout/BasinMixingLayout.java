@@ -37,8 +37,8 @@ public class BasinMixingLayout implements RecipeLayout {
             "fluid_input_1",
             9,
             "minecraft:water",
-            1000,
-            10000
+            0,
+            1000
         ));
         
         components.add(new FluidSlotComponent(
@@ -46,8 +46,8 @@ public class BasinMixingLayout implements RecipeLayout {
             "fluid_input_2",
             10,
             "minecraft:lava",
-            1000,
-            10000
+            0,
+            1000
         ));
         
         int outputStartX = baseX + 3 * SPACING + 110;
@@ -73,8 +73,8 @@ public class BasinMixingLayout implements RecipeLayout {
             "fluid_output_1",
             20,
             "minecraft:water",
-            1000,
-            10000
+            0,
+            1000
         ));
         
         components.add(new FluidSlotComponent(
@@ -82,8 +82,8 @@ public class BasinMixingLayout implements RecipeLayout {
             "fluid_output_2",
             21,
             "minecraft:lava",
-            1000,
-            10000
+            0,
+            1000
         ));
         
         return components;

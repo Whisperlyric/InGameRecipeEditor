@@ -51,6 +51,7 @@ public class RecipePreviewRenderer {
         public final ContentType type;
         public final Object content;
         public final long amount;
+        public final boolean useSmallSlot;  // 是否使用小槽渲染（用于流体）
         
         public PreviewSlot(int x, int y, net.minecraft.world.item.ItemStack item) {
             this.x = x;
@@ -58,14 +59,20 @@ public class RecipePreviewRenderer {
             this.type = ContentType.ITEM;
             this.content = item;
             this.amount = item.getCount();
+            this.useSmallSlot = false;
         }
         
         public PreviewSlot(int x, int y, FluidStack fluidStack) {
+            this(x, y, fluidStack, false);
+        }
+        
+        public PreviewSlot(int x, int y, FluidStack fluidStack, boolean useSmallSlot) {
             this.x = x;
             this.y = y;
             this.type = ContentType.FLUID;
             this.content = fluidStack;
             this.amount = fluidStack.getAmount();
+            this.useSmallSlot = useSmallSlot;
         }
         
         public PreviewSlot(int x, int y, String chemicalId, ContentType chemicalType, long amount) {
@@ -74,6 +81,7 @@ public class RecipePreviewRenderer {
             this.type = chemicalType;
             this.content = chemicalId;
             this.amount = amount;
+            this.useSmallSlot = true;  // 化学品默认使用小槽
         }
         
         public PreviewSlot(int x, int y, long energyAmount) {
@@ -82,6 +90,7 @@ public class RecipePreviewRenderer {
             this.type = ContentType.ENERGY;
             this.content = energyAmount;
             this.amount = energyAmount;
+            this.useSmallSlot = false;
         }
         
         public boolean isEmpty() {
@@ -114,7 +123,18 @@ public class RecipePreviewRenderer {
             com.mojang.logging.LogUtils.getLogger().info("renderSlot: Rendering ENERGY slot at x={}, y={}, amount={}", x, y, slot.amount);
             RenderSystem.setShaderTexture(0, POWER_SLOT);
             guiGraphics.blit(POWER_SLOT, x, y, 0, 0, 18, 18, 18, 18);
+        } else if (slot.type == ContentType.FLUID && !slot.useSmallSlot) {
+            // 流体使用普通槽渲染（不使用小槽）
+            int bgColor = isResult ? 0xFF4A4A4A : 0xFF373737;
+            guiGraphics.fill(x, y, x + SLOT_SIZE, y + SLOT_SIZE, bgColor);
+            
+            int borderColor = isResult ? 0xFF7777FF : 0xFF888888;
+            guiGraphics.fill(x - 1, y - 1, x + SLOT_SIZE + 1, y, borderColor);
+            guiGraphics.fill(x - 1, y + SLOT_SIZE, x + SLOT_SIZE + 1, y + SLOT_SIZE + 1, borderColor);
+            guiGraphics.fill(x - 1, y, x, y + SLOT_SIZE, borderColor);
+            guiGraphics.fill(x + SLOT_SIZE, y, x + SLOT_SIZE + 1, y + SLOT_SIZE, borderColor);
         } else {
+            // 化学品或使用小槽的流体
             RenderSystem.setShaderTexture(0, ELEMENT_HOLDER);
             guiGraphics.blit(ELEMENT_HOLDER, x, y, 0, 0, SMALL_SLOT_WIDTH, SMALL_SLOT_HEIGHT, SMALL_SLOT_WIDTH, SMALL_SLOT_HEIGHT);
             
@@ -182,10 +202,20 @@ public class RecipePreviewRenderer {
         
         int x = slot.x;
         int y = slot.y;
-        int width = SMALL_SLOT_WIDTH;
-        int fullHeight = SMALL_SLOT_HEIGHT;
-        int height = (int) (fullHeight * 0.75);
-        int yOffset = fullHeight - height;
+        
+        // 根据useSmallSlot决定渲染尺寸
+        int width, fullHeight, height, yOffset;
+        if (slot.useSmallSlot) {
+            width = SMALL_SLOT_WIDTH;
+            fullHeight = SMALL_SLOT_HEIGHT;
+            height = (int) (fullHeight * 0.75);
+            yOffset = fullHeight - height;
+        } else {
+            width = SLOT_SIZE - 2;
+            fullHeight = SLOT_SIZE - 2;
+            height = fullHeight;
+            yOffset = 0;
+        }
         
         if (sprite != null) {
             // 正常渲染流体纹理（JEI方式）

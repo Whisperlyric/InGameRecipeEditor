@@ -6,7 +6,7 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CompactingLayout implements RecipeLayout {
+public class MixingLayout implements RecipeLayout {
     private static final int SLOT_SIZE = 18;
     private static final int SPACING = 20;
     
@@ -114,7 +114,7 @@ public class CompactingLayout implements RecipeLayout {
     
     @Override
     public String getLayoutName() {
-        return "Compacting (压块塑形)";
+        return "Mixing (混合搅拌)";
     }
     
     @Override

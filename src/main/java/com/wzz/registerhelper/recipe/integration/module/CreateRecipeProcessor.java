@@ -3,10 +3,15 @@ package com.wzz.registerhelper.recipe.integration.module;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.wzz.registerhelper.gui.recipe.component.FluidSlotComponent;
+import com.wzz.registerhelper.gui.recipe.component.RecipeComponent;
+import com.wzz.registerhelper.gui.recipe.component.SlotComponent;
 import com.wzz.registerhelper.recipe.RecipeRequest;
 import com.wzz.registerhelper.recipe.integration.ModRecipeProcessor;
 import com.wzz.registerhelper.util.RecipeUtil;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static com.wzz.registerhelper.util.RecipeUtil.createIngredientJson;
@@ -29,7 +34,7 @@ public class CreateRecipeProcessor implements ModRecipeProcessor {
             case "create:compacting" -> createCompactingRecipe(request);
             case "create:pressing" -> createPressingRecipe(request);
             case "create:filling" -> createFillingRecipe(request);
-            case "create:mixing" -> creatMixingRecipe(request);
+            case "create:mixing" -> createMixingRecipe(request);
             default -> null;
         };
     }
@@ -39,11 +44,69 @@ public class CreateRecipeProcessor implements ModRecipeProcessor {
         return new String[]{"emptying", "cutting", "compacting", "pressing", "mixing", "filling"};
     }
 
+    /**
+     * 创建emptying配方（物品 -> 物品 + 流体）
+     */
     private JsonObject createEmptyingRecipe(RecipeRequest request) {
         JsonObject recipe = new JsonObject();
         recipe.addProperty("type", "create:emptying");
-        recipe.add("ingredients", buildIngredients(request.ingredients, false));
-        recipe.add("results", buildResults(request));
+        
+        JsonArray ingredients = new JsonArray();
+        JsonArray results = new JsonArray();
+        
+        // 输入物品
+        if (request.ingredients != null) {
+            for (Object ingredient : request.ingredients) {
+                JsonObject obj = createIngredientJson(ingredient);
+                if (obj != null) {
+                    ingredients.add(obj);
+                }
+            }
+        }
+        
+        // 输出物品（从outputSlotItems或result）
+        if (request.outputSlotItems != null && !request.outputSlotItems.isEmpty()) {
+            for (Map.Entry<Integer, net.minecraft.world.item.ItemStack> entry : request.outputSlotItems.entrySet()) {
+                net.minecraft.world.item.ItemStack stack = entry.getValue();
+                if (!stack.isEmpty()) {
+                    JsonObject resultItem = new JsonObject();
+                    resultItem.addProperty("item", RecipeUtil.getItemResourceLocation(stack.getItem()).toString());
+                    if (stack.getCount() > 1) {
+                        resultItem.addProperty("count", stack.getCount());
+                    }
+                    results.add(resultItem);
+                }
+            }
+        } else if (request.result != null && !request.result.isEmpty()) {
+            JsonObject resultItem = new JsonObject();
+            resultItem.addProperty("item", RecipeUtil.getItemResourceLocation(request.result.getItem()).toString());
+            if (request.resultCount > 1) {
+                resultItem.addProperty("count", request.resultCount);
+            }
+            results.add(resultItem);
+        }
+        
+        // 输出流体（从properties或outputComponent）
+        if (request.properties.containsKey("fluidOutput")) {
+            String fluidId = (String) request.properties.get("fluidOutput");
+            Object amountObj = request.properties.get("fluidOutputAmount");
+            int amount = amountObj instanceof Number ? ((Number) amountObj).intValue() : 250;
+            
+            JsonObject fluidResult = new JsonObject();
+            fluidResult.addProperty("fluid", fluidId);
+            fluidResult.addProperty("amount", amount);
+            results.add(fluidResult);
+        } else if (request.outputComponent instanceof FluidSlotComponent fluidComp) {
+            if (fluidComp.getFluidId() != null && !fluidComp.getFluidId().isEmpty() && fluidComp.getAmount() > 0) {
+                JsonObject fluidResult = new JsonObject();
+                fluidResult.addProperty("fluid", fluidComp.getFluidId());
+                fluidResult.addProperty("amount", (int) fluidComp.getAmount());
+                results.add(fluidResult);
+            }
+        }
+        
+        recipe.add("ingredients", ingredients);
+        recipe.add("results", results);
         return recipe;
     }
 
@@ -56,19 +119,39 @@ public class CreateRecipeProcessor implements ModRecipeProcessor {
         return recipe;
     }
 
+    /**
+     * 创建compacting配方（物品 + 流体 -> 物品）
+     */
     private JsonObject createCompactingRecipe(RecipeRequest request) {
         JsonObject recipe = new JsonObject();
         recipe.addProperty("type", "create:compacting");
-        recipe.add("ingredients", buildIngredients(request.ingredients, true));
-        recipe.add("results", buildResults(request));
+        
+        JsonArray ingredients = buildIngredientsWithFluids(request);
+        JsonArray results = buildResults(request);
+        
+        recipe.add("ingredients", ingredients);
+        recipe.add("results", results);
         return recipe;
     }
 
-    private JsonObject creatMixingRecipe(RecipeRequest request) {
+    /**
+     * 创建mixing配方（物品 + 流体 -> 物品 + 流体）
+     */
+    private JsonObject createMixingRecipe(RecipeRequest request) {
         JsonObject recipe = new JsonObject();
         recipe.addProperty("type", "create:mixing");
-        recipe.add("ingredients", buildIngredients(request.ingredients, true));
-        recipe.add("results", buildResults(request));
+        
+        JsonArray ingredients = buildIngredientsWithFluids(request);
+        JsonArray results = buildResultsWithFluids(request);
+        
+        // 添加热量需求（如果指定）
+        String heatRequirement = (String) request.properties.get("heatRequirement");
+        if (heatRequirement != null && !heatRequirement.isEmpty()) {
+            recipe.addProperty("heatRequirement", heatRequirement);
+        }
+        
+        recipe.add("ingredients", ingredients);
+        recipe.add("results", results);
         return recipe;
     }
 
@@ -80,38 +163,138 @@ public class CreateRecipeProcessor implements ModRecipeProcessor {
         return recipe;
     }
 
+    /**
+     * 创建filling配方（物品 + 流体 -> 物品）
+     */
     private JsonObject createFillingRecipe(RecipeRequest request) {
         JsonObject recipe = new JsonObject();
         recipe.addProperty("type", "create:filling");
 
-        JsonArray ingredientsArray = new JsonArray();
-        boolean hasFluid = false;
-
+        JsonArray ingredients = new JsonArray();
+        
+        // 输入物品
         if (request.ingredients != null) {
             for (Object ingredient : request.ingredients) {
-                JsonObject obj = createIngredientJson(ingredient); // 处理物品 + NBT
-                if (obj != null) {
-                    ingredientsArray.add(obj);
-                    if (obj.has("fluid")) hasFluid = true;
+                JsonObject obj = createIngredientJson(ingredient);
+                if (obj != null && !obj.has("fluid")) {
+                    ingredients.add(obj);
                 }
             }
         }
-
-        // 如果没有流体输入，给一个默认流体（可以是水，也可以从 properties 读取）
-        if (!hasFluid) {
-            JsonObject defaultFluid = new JsonObject();
-            defaultFluid.addProperty("fluid", "minecraft:water"); // 默认流体
-            defaultFluid.addProperty("amount", 250);
-            defaultFluid.add("nbt", new JsonObject());
-            ingredientsArray.add(defaultFluid);
+        
+        // 输入流体（从properties）
+        if (request.properties.containsKey("fluidInput")) {
+            String fluidId = (String) request.properties.get("fluidInput");
+            Object amountObj = request.properties.get("fluidInputAmount");
+            int amount = amountObj instanceof Number ? ((Number) amountObj).intValue() : 250;
+            
+            JsonObject fluidIngredient = new JsonObject();
+            fluidIngredient.addProperty("fluid", fluidId);
+            fluidIngredient.addProperty("amount", amount);
+            fluidIngredient.add("nbt", new JsonObject());
+            ingredients.add(fluidIngredient);
         }
 
-        recipe.add("ingredients", ingredientsArray);
-
-        // 输出结果
+        recipe.add("ingredients", ingredients);
         recipe.add("results", buildResults(request));
 
         return recipe;
+    }
+
+    /**
+     * 构建包含流体输入的ingredients数组
+     */
+    private JsonArray buildIngredientsWithFluids(RecipeRequest request) {
+        JsonArray array = new JsonArray();
+        
+        // 添加物品输入
+        if (request.ingredients != null) {
+            for (Object ingredient : request.ingredients) {
+                JsonObject obj = RecipeUtil.createIngredientJson(ingredient);
+                if (obj != null) {
+                    array.add(obj);
+                }
+            }
+        }
+        
+        // 添加流体输入（从properties）
+        List<String> fluidInputKeys = new ArrayList<>();
+        for (String key : request.properties.keySet()) {
+            if (key.startsWith("fluid_input_") && key.endsWith("_id")) {
+                fluidInputKeys.add(key);
+            }
+        }
+        
+        for (String key : fluidInputKeys) {
+            String fluidId = (String) request.properties.get(key);
+            if (fluidId != null && !fluidId.isEmpty()) {
+                String slotId = key.replace("_id", "");
+                Object amountObj = request.properties.get(slotId + "_amount");
+                int amount = amountObj instanceof Number ? ((Number) amountObj).intValue() : 250;
+                
+                JsonObject fluidIngredient = new JsonObject();
+                fluidIngredient.addProperty("fluid", fluidId);
+                fluidIngredient.addProperty("amount", amount);
+                array.add(fluidIngredient);
+            }
+        }
+        
+        // 如果没有通过properties传递，尝试从fluidInput获取
+        if (fluidInputKeys.isEmpty() && request.properties.containsKey("fluidInput")) {
+            String fluidId = (String) request.properties.get("fluidInput");
+            Object amountObj = request.properties.get("fluidInputAmount");
+            int amount = amountObj instanceof Number ? ((Number) amountObj).intValue() : 250;
+            
+            JsonObject fluidIngredient = new JsonObject();
+            fluidIngredient.addProperty("fluid", fluidId);
+            fluidIngredient.addProperty("amount", amount);
+            array.add(fluidIngredient);
+        }
+        
+        return array;
+    }
+
+    /**
+     * 构建包含流体输出的results数组
+     */
+    private JsonArray buildResultsWithFluids(RecipeRequest request) {
+        JsonArray array = buildResults(request);
+        
+        // 添加流体输出（从properties）
+        List<String> fluidOutputKeys = new ArrayList<>();
+        for (String key : request.properties.keySet()) {
+            if (key.startsWith("fluid_output_") && key.endsWith("_id")) {
+                fluidOutputKeys.add(key);
+            }
+        }
+        
+        for (String key : fluidOutputKeys) {
+            String fluidId = (String) request.properties.get(key);
+            if (fluidId != null && !fluidId.isEmpty()) {
+                String slotId = key.replace("_id", "");
+                Object amountObj = request.properties.get(slotId + "_amount");
+                int amount = amountObj instanceof Number ? ((Number) amountObj).intValue() : 250;
+                
+                JsonObject fluidResult = new JsonObject();
+                fluidResult.addProperty("fluid", fluidId);
+                fluidResult.addProperty("amount", amount);
+                array.add(fluidResult);
+            }
+        }
+        
+        // 如果没有通过properties传递，尝试从fluidOutput获取
+        if (fluidOutputKeys.isEmpty() && request.properties.containsKey("fluidOutput")) {
+            String fluidId = (String) request.properties.get("fluidOutput");
+            Object amountObj = request.properties.get("fluidOutputAmount");
+            int amount = amountObj instanceof Number ? ((Number) amountObj).intValue() : 250;
+            
+            JsonObject fluidResult = new JsonObject();
+            fluidResult.addProperty("fluid", fluidId);
+            fluidResult.addProperty("amount", amount);
+            array.add(fluidResult);
+        }
+        
+        return array;
     }
 
     @SuppressWarnings("unchecked")
@@ -148,15 +331,20 @@ public class CreateRecipeProcessor implements ModRecipeProcessor {
             if (request.resultCount > 1) resultItem.addProperty("count", request.resultCount);
             array.add(resultItem);
         }
-
-        if (request.properties.containsKey("fluidOutput")) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> fluidOutput = (Map<String, Object>) request.properties.get("fluidOutput");
-            JsonObject fluidResult = new JsonObject();
-            fluidResult.addProperty("fluid", (String) fluidOutput.get("fluid"));
-            fluidResult.addProperty("amount", (Integer) fluidOutput.getOrDefault("amount", 250));
-            fluidResult.add("nbt", new JsonObject());
-            array.add(fluidResult);
+        
+        // 添加输出槽物品
+        if (request.outputSlotItems != null && !request.outputSlotItems.isEmpty()) {
+            for (Map.Entry<Integer, net.minecraft.world.item.ItemStack> entry : request.outputSlotItems.entrySet()) {
+                net.minecraft.world.item.ItemStack stack = entry.getValue();
+                if (!stack.isEmpty()) {
+                    JsonObject resultItem = new JsonObject();
+                    resultItem.addProperty("item", RecipeUtil.getItemResourceLocation(stack.getItem()).toString());
+                    if (stack.getCount() > 1) {
+                        resultItem.addProperty("count", stack.getCount());
+                    }
+                    array.add(resultItem);
+                }
+            }
         }
 
         return array;

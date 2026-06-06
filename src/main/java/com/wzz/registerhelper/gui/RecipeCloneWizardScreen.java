@@ -378,6 +378,61 @@ public class RecipeCloneWizardScreen extends Screen {
                     } catch (Exception e) {}
                 }
                 
+                // 检查Create配方中的物品输入/输出
+                if (recipeTypeName.contains("create:mixing") || recipeTypeName.contains("create:compacting") ||
+                    recipeTypeName.contains("create:filling") || recipeTypeName.contains("create:emptying")) {
+                    try {
+                        // 检查物品输入
+                        for (Ingredient ingredient : r.getIngredients()) {
+                            if (!ingredient.isEmpty()) {
+                                for (ItemStack matching : ingredient.getItems()) {
+                                    if (ItemStack.isSameItem(matching, item)) {
+                                        asIng = true;
+                                        break;
+                                    }
+                                }
+                                if (asIng) break;
+                            }
+                        }
+                        
+                        // 检查物品输出 - 尝试getResults方法
+                        if (!asIng) {
+                            try {
+                                java.lang.reflect.Method getResultsMethod = r.getClass().getMethod("getResults");
+                                Object resultsObj = getResultsMethod.invoke(r);
+                                if (resultsObj instanceof List<?> results) {
+                                    for (Object result : results) {
+                                        if (result instanceof ItemStack resultItem && !resultItem.isEmpty()) {
+                                            if (ItemStack.isSameItem(resultItem, item)) {
+                                                asRes = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {}
+                        }
+                        
+                        // 检查emptying配方的输出物品
+                        if (!asIng && !asRes && recipeTypeName.contains("emptying")) {
+                            try {
+                                java.lang.reflect.Method getOutputItemsMethod = r.getClass().getMethod("getOutputItems");
+                                Object outputItemsObj = getOutputItemsMethod.invoke(r);
+                                if (outputItemsObj instanceof List<?> outputItems) {
+                                    for (Object outputItem : outputItems) {
+                                        if (outputItem instanceof ItemStack resultItem && !resultItem.isEmpty()) {
+                                            if (ItemStack.isSameItem(resultItem, item)) {
+                                                asRes = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {}
+                        }
+                    } catch (Exception e) {}
+                }
+                
                 // 原版配方检查（作为后备）
                 if (!asIng && !asRes) {
                     try {
@@ -465,6 +520,65 @@ public class RecipeCloneWizardScreen extends Screen {
                                     }
                                 } catch (Exception e) {}
                             }
+                        }
+                    } catch (Exception e) {}
+                }
+                
+                // 检查Create配方中的流体输入/输出
+                if (recipeTypeName.contains("create:mixing") || recipeTypeName.contains("create:compacting") ||
+                    recipeTypeName.contains("create:filling") || recipeTypeName.contains("create:emptying")) {
+                    try {
+                        // 检查流体输入 - 尝试getFluidIngredients方法
+                        if (!asIng) {
+                            try {
+                                java.lang.reflect.Method getFluidIngredientsMethod = r.getClass().getMethod("getFluidIngredients");
+                                Object fluidIngredientsObj = getFluidIngredientsMethod.invoke(r);
+                                if (fluidIngredientsObj instanceof List<?> fluidIngredients) {
+                                    for (Object fluidIngredient : fluidIngredients) {
+                                        if (fluidIngredient instanceof mekanism.api.recipes.ingredients.FluidStackIngredient mekanismFluidIngredient) {
+                                            List<FluidStack> matchingStacks = mekanismFluidIngredient.getRepresentations();
+                                            for (FluidStack matching : matchingStacks) {
+                                                if (matching.getFluid() == targetFluidType) {
+                                                    asIng = true;
+                                                    break;
+                                                }
+                                            }
+                                            if (asIng) break;
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {}
+                        }
+                        
+                        // 检查流体输出 - 尝试getResults方法
+                        if (!asIng) {
+                            try {
+                                java.lang.reflect.Method getResultsMethod = r.getClass().getMethod("getResults");
+                                Object resultsObj = getResultsMethod.invoke(r);
+                                if (resultsObj instanceof List<?> results) {
+                                    for (Object result : results) {
+                                        if (result instanceof FluidStack resultFluid && !resultFluid.isEmpty()) {
+                                            if (resultFluid.getFluid() == targetFluidType) {
+                                                asRes = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {}
+                        }
+                        
+                        // 检查emptying配方的输出流体
+                        if (!asIng && !asRes && recipeTypeName.contains("emptying")) {
+                            try {
+                                java.lang.reflect.Method getOutputFluidMethod = r.getClass().getMethod("getOutputFluid");
+                                Object outputFluidObj = getOutputFluidMethod.invoke(r);
+                                if (outputFluidObj instanceof FluidStack outputFluid && !outputFluid.isEmpty()) {
+                                    if (outputFluid.getFluid() == targetFluidType) {
+                                        asRes = true;
+                                    }
+                                }
+                            } catch (Exception e) {}
                         }
                     } catch (Exception e) {}
                 }
@@ -969,8 +1083,11 @@ public class RecipeCloneWizardScreen extends Screen {
         int startX = c3x + 8;
         int startY = contentY + 20;
         
-        // 检查是否为Mekanism配方
-        if (recipeTypeName.contains("mekanism") || recipeTypeName.contains("rotary") || 
+        // 检查是否为Create配方
+        if (recipeTypeName.contains("create:mixing") || recipeTypeName.contains("create:compacting") ||
+            recipeTypeName.contains("create:filling") || recipeTypeName.contains("create:emptying")) {
+            parseCreateRecipe(recipe, startX, startY);
+        } else if (recipeTypeName.contains("mekanism") || recipeTypeName.contains("rotary") || 
             recipeTypeName.contains("condensentrator") || recipeTypeName.contains("metallurgic") ||
             recipeTypeName.contains("infuser") || recipeTypeName.contains("energy_conversion") ||
             recipeTypeName.contains("infusion_conversion") || recipeTypeName.contains("sawmill") ||
@@ -985,6 +1102,193 @@ public class RecipeCloneWizardScreen extends Screen {
             recipeTypeName.contains("evaporating")) {
             parseMekanismRecipe(recipe, startX, startY, entry);
         } else {
+            parseNormalRecipe(recipe);
+        }
+    }
+    
+    /**
+     * 解析Create配方（mixing, compacting, filling, emptying）
+     */
+    private void parseCreateRecipe(Recipe<?> recipe, int startX, int startY) {
+        try {
+            String recipeTypeName = recipe.getType().toString().toLowerCase();
+            int slotSpacing = SLOT + 3;
+            int smallSlotSpacing = RecipePreviewRenderer.SMALL_SLOT_WIDTH + 4;
+            
+            // 解析输入材料
+            List<Ingredient> ingredients = recipe.getIngredients();
+            int itemInputCols = 3;
+            int itemInputRows = 0;
+            
+            // 物品输入槽
+            for (int i = 0; i < ingredients.size(); i++) {
+                Ingredient ingredient = ingredients.get(i);
+                if (!ingredient.isEmpty()) {
+                    ItemStack[] items = ingredient.getItems();
+                    if (items.length > 0) {
+                        int x = startX + (i % itemInputCols) * slotSpacing;
+                        int y = startY + (i / itemInputCols) * slotSpacing;
+                        currentRecipeSlots.add(new PreviewSlot(x, y, items[0].copy()));
+                        itemInputRows = Math.max(itemInputRows, i / itemInputCols + 1);
+                    }
+                }
+            }
+            
+            // 尝试解析流体输入（通过反射获取）
+            try {
+                java.lang.reflect.Method getFluidIngredients = recipe.getClass().getMethod("getFluidIngredients");
+                Object fluidIngredientsObj = getFluidIngredients.invoke(recipe);
+                
+                    if (fluidIngredientsObj instanceof List<?> fluidIngredients) {
+                    int fluidInputX = startX + itemInputCols * slotSpacing + 4;
+                    int fluidInputY = startY + (itemInputRows > 0 ? itemInputRows / 2 * slotSpacing : 0);
+                    
+                    for (int i = 0; i < fluidIngredients.size(); i++) {
+                        Object fluidIngredient = fluidIngredients.get(i);
+                        if (fluidIngredient instanceof mekanism.api.recipes.ingredients.FluidStackIngredient mekanismFluidIngredient) {
+                            List<FluidStack> matchingStacks = mekanismFluidIngredient.getRepresentations();
+                            if (!matchingStacks.isEmpty()) {
+                                int x = fluidInputX + i * smallSlotSpacing;
+                                // Create配方流体使用小槽
+                                currentRecipeSlots.add(new PreviewSlot(x, fluidInputY, matchingStacks.get(0), true));
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // 没有流体输入方法，忽略
+            }
+            
+            // 解析输出
+            try {
+                // 尝试获取results列表
+                java.lang.reflect.Method getResults = recipe.getClass().getMethod("getResults");
+                Object resultsObj = getResults.invoke(recipe);
+                
+                if (resultsObj instanceof List<?> results) {
+                    int outputStartY = startY + (itemInputRows > 0 ? itemInputRows * slotSpacing + 10 : 0);
+                    int itemOutputCols = 3;
+                    int itemOutputRows = 0;
+                    int fluidOutputX = startX;
+                    
+                    for (int i = 0; i < results.size(); i++) {
+                        Object result = results.get(i);
+                        
+                        if (result instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                            int x = startX + (i % itemOutputCols) * slotSpacing;
+                            int y = outputStartY + (i / itemOutputCols) * slotSpacing;
+                            currentRecipeSlots.add(new PreviewSlot(x, y, itemStack.copy()));
+                            itemOutputRows = Math.max(itemOutputRows, i / itemOutputCols + 1);
+                        } else if (result instanceof FluidStack fluidStack && !fluidStack.isEmpty()) {
+                            int fluidOutputY = outputStartY + (itemOutputRows > 0 ? itemOutputRows * slotSpacing + 4 : 0);
+                            int x = fluidOutputX + (i % 2) * smallSlotSpacing;
+                            // Create配方流体使用小槽
+                            currentRecipeSlots.add(new PreviewSlot(x, fluidOutputY, fluidStack, true));
+                        }
+                    }
+                } else {
+                    // 单个输出
+                    ItemStack result = recipe.getResultItem(Minecraft.getInstance().level.registryAccess()).copy();
+                    if (!result.isEmpty()) {
+                        int resultX = startX + itemInputCols * slotSpacing + 4;
+                        int resultY = startY + (itemInputRows > 0 ? itemInputRows / 2 * slotSpacing - SLOT / 2 : 0);
+                        currentResultSlot = new PreviewSlot(resultX, resultY, result);
+                    }
+                }
+            } catch (Exception e) {
+                // 尝试普通方式获取输出
+                ItemStack result = recipe.getResultItem(Minecraft.getInstance().level.registryAccess()).copy();
+                if (!result.isEmpty()) {
+                    int resultX = startX + itemInputCols * slotSpacing + 4;
+                    int resultY = startY + (itemInputRows > 0 ? itemInputRows / 2 * slotSpacing - SLOT / 2 : 0);
+                    currentResultSlot = new PreviewSlot(resultX, resultY, result);
+                }
+            }
+            
+            // 特殊处理emptying配方：物品 -> 物品 + 流体
+            if (recipeTypeName.contains("emptying")) {
+                try {
+                    java.lang.reflect.Method getOutputItems = recipe.getClass().getMethod("getOutputItems");
+                    java.lang.reflect.Method getOutputFluid = recipe.getClass().getMethod("getOutputFluid");
+                    
+                    Object outputItemsObj = getOutputItems.invoke(recipe);
+                    Object outputFluidObj = getOutputFluid.invoke(recipe);
+                    
+                    currentRecipeSlots.clear();
+                    currentResultSlot = null;
+                    
+                    // 输入物品
+                    if (!ingredients.isEmpty()) {
+                        ItemStack[] items = ingredients.get(0).getItems();
+                        if (items.length > 0) {
+                            currentRecipeSlots.add(new PreviewSlot(startX, startY, items[0].copy()));
+                        }
+                    }
+                    
+                    // 输出物品
+                    if (outputItemsObj instanceof List<?> outputItems && !outputItems.isEmpty()) {
+                        Object outputItem = outputItems.get(0);
+                        if (outputItem instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                            int resultX = startX + slotSpacing + 4;
+                            currentRecipeSlots.add(new PreviewSlot(resultX, startY, itemStack.copy()));
+                        }
+                    }
+                    
+                    // 输出流体
+                    if (outputFluidObj instanceof FluidStack fluidStack && !fluidStack.isEmpty()) {
+                        int fluidX = startX + slotSpacing + 4;
+                        int fluidY = startY + slotSpacing;
+                        // Create配方流体使用小槽
+                        currentRecipeSlots.add(new PreviewSlot(fluidX, fluidY, fluidStack, true));
+                    }
+                } catch (Exception e) {
+                    // 解析失败
+                }
+            }
+            
+            // 特殊处理filling配方：物品 + 流体 -> 物品
+            if (recipeTypeName.contains("filling")) {
+                try {
+                    java.lang.reflect.Method getFluidIngredients = recipe.getClass().getMethod("getFluidIngredients");
+                    Object fluidIngredientsObj = getFluidIngredients.invoke(recipe);
+                    
+                    currentRecipeSlots.clear();
+                    currentResultSlot = null;
+                    
+                    // 输入物品
+                    if (!ingredients.isEmpty()) {
+                        ItemStack[] items = ingredients.get(0).getItems();
+                        if (items.length > 0) {
+                            currentRecipeSlots.add(new PreviewSlot(startX, startY, items[0].copy()));
+                        }
+                    }
+                    
+                    // 输入流体
+                    if (fluidIngredientsObj instanceof List<?> fluidIngredients && !fluidIngredients.isEmpty()) {
+                        Object fluidIngredient = fluidIngredients.get(0);
+                        if (fluidIngredient instanceof mekanism.api.recipes.ingredients.FluidStackIngredient mekanismFluidIngredient) {
+                            List<FluidStack> matchingStacks = mekanismFluidIngredient.getRepresentations();
+                            if (!matchingStacks.isEmpty()) {
+                                int fluidX = startX + smallSlotSpacing;
+                                // Create配方流体使用小槽
+                                currentRecipeSlots.add(new PreviewSlot(fluidX, startY, matchingStacks.get(0), true));
+                            }
+                        }
+                    }
+                    
+                    // 输出物品
+                    ItemStack result = recipe.getResultItem(Minecraft.getInstance().level.registryAccess()).copy();
+                    if (!result.isEmpty()) {
+                        int resultX = startX + slotSpacing + smallSlotSpacing + 8;
+                        currentResultSlot = new PreviewSlot(resultX, startY, result);
+                    }
+                } catch (Exception e) {
+                    // 解析失败
+                }
+            }
+            
+        } catch (Exception e) {
+            // 解析失败，使用普通方式
             parseNormalRecipe(recipe);
         }
     }
@@ -2044,6 +2348,11 @@ public class RecipeCloneWizardScreen extends Screen {
         g.fill(c1x-1, gridTop-1, c1x+gridW+1, gridTop+gridH+1, 0xFF333340);
         g.fill(c1x,   gridTop,   c1x+gridW,   gridTop+gridH,   0xFF0C0C18);
 
+        // 记录hover的对象，用于最后渲染tooltip
+        ItemStack hoveredItem = null;
+        FluidStack hoveredFluid = null;
+        ChemicalEntry hoveredChemical = null;
+        
         for (int row = 0; row < ITEM_ROWS; row++) {
             for (int col = 0; col < ITEM_COLS; col++) {
                 int idx = (row + itemScroll) * ITEM_COLS + col;
@@ -2058,7 +2367,7 @@ public class RecipeCloneWizardScreen extends Screen {
                 RenderSystem.enableDepthTest();
                 g.renderItem(it, sx+1, sy+1);
                 RenderSystem.disableDepthTest();
-                if (hov) g.renderTooltip(font, it, mx, my);
+                if (hov) hoveredItem = it;
             }
         }
 
@@ -2095,12 +2404,7 @@ public class RecipeCloneWizardScreen extends Screen {
                 // 渲染流体（JEI样式）
                 renderFluidSlot(g, fluid, sx+1, sy+1);
                 
-                if (hov) {
-                    List<Component> tooltip = new ArrayList<>();
-                    tooltip.add(fluid.getDisplayName());
-                    tooltip.add(Component.literal("§8" + ForgeRegistries.FLUIDS.getKey(fluid.getFluid())));
-                    g.renderTooltip(font, tooltip, Optional.empty(), mx, my);
-                }
+                if (hov) hoveredFluid = fluid;
             }
         }
 
@@ -2137,19 +2441,29 @@ public class RecipeCloneWizardScreen extends Screen {
                 // 渲染化学品（JEI样式）
                 renderChemicalSlot(g, chemical, sx+1, sy+1);
                 
-                if (hov) {
-                    List<Component> tooltip = new ArrayList<>();
-                    tooltip.add(Component.literal(chemical.getDisplayName()));
-                    tooltip.add(Component.literal("§8" + chemical.id));
-                    tooltip.add(Component.literal("§7类型: " + chemical.type.name()));
-                    g.renderTooltip(font, tooltip, Optional.empty(), mx, my);
-                }
+                if (hov) hoveredChemical = chemical;
             }
         }
 
         // 化学品滚动条
         renderSB(g, c1x+gridW+1, chemicalGridTop, 3, chemicalGridH,
                 (filteredChemicals.size()+ITEM_COLS-1)/ITEM_COLS, CHEMICAL_ROWS, chemicalScroll);
+        
+        // ── 最后渲染tooltip ──────────────────────────────────────────────
+        if (hoveredChemical != null) {
+            List<Component> tooltip = new ArrayList<>();
+            tooltip.add(Component.literal(hoveredChemical.getDisplayName()));
+            tooltip.add(Component.literal("§8" + hoveredChemical.id));
+            tooltip.add(Component.literal("§7类型: " + hoveredChemical.type.name()));
+            g.renderTooltip(font, tooltip, Optional.empty(), mx, my);
+        } else if (hoveredFluid != null) {
+            List<Component> tooltip = new ArrayList<>();
+            tooltip.add(hoveredFluid.getDisplayName());
+            tooltip.add(Component.literal("§8" + ForgeRegistries.FLUIDS.getKey(hoveredFluid.getFluid())));
+            g.renderTooltip(font, tooltip, Optional.empty(), mx, my);
+        } else if (hoveredItem != null) {
+            g.renderTooltip(font, hoveredItem, mx, my);
+        }
     }
     
     /**
