@@ -1,0 +1,24 @@
+{
+  "recipe_type": "mekanism:crystallizing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/input/gas",
+        "/input/infuse_type",
+        "/input/pigment",
+        "/input/slurry"
+      ],
+      "amount_path": "/input/amount",
+      "value_kind": "merged_chemical_input",
+      "chemical_type_path": "/chemicalType"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/item",
+      "amount_path": "/output/count"
+    }
+  ]
+}

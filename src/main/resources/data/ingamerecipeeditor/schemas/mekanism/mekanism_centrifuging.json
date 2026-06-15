@@ -1,0 +1,19 @@
+{
+  "recipe_type": "mekanism:centrifuging",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/input/gas",
+      "value_kind": "gas_stack",
+      "amount_path": "/input/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/gas",
+      "value_kind": "gas_stack",
+      "amount_path": "/output/amount"
+    }
+  ]
+}

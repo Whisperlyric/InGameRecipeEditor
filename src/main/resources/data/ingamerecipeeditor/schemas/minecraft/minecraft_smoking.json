@@ -1,0 +1,21 @@
+{
+  "recipe_type": "minecraft:smoking",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/ingredient",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/result",
+      "value_kind": "item_stack"
+    }
+  ],
+  "properties": {
+    "experience": { "path": "/experience", "default_value": 0.7 },
+    "cookingtime": { "path": "/cookingtime", "default_value": 100 }
+  }
+}

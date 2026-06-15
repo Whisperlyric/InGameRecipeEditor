@@ -1,0 +1,37 @@
+{
+  "recipe_type": "mekanism:dissolution",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/itemInput/ingredient/item",
+        "/itemInput/ingredient/tag"
+      ],
+      "amount_path": "/itemInput/count"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": [
+        "/gasInput/gas",
+        "/gasInput/tag"
+      ],
+      "amount_path": "/gasInput/amount",
+      "value_kind": "gas_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "paths": [
+        "/output/gas",
+        "/output/infuse_type",
+        "/output/pigment",
+        "/output/slurry"
+      ],
+      "amount_path": "/output/amount",
+      "value_kind": "merged_chemical_output",
+      "chemical_type_path": "/output/chemicalType"
+    }
+  ]
+}

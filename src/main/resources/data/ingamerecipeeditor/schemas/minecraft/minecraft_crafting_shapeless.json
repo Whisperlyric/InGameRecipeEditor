@@ -1,0 +1,65 @@
+{
+  "recipe_type": "minecraft:crafting_shapeless",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/ingredients[0]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "path": "/ingredients[1]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 2,
+      "path": "/ingredients[2]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 3,
+      "path": "/ingredients[3]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 4,
+      "path": "/ingredients[4]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 5,
+      "path": "/ingredients[5]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 6,
+      "path": "/ingredients[6]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 7,
+      "path": "/ingredients[7]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 8,
+      "path": "/ingredients[8]",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/result",
+      "value_kind": "item_stack"
+    }
+  ]
+}

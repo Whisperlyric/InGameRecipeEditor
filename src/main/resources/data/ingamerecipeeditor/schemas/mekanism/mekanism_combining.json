@@ -1,0 +1,24 @@
+{
+  "recipe_type": "mekanism:combining",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": ["/mainInput/ingredient/item", "/mainInput/ingredient/tag"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": ["/extraInput/ingredient/item", "/extraInput/ingredient/tag"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/item",
+      "value_kind": "item_stack",
+      "amount_path": "/output/count"
+    }
+  ]
+}

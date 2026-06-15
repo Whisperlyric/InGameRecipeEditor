@@ -1,0 +1,26 @@
+{
+  "recipe_type": "mekanism:chemical_infusing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/leftInput/gas",
+      "value_kind": "gas_stack",
+      "amount_path": "/leftInput/amount"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "path": "/rightInput/gas",
+      "value_kind": "gas_stack",
+      "amount_path": "/rightInput/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/gas",
+      "value_kind": "gas_stack",
+      "amount_path": "/output/amount"
+    }
+  ]
+}
