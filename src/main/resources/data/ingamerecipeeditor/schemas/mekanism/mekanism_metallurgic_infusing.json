@@ -1,0 +1,25 @@
+{
+  "recipe_type": "mekanism:metallurgic_infusing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": ["/itemInput/ingredient/item", "/itemInput/ingredient/tag"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "path": "/chemicalInput/infuse_type",
+      "value_kind": "infuse_type_stack",
+      "amount_path": "/chemicalInput/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/item",
+      "value_kind": "item_stack",
+      "amount_path": "/output/count"
+    }
+  ]
+}

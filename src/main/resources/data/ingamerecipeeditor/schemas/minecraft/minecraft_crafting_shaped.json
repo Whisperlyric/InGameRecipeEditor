@@ -1,0 +1,65 @@
+{
+  "recipe_type": "minecraft:crafting_shaped",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": ["/key/a"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": ["/key/b"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 2,
+      "paths": ["/key/c"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 3,
+      "paths": ["/key/d"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 4,
+      "paths": ["/key/e"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 5,
+      "paths": ["/key/f"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 6,
+      "paths": ["/key/g"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 7,
+      "paths": ["/key/h"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 8,
+      "paths": ["/key/i"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/result",
+      "value_kind": "item_stack"
+    }
+  ]
+}

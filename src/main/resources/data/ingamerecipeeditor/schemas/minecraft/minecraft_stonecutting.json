@@ -1,0 +1,20 @@
+{
+  "recipe_type": "minecraft:stonecutting",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/ingredient",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/result",
+      "value_kind": "item_stack"
+    }
+  ],
+  "properties": {
+    "count": { "path": "/count", "default_value": 1 }
+  }
+}

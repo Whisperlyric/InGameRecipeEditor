@@ -1,0 +1,79 @@
+{
+  "description": "全局配方默认值定义",
+  "version": "1.0.0",
+  
+  "global_defaults": {
+    "time": {
+      "default_value": 200,
+      "min": 1,
+      "max": 10000
+    },
+    "experience": {
+      "default_value": 0.7,
+      "min": 0.0,
+      "max": 100.0
+    },
+    "chance": {
+      "default_value": 1.0,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "count": {
+      "default_value": 1,
+      "min": 1,
+      "max": 64
+    },
+    "amount": {
+      "default_value": 1000,
+      "min": 1,
+      "max": 1000000
+    }
+  },
+  
+  "value_kinds": {
+    "item_ingredient": {
+      "description": "物品成分",
+      "json_fields": ["ingredient", "item", "tag"]
+    },
+    "item_stack": {
+      "description": "物品堆",
+      "json_fields": ["item", "id"]
+    },
+    "fluid_ingredient": {
+      "description": "流体成分",
+      "json_fields": ["fluid", "fluidTag"]
+    },
+    "fluid_stack": {
+      "description": "流体堆",
+      "json_fields": ["fluid"]
+    },
+    "gas_ingredient": {
+      "description": "气体成分",
+      "json_fields": ["gas", "tag"]
+    },
+    "gas_stack": {
+      "description": "气体堆",
+      "json_fields": ["gas"]
+    },
+    "slurry_stack": {
+      "description": "污泥堆",
+      "json_fields": ["slurry"]
+    },
+    "infuse_type_stack": {
+      "description": "灌注类型堆",
+      "json_fields": ["infuse_type"]
+    },
+    "pigment_stack": {
+      "description": "颜料堆",
+      "json_fields": ["pigment"]
+    }
+  },
+  
+  "slot_roles": {
+    "INPUT": { "is_in_json": true, "is_required": true },
+    "OUTPUT": { "is_in_json": true, "is_required": true },
+    "EXTRA": { "is_in_json": true, "is_required": false },
+    "CATALYST": { "is_in_json": false, "is_required": false },
+    "RENDER_ONLY": { "is_in_json": false, "is_required": false }
+  }
+}

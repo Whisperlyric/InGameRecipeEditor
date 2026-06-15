@@ -4,5 +4,5 @@ run/
 .vscode/
 .idea/
 refs/
-tasks.md
 bin/
+src-old/

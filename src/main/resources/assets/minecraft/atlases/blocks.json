@@ -20,27 +20,27 @@
     },
     {
       "type": "minecraft:single",
-      "resource": "registerhelper:liquid/liquid"
+      "resource": "ingamerecipeeditor:liquid/liquid"
     },
     {
       "type": "minecraft:single",
-      "resource": "registerhelper:infuse_type/base"
+      "resource": "ingamerecipeeditor:infuse_type/base"
     },
     {
       "type": "minecraft:single",
-      "resource": "registerhelper:infuse_type/bio"
+      "resource": "ingamerecipeeditor:infuse_type/bio"
     },
     {
       "type": "minecraft:single",
-      "resource": "registerhelper:infuse_type/fungi"
+      "resource": "ingamerecipeeditor:infuse_type/fungi"
     },
     {
       "type": "minecraft:single",
-      "resource": "registerhelper:pigment/base"
+      "resource": "ingamerecipeeditor:pigment/base"
     },
     {
       "type": "minecraft:single",
-      "resource": "registerhelper:slurry/base"
+      "resource": "ingamerecipeeditor:slurry/base"
     }
   ]
 }

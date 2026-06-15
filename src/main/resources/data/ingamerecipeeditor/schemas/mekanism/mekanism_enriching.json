@@ -1,0 +1,18 @@
+{
+  "recipe_type": "mekanism:enriching",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": ["/input/ingredient/item", "/input/ingredient/tag"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/item",
+      "value_kind": "item_stack",
+      "amount_path": "/output/count"
+    }
+  ]
+}

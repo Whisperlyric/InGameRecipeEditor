@@ -1,0 +1,28 @@
+{
+  "recipe_type": "mekanism:nucleosynthesizing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": ["/itemInput/ingredient/item", "/itemInput/ingredient/tag"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "path": "/gasInput/gas",
+      "value_kind": "gas_stack",
+      "amount_path": "/gasInput/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/item",
+      "value_kind": "item_stack",
+      "amount_path": "/output/count"
+    }
+  ],
+  "properties": {
+    "duration": { "path": "/duration", "default_value": 500 }
+  }
+}

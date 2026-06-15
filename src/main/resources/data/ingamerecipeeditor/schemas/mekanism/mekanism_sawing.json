@@ -1,0 +1,28 @@
+{
+  "recipe_type": "mekanism:sawing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": ["/input/ingredient/item", "/input/ingredient/tag"],
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/mainOutput/item",
+      "value_kind": "item_stack",
+      "amount_path": "/mainOutput/count"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 1,
+      "path": "/secondaryOutput/item",
+      "value_kind": "item_stack",
+      "amount_path": "/secondaryOutput/count"
+    }
+  ],
+  "properties": {
+    "secondaryChance": { "path": "/secondaryChance", "default_value": 1.0 }
+  }
+}

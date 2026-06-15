@@ -5,7 +5,6 @@ plugins {
     id 'org.spongepowered.mixin' version '0.7.+'
 }
 
-
 group = mod_group_id
 version = mod_version
 
@@ -21,49 +20,18 @@ minecraft {
     mappings channel: mapping_channel, version: mapping_version
     copyIdeResources = true
 
-    // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
-
     runs {
-        // applies to all the run configs below
-        configureEach {
+        client {
             workingDirectory project.file('run')
-
-            property 'forge.logging.markers', 'REGISTRIES'
-
             property 'forge.logging.console.level', 'debug'
-
             mods {
                 "${mod_id}" {
                     source sourceSets.main
                 }
             }
         }
-
-        client {
-            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
-            property 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
-        }
-
-        gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        data {
-            // example of overriding the workingDirectory set in configureEach above
-            workingDirectory project.file('run-data')
-
-            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-        }
     }
 }
-
-sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
     maven {
@@ -85,56 +53,55 @@ repositories {
 }
 
 mixin {
-    add sourceSets.main, "mixins.registerhelper.refmap.json"
-    config "mixins.registerhelper.json"
+    add sourceSets.main, "ingamerecipeeditor.refmap.json"
+    config "ingamerecipeeditor.mixins.json"
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
-    implementation fg.deobf("curse.maven:crafttweaker-239197:6914010")
     implementation fg.deobf("curse.maven:jei-238222:7391695")
     compileOnly fg.deobf("mekanism:Mekanism:${minecraft_version}-10.4.16.80:api")
 }
 
 tasks.named('processResources', ProcessResources).configure {
-    var replaceProperties = [minecraft_version   : minecraft_version, minecraft_version_range: minecraft_version_range,
-                             forge_version       : forge_version, forge_version_range: forge_version_range,
-                             loader_version_range: loader_version_range,
-                             mod_id              : mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
-                             mod_authors         : mod_authors, mod_description: mod_description,]
+    var replaceProperties = [
+        minecraft_version: minecraft_version,
+        minecraft_version_range: minecraft_version_range,
+        forge_version: forge_version,
+        forge_version_range: forge_version_range,
+        loader_version_range: loader_version_range,
+        mod_id: mod_id,
+        mod_name: mod_name,
+        mod_license: mod_license,
+        mod_version: mod_version,
+        mod_authors: mod_authors,
+        mod_description: mod_description
+    ]
 
     inputs.properties replaceProperties
-
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+    filesMatching(['META-INF/mods.toml']) {
         expand replaceProperties + [project: project]
     }
 }
 
-// Example for how to get properties into the manifest for reading at runtime.
 tasks.named('jar', Jar).configure {
     manifest {
-        attributes(["Specification-Title"     : mod_id,
-                    "Specification-Vendor"    : mod_authors,
-                    "Specification-Version"   : "1", // We are version 1 of ourselves
-                    "Implementation-Title"    : project.name,
-                    "Implementation-Version"  : project.jar.archiveVersion,
-                    "Implementation-Vendor"   : mod_authors,
-                    "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")])
+        attributes([
+            "Specification-Title": mod_id,
+            "Specification-Vendor": mod_authors,
+            "Specification-Version": "1",
+            "Implementation-Title": project.name,
+            "Implementation-Version": project.jar.archiveVersion,
+            "Implementation-Vendor": mod_authors
+        ])
     }
-
-    // This is the preferred method to reobfuscate your jar file
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     finalizedBy 'reobfJar'
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
-//     options.compilerArgs << '-Xlint:-deprecation' // 忽略deprecation警告
-//    options.compilerArgs << '-Xlint:-removal' // 忽略removal警告
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:-deprecation'
+    //options.compilerArgs << '-Xlint:-removal'
 }
-
-//task sourcesJar(type: Jar, dependsOn: classes) {
-//    archiveClassifier = 'sources'
-//    from sourceSets.main.allSource
-//}
-//build.dependsOn sourcesJar
