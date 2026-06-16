@@ -1,676 +1,617 @@
 package dev.whisperlyric.ingamerecipeeditor.workspace;
 
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
-import dev.whisperlyric.ingamerecipeeditor.schema.PropertyDefinition;
 import dev.whisperlyric.ingamerecipeeditor.schema.RecipeSchema;
-import dev.whisperlyric.ingamerecipeeditor.schema.SlotDefinition;
+import dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry;
+import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
-import mezz.jei.api.recipe.category.IRecipeCategory;
+import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
+import mezz.jei.api.gui.ingredient.IRecipeSlotView;
+import mezz.jei.api.recipe.RecipeIngredientRole;
+import mezz.jei.common.Internal;
+import mezz.jei.common.gui.elements.DrawableNineSliceTexture;
+import mezz.jei.common.gui.textures.Textures;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.texture.TextureAtlas;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.fluids.FluidStack;
-import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 /**
- * 配方工作区界面屏幕
- * 提供配方可视化编辑界面
+ * 配方工作区界面 - 用于编辑配方
+ * 使用JEI的界面类型显示配方布局，界面更大更清晰
  */
 public class RecipeWorkspaceScreen extends Screen {
-    
-    private static final int PADDING = 10;
-    private static final int SLOT_SIZE = 18;
-    private static final int BUTTON_WIDTH = 80;
-    private static final int BUTTON_HEIGHT = 20;
-    
-    private final WorkspaceEditor editor;
-    private final Screen parentScreen;
-    
-    // 界面位置
-    private int guiLeft;
-    private int guiTop;
-    private int guiWidth;
-    private int guiHeight;
-    
-    // 属性编辑框
-    private final List<EditBox> propertyEditBoxes = new ArrayList<>();
-    
-    // 当前选中的槽位
-    private WorkspaceSlot selectedSlot;
-    
-    // 拖拽的物品
-    private ItemStack draggedItem;
-    
-    // 按钮组件
-    private Button confirmButton;
-    private Button cancelButton;
-    private Button clearButton;
-    
-    // 配方ID（从JEI配方布局获取）
+    private static final int PADDING = 15;
+    private static final int BUTTON_HEIGHT = 22;
+    private static final int BUTTON_WIDTH = 90;
+
+    private final Screen parent;
     private final String recipeId;
-    
-    // JEI配方布局（可选）
     private final IRecipeLayoutDrawable<?> recipeLayout;
-    
-    // 是否为编辑模式（true=编辑现有配方，false=新建/复制配方）
+    private final Object recipe;
+    private final List<IRecipeSlotView> slots;
     private final boolean editMode;
     
-    /**
-     * 从WorkspaceEditor创建工作区界面
-     */
-    public RecipeWorkspaceScreen(WorkspaceEditor editor, Screen parentScreen) {
-        super(Component.translatable("ingamerecipeeditor.screen.workspace.title"));
-        this.editor = editor;
-        this.parentScreen = parentScreen;
-        this.recipeId = null;
-        this.recipeLayout = null;
-        this.editMode = false;
-    }
+    private int layoutX;
+    private int layoutY;
+    private int panelWidth;
+    private int panelHeight;
     
+    private Button submitButton;
+    private Button cancelButton;
+    private Button clearButton;
+
     /**
-     * 从JEI配方布局创建工作区界面
-     * @param parentScreen 父界面
+     * 创建工作区界面
+     * @param parent 父界面
      * @param recipeIdOrType 配方ID或配方类型
      * @param recipeLayout JEI配方布局
      * @param editMode 是否为编辑模式
      */
-    public RecipeWorkspaceScreen(Screen parentScreen, String recipeIdOrType, IRecipeLayoutDrawable<?> recipeLayout, boolean editMode) {
+    public RecipeWorkspaceScreen(Screen parent, String recipeIdOrType, IRecipeLayoutDrawable<?> recipeLayout, boolean editMode) {
         super(Component.translatable("ingamerecipeeditor.screen.workspace.title"));
-        this.parentScreen = parentScreen;
+        this.parent = parent;
         this.recipeLayout = recipeLayout;
+        this.recipe = recipeLayout.getRecipe();
+        this.slots = recipeLayout.getRecipeSlotsView().getSlotViews();
         this.editMode = editMode;
         
-        // 从配方布局获取配方类型并创建编辑器
-        IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
-        String recipeType = category.getRecipeType().getUid().toString();
-        this.editor = new WorkspaceEditor(recipeType);
+        // 使用JeiRecipeHelper获取正确的配方ID
+        this.recipeId = JeiRecipeHelper.getRecipeId(recipeLayout);
         
-        if (editMode) {
-            // 编辑模式：recipeIdOrType是配方ID
-            this.recipeId = recipeIdOrType;
-            InGameRecipeEditor.LOGGER.info("从JEI配方布局创建编辑工作区: {} (类型: {})", recipeId, recipeType);
-        } else {
-            // 新建/复制模式：recipeIdOrType可能是配方ID或配方类型
-            this.recipeId = recipeIdOrType.contains(":") ? recipeIdOrType : null;
-            InGameRecipeEditor.LOGGER.info("从JEI配方布局创建新工作区 (类型: {})", recipeType);
+        // 初始化编辑状态
+        if (recipeId != null && !recipeId.isEmpty()) {
+            RecipeEditManager.startEdit(recipeId, recipeLayout);
         }
+        
+        InGameRecipeEditor.LOGGER.info("创建工作区界面: {} (编辑模式: {})", recipeId, editMode);
     }
-    
-    /**
-     * 获取配方ID
-     */
-    public String getRecipeId() {
-        return recipeId;
-    }
-    
-    /**
-     * 获取JEI配方布局
-     */
-    public IRecipeLayoutDrawable<?> getRecipeLayout() {
-        return recipeLayout;
-    }
-    
-    /**
-     * 是否为编辑模式
-     */
-    public boolean isEditMode() {
-        return editMode;
-    }
-    
+
     @Override
     protected void init() {
-        // 检查配方类型是否已注册
-        if (!editor.isSchemaRegistered()) {
-            // 显示未注册提示界面
-            guiWidth = 300;
-            guiHeight = 150;
-            guiLeft = (this.width - guiWidth) / 2;
-            guiTop = (this.height - guiHeight) / 2;
-            
-            // 只添加关闭按钮
-            cancelButton = Button.builder(
-                Component.translatable("ingamerecipeeditor.screen.workspace.cancel"),
-                button -> onClose()
-            ).bounds(guiLeft + guiWidth / 2 - 40, guiTop + guiHeight - 30, 80, 20).build();
-            this.addRenderableWidget(cancelButton);
-            return;
-        }
+        // 计算配方布局位置（居中显示）
+        @SuppressWarnings("removal")
+        Rect2i layoutRect = recipeLayout.getRect();
+        int layoutWidth = layoutRect.getWidth();
+        int layoutHeight = layoutRect.getHeight();
         
-        // 计算界面尺寸
-        RecipeSchema schema = editor.getSchema().orElse(null);
-        if (schema != null) {
-            guiWidth = Math.max(200, schema.getWidth() + 2 * PADDING);
-            guiHeight = Math.max(150, schema.getHeight() + 2 * PADDING + 30); // 底部留空间给按钮
-        } else {
-            guiWidth = 200;
-            guiHeight = 150;
-        }
+        // 添加额外的空间用于按钮
+        int totalHeight = layoutHeight + PADDING * 2 + BUTTON_HEIGHT + PADDING;
         
-        guiLeft = (this.width - guiWidth) / 2;
-        guiTop = (this.height - guiHeight) / 2;
+        // 配方布局居中
+        this.layoutX = (this.width - layoutWidth) / 2;
+        this.layoutY = (this.height - totalHeight) / 2 + PADDING;
         
-        // 创建按钮
-        int buttonY = guiTop + guiHeight - PADDING - BUTTON_HEIGHT;
+        // 设置配方布局的位置（这样drawRecipe内部会使用正确的位置）
+        recipeLayout.setPosition(this.layoutX, this.layoutY);
         
-        confirmButton = Button.builder(
-            Component.translatable("ingamerecipeeditor.screen.workspace.confirm"),
-            button -> onConfirm()
-        ).bounds(guiLeft + PADDING, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
-        this.addRenderableWidget(confirmButton);
+        // 计算面板尺寸
+        this.panelWidth = layoutWidth + PADDING * 2;
+        this.panelHeight = layoutHeight + PADDING * 2;
         
-        cancelButton = Button.builder(
+        // 创建按钮（底部居中）
+        int buttonY = layoutY + layoutHeight + PADDING;
+        int totalButtonWidth = BUTTON_WIDTH * 3 + PADDING * 2;
+        int buttonStartX = (this.width - totalButtonWidth) / 2;
+        
+        this.submitButton = Button.builder(
+            Component.translatable("ingamerecipeeditor.screen.workspace.submit"),
+            button -> submit()
+        ).bounds(buttonStartX, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
+        this.addRenderableWidget(this.submitButton);
+        
+        this.cancelButton = Button.builder(
             Component.translatable("ingamerecipeeditor.screen.workspace.cancel"),
-            button -> onClose()
-        ).bounds(guiLeft + guiWidth - PADDING - BUTTON_WIDTH, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
-        this.addRenderableWidget(cancelButton);
+            button -> cancel()
+        ).bounds(buttonStartX + BUTTON_WIDTH + PADDING, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
+        this.addRenderableWidget(this.cancelButton);
         
-        clearButton = Button.builder(
+        this.clearButton = Button.builder(
             Component.translatable("ingamerecipeeditor.screen.workspace.clear"),
-            button -> onClear()
-        ).bounds(guiLeft + guiWidth / 2 - BUTTON_WIDTH / 2, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
-        this.addRenderableWidget(clearButton);
+            button -> clear()
+        ).bounds(buttonStartX + BUTTON_WIDTH * 2 + PADDING * 2, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
+        this.addRenderableWidget(this.clearButton);
         
-        // 创建属性编辑框
-        createPropertyEditBoxes();
-        
-        // 更新确认按钮状态
-        updateConfirmButton();
+        updateButtonStates();
     }
-    
-    /**
-     * 创建属性编辑框
-     */
-    private void createPropertyEditBoxes() {
-        propertyEditBoxes.clear();
-        
-        RecipeSchema schema = editor.getSchema().orElse(null);
-        if (schema == null) return;
-        
-        List<PropertyDefinition> properties = schema.getProperties();
-        
-        if (properties.isEmpty()) return;
-        
-        int propY = guiTop + guiHeight - PADDING - BUTTON_HEIGHT - 25;
-        int propX = guiLeft + PADDING;
-        
-        for (PropertyDefinition prop : properties) {
-            EditBox editBox = new EditBox(
-                this.font,
-                propX, propY,
-                60, 18,
-                Component.literal(prop.getId())
-            );
-            
-            editBox.setMaxLength(10);
-            
-            // 设置初始值
-            Object defaultValue = prop.getDefaultValue();
-            if (defaultValue != null) {
-                editBox.setValue(String.valueOf(defaultValue));
-            }
-            
-            editBox.setResponder(value -> {
-                try {
-                    Object parsedValue = parsePropertyValue(value, prop.getType());
-                    editor.setPropertyData(prop.getId(), parsedValue);
-                    updateConfirmButton();
-                } catch (NumberFormatException e) {
-                    // 无效输入，保持原值
-                }
-            });
-            
-            this.addRenderableWidget(editBox);
-            propertyEditBoxes.add(editBox);
-            
-            propX += 70;
-            if (propX > guiLeft + guiWidth - PADDING - 60) {
-                propX = guiLeft + PADDING;
-                propY -= 20;
-            }
+
+    private void updateButtonStates() {
+        if (submitButton != null && recipeId != null) {
+            this.submitButton.active = RecipeEditManager.hasDraft(recipeId);
         }
     }
-    
-    /**
-     * 解析属性值
-     */
-    private Object parsePropertyValue(String value, PropertyDefinition.PropertyType type) {
-        return switch (type) {
-            case INTEGER -> Integer.parseInt(value);
-            case FLOAT -> Float.parseFloat(value);
-            case BOOLEAN -> Boolean.parseBoolean(value);
-            case STRING -> value;
-        };
-    }
-    
-    /**
-     * 更新确认按钮状态
-     */
-    private void updateConfirmButton() {
-        if (confirmButton != null) {
-            // 检查所有必需槽位是否有数据
-            boolean allRequiredFilled = true;
-            for (WorkspaceSlot slot : editor.getSlots()) {
-                if (slot.isRequired() && slot.isInJson() && !slot.hasData()) {
-                    allRequiredFilled = false;
-                    break;
-                }
-            }
-            confirmButton.active = allRequiredFilled;
+
+    private void submit() {
+        if (recipeId != null) {
+            RecipeEditManager.submit(recipeId);
         }
+        close();
     }
-    
+
+    private void cancel() {
+        if (recipeId != null) {
+            RecipeEditManager.clear(recipeId);
+        }
+        close();
+    }
+
+    private void clear() {
+        if (recipeId != null) {
+            RecipeEditManager.clear(recipeId);
+            RecipeEditManager.startEdit(recipeId, recipeLayout);
+        }
+        updateButtonStates();
+    }
+
+    private void close() {
+        Minecraft.getInstance().setScreen(parent);
+    }
+
+    @Override
+    public void onClose() {
+        cancel();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        // 应用草稿到布局
+        if (recipeId != null) {
+            RecipeEditManager.applyDraftToLayout(recipeLayout);
+        }
+        updateButtonStates();
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // 渲染背景
         this.renderBackground(guiGraphics);
         
-        // 检查配方类型是否已注册
-        if (!editor.isSchemaRegistered()) {
-            // 渲染未注册提示界面
-            renderPanel(guiGraphics);
-            
-            // 渲染标题
-            guiGraphics.drawString(
-                this.font,
-                Component.translatable("ingamerecipeeditor.screen.workspace.title"),
-                guiLeft + PADDING, guiTop + 5,
-                0xFFFFFF, false
-            );
-            
-            // 渲染错误消息
-            guiGraphics.drawCenteredString(
-                this.font,
-                editor.getUnregisteredMessage(),
-                guiLeft + guiWidth / 2, guiTop + 40,
-                0xFF5555
-            );
-            
-            // 渲染配方类型
-            guiGraphics.drawCenteredString(
-                this.font,
-                Component.literal(editor.getRecipeType()),
-                guiLeft + guiWidth / 2, guiTop + 60,
-                0xAAAAAA
-            );
-            
-            // 渲染按钮
-            super.render(guiGraphics, mouseX, mouseY, partialTick);
-            return;
-        }
+        // 计算面板位置
+        @SuppressWarnings("removal")
+        Rect2i layoutRect = recipeLayout.getRect();
+        int layoutWidth = layoutRect.getWidth();
+        int layoutHeight = layoutRect.getHeight();
+        int panelX = layoutX - PADDING;
+        int panelY = layoutY - PADDING;
+        int contentPanelWidth = layoutWidth + PADDING * 2;
+        int contentPanelHeight = layoutHeight + PADDING * 2;
         
-        // 渲染主面板
-        renderPanel(guiGraphics);
+        // 渲染配方布局背景面板
+        Textures textures = Internal.getTextures();
+        DrawableNineSliceTexture backgroundTexture = textures.getRecipeBackground();
+        backgroundTexture.draw(guiGraphics, panelX, panelY, contentPanelWidth, contentPanelHeight);
         
-        // 渲染标题
+        // 渲染配方布局（包括槽位内容物）
+        renderRecipeLayout(guiGraphics, mouseX, mouseY, partialTick);
+        
+        // 渲染标题区域（在面板外顶部）
+        int headerY = panelY - this.font.lineHeight * 2 - 8;
+        
+        // 第一行：配方编辑工作区 + 编码文件状态
+        Component titleText = Component.translatable("ingamerecipeeditor.screen.workspace.title");
+        String encodingStatus = getEncodingFileStatusText();
+        String headerLine = titleText.getString() + " " + encodingStatus;
+        int headerLineWidth = this.font.width(headerLine);
         guiGraphics.drawString(
             this.font,
-            Component.literal(editor.getDisplayName()),
-            guiLeft + PADDING, guiTop + 5,
-            0xFFFFFF, false
+            headerLine,
+            (this.width - headerLineWidth) / 2,
+            headerY,
+            0xFFE0E0E0,
+            false
         );
         
-        // 渲染槽位
-        renderSlots(guiGraphics, mouseX, mouseY);
-        
-        // 渲染属性标签
-        renderPropertyLabels(guiGraphics);
-        
-        // 渲染按钮和编辑框
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-        
-        // 渲染拖拽物品
-        if (draggedItem != null && !draggedItem.isEmpty()) {
-            guiGraphics.renderItem(draggedItem, mouseX - 8, mouseY - 8);
-        }
-        
-        // 渲染槽位提示
-        renderSlotTooltip(guiGraphics, mouseX, mouseY);
-    }
-    
-    /**
-     * 渲染主面板
-     */
-    private void renderPanel(GuiGraphics guiGraphics) {
-        // 渲染背景
-        guiGraphics.fill(guiLeft, guiTop, guiLeft + guiWidth, guiTop + guiHeight, 0xF0100010);
-        
-        // 渲染边框
-        guiGraphics.fill(guiLeft, guiTop, guiLeft + guiWidth, guiTop + 1, 0xFF707070);
-        guiGraphics.fill(guiLeft, guiTop + guiHeight - 1, guiLeft + guiWidth, guiTop + guiHeight, 0xFF707070);
-        guiGraphics.fill(guiLeft, guiTop, guiLeft + 1, guiTop + guiHeight, 0xFF707070);
-        guiGraphics.fill(guiLeft + guiWidth - 1, guiTop, guiLeft + guiWidth, guiTop + guiHeight, 0xFF707070);
-    }
-    
-    /**
-     * 渲染槽位
-     */
-    private void renderSlots(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        for (WorkspaceSlot slot : editor.getSlots()) {
-            renderSlot(guiGraphics, slot, mouseX, mouseY);
-        }
-    }
-    
-    /**
-     * 渲染单个槽位
-     */
-    private void renderSlot(GuiGraphics guiGraphics, WorkspaceSlot slot, int mouseX, int mouseY) {
-        int x = guiLeft + slot.getX();
-        int y = guiTop + slot.getY();
-        int width = slot.getWidth();
-        int height = slot.getHeight();
-        
-        // 渲染槽位背景
-        int bgColor = slot.isHovered() ? 0xFF555555 : 0xFF8B8B8B;
-        guiGraphics.fill(x, y, x + width, y + height, bgColor);
-        
-        // 渲染槽位边框
-        int borderColor = slot.isSelected() ? 0xFFFFFFFF : (slot.isHovered() ? 0xFFAAAAAA : 0xFF373737);
-        guiGraphics.fill(x, y, x + width, y + 1, borderColor);
-        guiGraphics.fill(x, y + height - 1, x + width, y + height, borderColor);
-        guiGraphics.fill(x, y, x + 1, y + height, borderColor);
-        guiGraphics.fill(x + width - 1, y, x + width, y + height, borderColor);
-        
-        // 渲染槽位内容
-        renderSlotContent(guiGraphics, slot, x, y);
-    }
-    
-    /**
-     * 渲染槽位内容
-     */
-    private void renderSlotContent(GuiGraphics guiGraphics, WorkspaceSlot slot, int x, int y) {
-        Object data = slot.getData();
-        
-        if (data == null) {
-            // 空槽位，渲染占位符
-            if (slot.isItemSlot()) {
-                // 渲染物品槽位占位符
-            } else if (slot.isFluidSlot()) {
-                // 渲染流体槽位占位符
-            } else if (slot.isChemicalSlot()) {
-                // 渲染化学品槽位占位符
-            }
-            return;
-        }
-        
-        // 根据类型渲染内容
-        if (data instanceof ItemStack itemStack) {
-            guiGraphics.renderItem(itemStack, x + 1, y + 1);
-            guiGraphics.renderItemDecorations(this.font, itemStack, x + 1, y + 1);
-        } else if (data instanceof FluidStack fluidStack) {
-            renderFluidSlot(guiGraphics, fluidStack, x, y, slot.getWidth(), slot.getHeight());
-        } else if (slot.isChemicalSlot()) {
-            renderChemicalSlot(guiGraphics, data, x, y, slot.getWidth(), slot.getHeight());
-        }
-    }
-    
-    /**
-     * 渲染流体槽位
-     */
-    private void renderFluidSlot(GuiGraphics guiGraphics, FluidStack fluidStack, int x, int y, int width, int height) {
-        if (fluidStack.isEmpty()) return;
-        
-        // 获取流体纹理
-        try {
-            net.minecraft.world.level.material.Fluid fluid = fluidStack.getFluid();
-            net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions fluidExtensions = 
-                net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions.of(fluid);
-            
-            if (fluidExtensions != null) {
-                ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
-                if (stillTexture != null) {
-                    TextureAtlasSprite sprite = Minecraft.getInstance()
-                        .getTextureAtlas(TextureAtlas.LOCATION_BLOCKS)
-                        .apply(stillTexture);
-                    
-                    if (sprite != null) {
-                        int color = fluidExtensions.getTintColor(fluidStack);
-                        float r = ((color >> 16) & 0xFF) / 255.0f;
-                        float g = ((color >> 8) & 0xFF) / 255.0f;
-                        float b = (color & 0xFF) / 255.0f;
-                        
-                        RenderSystem.setShaderColor(r, g, b, 1.0f);
-                        RenderSystem.setShaderTexture(0, sprite.atlasLocation());
-                        
-                        guiGraphics.blit(x + 1, y + 1, 0, width - 2, height - 2, sprite);
-                        
-                        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // 渲染失败
-        }
-        
-        // 渲染数量
-        String amountText = formatAmount(fluidStack.getAmount());
-        guiGraphics.drawString(this.font, amountText, x + 2, y + height - 10, 0xFFFFFF, true);
-    }
-    
-    /**
-     * 渲染化学品槽位（Mekanism）
-     */
-    private void renderChemicalSlot(GuiGraphics guiGraphics, Object chemicalData, int x, int y, int width, int height) {
-        // 使用ChemicalSlotRenderer渲染
-        ChemicalSlotRenderer.renderChemical(guiGraphics, chemicalData, x, y, width, height);
-    }
-    
-    /**
-     * 渲染属性标签
-     */
-    private void renderPropertyLabels(GuiGraphics guiGraphics) {
-        RecipeSchema schema = editor.getSchema().orElse(null);
-        if (schema == null) return;
-        
-        List<PropertyDefinition> properties = schema.getProperties();
-        
-        if (properties.isEmpty()) return;
-        
-        int propY = guiTop + guiHeight - PADDING - BUTTON_HEIGHT - 40;
-        int propX = guiLeft + PADDING;
-        
-        for (PropertyDefinition prop : properties) {
+        // 第二行：配方ID
+        if (recipeId != null && !recipeId.isEmpty()) {
+            Component recipeIdText = Component.literal(recipeId);
             guiGraphics.drawString(
                 this.font,
-                Component.literal(prop.getId() + ":"),
-                propX, propY,
-                0xAAAAAA, false
+                recipeIdText,
+                (this.width - this.font.width(recipeIdText)) / 2,
+                headerY + this.font.lineHeight + 2,
+                0xFFA0A0A0,
+                false
             );
-            propX += 70;
-            if (propX > guiLeft + guiWidth - PADDING - 60) {
-                propX = guiLeft + PADDING;
-                propY -= 20;
+        }
+        
+        // 渲染按钮和子组件
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        
+        // 渲染槽位高亮和tooltip
+        renderSlotHighlight(guiGraphics, mouseX, mouseY);
+    }
+
+    /**
+     * 获取编码文件状态文本
+     */
+    private String getEncodingFileStatusText() {
+        String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+        RecipeSchema schema = SchemaRegistry.getSchema(recipeType).orElse(null);
+        
+        if (schema != null) {
+            if (schema.useEncodingFile()) {
+                return "\u00a7a[编码文件]"; // 绿色
+            } else {
+                return "\u00a7e[备用方案]"; // 黄色
+            }
+        } else {
+            return "\u00a7c[无编码]"; // 红色
+        }
+    }
+
+    /**
+     * 渲染配方布局
+     * 注意：drawRecipe内部会使用setPosition设置的位置进行translate，
+     * 所以这里不需要额外的poseStack.translate
+     */
+    private void renderRecipeLayout(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        // 使用recipeLayout.drawRecipe渲染完整的配方布局（包括槽位内容物）
+        // drawRecipe内部会使用area的位置进行translate
+        recipeLayout.drawRecipe(guiGraphics, mouseX, mouseY);
+        
+        // 不调用drawOverlays，避免JEI的tooltip与我们自定义的tooltip重叠
+        // recipeLayout.drawOverlays(guiGraphics, mouseX, mouseY);
+        
+        // 渲染编辑的槽位内容（叠加渲染化学物质）
+        renderEditedSlots(guiGraphics);
+    }
+
+    /**
+     * 渲染编辑的槽位内容
+     * 注意：slot.getRect()返回的是相对于配方布局的相对位置，
+     * 需要加上layoutX/layoutY来得到绝对屏幕位置
+     */
+    private void renderEditedSlots(GuiGraphics guiGraphics) {
+        // 获取配方布局的当前位置（setPosition后可能已更新）
+        @SuppressWarnings("removal")
+        Rect2i layoutRect = recipeLayout.getRect();
+        int currentLayoutX = layoutRect.getX();
+        int currentLayoutY = layoutRect.getY();
+        
+        for (IRecipeSlotView slotView : slots) {
+            if (!(slotView instanceof IRecipeSlotDrawable slot)) {
+                continue;
+            }
+            if (slot.getRole() != RecipeIngredientRole.INPUT && 
+                slot.getRole() != RecipeIngredientRole.OUTPUT) {
+                continue;
+            }
+
+            if (recipeId == null) continue;
+
+            RecipeEditManager.IngredientEditValue editValue = RecipeEditManager.getSlotEditValue(
+                recipeId, recipe, slots, slot
+            ).orElse(null);
+
+            if (editValue == null) {
+                continue;
+            }
+
+            @SuppressWarnings("removal")
+            Rect2i slotRect = slot.getRect();
+            // slot.getRect()返回相对位置，加上配方布局的绝对位置
+            int slotX = currentLayoutX + slotRect.getX();
+            int slotY = currentLayoutY + slotRect.getY();
+            int width = slotRect.getWidth();
+            int height = slotRect.getHeight();
+
+            // 根据类型渲染化学物质
+            if (editValue.kind().isChemical()) {
+                String chemicalId = editValue.ingredientId();
+                long amount = editValue.amount();
+                long capacity = getSlotCapacity(slot, editValue.kind());
+
+                if (chemicalId != null && !chemicalId.isEmpty() && amount > 0) {
+                    ChemicalSlotRenderer.renderChemical(guiGraphics, chemicalId, amount, capacity, slotX, slotY, width, height);
+                }
             }
         }
     }
-    
+
     /**
-     * 渲染槽位提示
+     * 获取槽位容量
      */
-    private void renderSlotTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        for (WorkspaceSlot slot : editor.getSlots()) {
-            if (slot.isHovered()) {
-                List<Component> tooltip = new ArrayList<>();
-                
-                // 添加槽位信息
-                tooltip.add(Component.literal(slot.getId()));
-                tooltip.add(Component.literal("类型: " + slot.getType().name()));
-                tooltip.add(Component.literal("角色: " + slot.getRole().name()));
-                
-                // 添加数据信息
-                Object data = slot.getData();
-                if (data != null) {
-                    if (data instanceof ItemStack itemStack) {
-                        tooltip.add(itemStack.getDisplayName());
-                        tooltip.add(Component.literal("数量: " + itemStack.getCount()));
-                    } else if (data instanceof FluidStack fluidStack) {
-                        tooltip.add(Component.literal(fluidStack.getDisplayName().getString()));
-                        tooltip.add(Component.literal("数量: " + fluidStack.getAmount() + " mB"));
+    private long getSlotCapacity(IRecipeSlotDrawable slot, RecipeEditManager.IngredientKind kind) {
+        try {
+            var ingredients = slot.getAllIngredients().toList();
+            for (var ingredient : ingredients) {
+                if (ingredient != null) {
+                    Object value = ingredient.getIngredient();
+                    if (RecipeEditManager.isChemicalStack(value)) {
+                        return RecipeEditManager.chemicalStackAmount(value);
                     }
                 }
+            }
+        } catch (Exception ignored) {}
+        
+        return 1000;
+    }
+
+    /**
+     * 渲染槽位高亮
+     */
+    private void renderSlotHighlight(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        // 获取配方布局的当前位置
+        @SuppressWarnings("removal")
+        Rect2i layoutRect = recipeLayout.getRect();
+        int currentLayoutX = layoutRect.getX();
+        int currentLayoutY = layoutRect.getY();
+        
+        for (IRecipeSlotView slotView : slots) {
+            if (!(slotView instanceof IRecipeSlotDrawable slot)) {
+                continue;
+            }
+            if (slot.getRole() != RecipeIngredientRole.INPUT && 
+                slot.getRole() != RecipeIngredientRole.OUTPUT) {
+                continue;
+            }
+            
+            @SuppressWarnings("removal")
+            Rect2i slotRect = slot.getRect();
+            // slot.getRect()返回相对位置，加上配方布局的绝对位置
+            int slotX = currentLayoutX + slotRect.getX();
+            int slotY = currentLayoutY + slotRect.getY();
+            
+            if (mouseX >= slotX && mouseX < slotX + slotRect.getWidth() &&
+                mouseY >= slotY && mouseY < slotY + slotRect.getHeight()) {
                 
-                guiGraphics.renderComponentTooltip(this.font, tooltip, mouseX, mouseY);
+                RenderSystem.enableBlend();
+                RenderSystem.blendFuncSeparate(
+                    GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                    GlStateManager.SourceFactor.ONE,
+                    GlStateManager.DestFactor.ZERO
+                );
+                RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 0.5F);
+                
+                guiGraphics.fill(
+                    slotX, slotY,
+                    slotX + slotRect.getWidth(), slotY + slotRect.getHeight(),
+                    0x40FFFFFF
+                );
+                
+                RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+                RenderSystem.disableBlend();
+                
+                renderSlotTooltip(guiGraphics, slot, mouseX, mouseY);
                 break;
             }
         }
     }
+
+    /**
+     * 渲染槽位tooltip
+     */
+    private void renderSlotTooltip(GuiGraphics guiGraphics, IRecipeSlotDrawable slot, int mouseX, int mouseY) {
+        List<Component> tooltipLines = new ArrayList<>();
+        
+        // 先尝试获取槽位实际的物品/流体tooltip
+        try {
+            var allIngredients = slot.getAllIngredients().toList();
+            for (var ingredient : allIngredients) {
+                if (ingredient != null) {
+                    Object value = ingredient.getIngredient();
+                    if (value instanceof ItemStack stack) {
+                        tooltipLines.addAll(getTooltipFromItem(stack));
+                    } else if (value instanceof net.minecraftforge.fluids.FluidStack stack) {
+                        tooltipLines.add(Component.literal(stack.getDisplayName().getString()));
+                        tooltipLines.add(Component.literal(stack.getFluid().builtInRegistryHolder().key().location().toString())
+                            .withStyle(s -> s.withColor(0x808080)));
+                    } else if (RecipeEditManager.isChemicalStack(value)) {
+                        String chemicalId = RecipeEditManager.getChemicalId(value);
+                        long amount = RecipeEditManager.chemicalStackAmount(value);
+                        tooltipLines.addAll(ChemicalSlotRenderer.getChemicalTooltip(chemicalId, amount, amount));
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        
+        // 如果没有从槽位获取到信息，尝试从编辑值获取
+        if (tooltipLines.isEmpty() && recipeId != null) {
+            RecipeEditManager.IngredientEditValue editValue = RecipeEditManager.getSlotEditValue(
+                recipeId, recipe, slots, slot
+            ).orElse(null);
+            
+            if (editValue != null) {
+                tooltipLines.add(Component.literal(editValue.ingredientId()));
+                if (editValue.hasAmount()) {
+                    tooltipLines.add(Component.translatable(
+                        "ingamerecipeeditor.tooltip.workspace.amount",
+                        editValue.amount()
+                    ));
+                }
+            }
+        }
+        
+        if (!tooltipLines.isEmpty()) {
+            guiGraphics.renderComponentTooltip(this.font, tooltipLines, mouseX, mouseY);
+        }
+    }
     
     /**
-     * 格式化数量显示
+     * 从ItemStack获取tooltip
      */
-    private String formatAmount(int amount) {
-        if (amount >= 1000000) {
-            return String.format("%.1fB", amount / 1000000.0);
-        } else if (amount >= 1000) {
-            return String.format("%.1fK", amount / 1000.0);
-        } else {
-            return String.valueOf(amount);
+    private List<Component> getTooltipFromItem(ItemStack stack) {
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            return stack.getTooltipLines(mc.player, net.minecraft.world.item.TooltipFlag.NORMAL);
+        } catch (Exception e) {
+            List<Component> lines = new ArrayList<>();
+            lines.add(stack.getHoverName());
+            return lines;
         }
     }
-    
-    // ========== 交互处理 ==========
-    
+
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 检查是否点击了槽位
-        for (WorkspaceSlot slot : editor.getSlots()) {
-            int slotX = guiLeft + slot.getX();
-            int slotY = guiTop + slot.getY();
-            
-            if (mouseX >= slotX && mouseX < slotX + slot.getWidth() &&
-                mouseY >= slotY && mouseY < slotY + slot.getHeight()) {
-                
-                if (button == 0) { // 左键
-                    selectedSlot = slot;
-                    slot.onClick((int) mouseX, (int) mouseY, button);
-                    
-                    // 如果槽位有物品，开始拖拽
-                    Object data = slot.getData();
-                    if (data instanceof ItemStack itemStack) {
-                        draggedItem = itemStack.copy();
-                        slot.clearData();
-                    }
-                    
-                    updateConfirmButton();
-                    return true;
-                } else if (button == 1) { // 右键
-                    // 清除槽位
-                    slot.clearData();
-                    updateConfirmButton();
-                    return true;
-                }
-            }
+        if (handleSlotClick(mouseX, mouseY, button)) {
+            return true;
         }
-        
         return super.mouseClicked(mouseX, mouseY, button);
     }
-    
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && draggedItem != null) {
-            // 检查是否释放在槽位上
-            for (WorkspaceSlot slot : editor.getSlots()) {
-                int slotX = guiLeft + slot.getX();
-                int slotY = guiTop + slot.getY();
+
+    /**
+     * 处理槽位点击
+     */
+    private boolean handleSlotClick(double mouseX, double mouseY, int mouseButton) {
+        if (recipeId == null) return false;
+        
+        // 获取配方布局的当前位置
+        @SuppressWarnings("removal")
+        Rect2i layoutRect = recipeLayout.getRect();
+        int currentLayoutX = layoutRect.getX();
+        int currentLayoutY = layoutRect.getY();
+        
+        for (IRecipeSlotView slotView : slots) {
+            if (!(slotView instanceof IRecipeSlotDrawable slot)) {
+                continue;
+            }
+            if (slot.getRole() != RecipeIngredientRole.INPUT && 
+                slot.getRole() != RecipeIngredientRole.OUTPUT) {
+                continue;
+            }
+            
+            @SuppressWarnings("removal")
+            Rect2i slotRect = slot.getRect();
+            // slot.getRect()返回相对位置，加上配方布局的绝对位置
+            int slotX = currentLayoutX + slotRect.getX();
+            int slotY = currentLayoutY + slotRect.getY();
+            
+            if (mouseX >= slotX && mouseX < slotX + slotRect.getWidth() &&
+                mouseY >= slotY && mouseY < slotY + slotRect.getHeight()) {
                 
-                if (mouseX >= slotX && mouseX < slotX + slot.getWidth() &&
-                    mouseY >= slotY && mouseY < slotY + slot.getHeight()) {
-                    
-                    if (slot.isItemSlot() && !slot.isRenderOnly()) {
-                        slot.setItemData(draggedItem.copy());
-                        updateConfirmButton();
+                if (mouseButton == 0) {
+                    // 左键点击：打开编辑界面
+                    RecipeEditManager.IngredientEditValue initialValue = RecipeEditManager.getSlotEditValue(
+                        recipeId, recipe, slots, slot
+                    ).orElseGet(() -> new RecipeEditManager.IngredientEditValue(
+                        RecipeEditManager.getSlotIngredientKind(recipeId, recipe, slots, slot),
+                        "",
+                        1
+                    ));
+                    Minecraft.getInstance().setScreen(new RecipeIngredientTextEditScreen(
+                        this,
+                        recipeId,
+                        slots,
+                        slot,
+                        initialValue
+                    ));
+                    return true;
+                } else if (mouseButton == 1) {
+                    // 右键点击：清除槽位
+                    if (!hasCarriedItem()) {
+                        RecipeEditManager.clearSlot(recipeId, slots, slot);
+                        return true;
                     }
-                    break;
+                    return true;
                 }
             }
-            
-            draggedItem = null;
-            selectedSlot = null;
-            return true;
         }
+        return false;
+    }
+
+    private boolean hasCarriedItem() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null) {
+            return false;
+        }
+        return !minecraft.player.containerMenu.getCarried().isEmpty();
+    }
+
+    /**
+     * 处理拖拽物品到槽位
+     */
+    public boolean handleDraggedIngredient(Object ingredient, double mouseX, double mouseY) {
+        if (recipeId == null) return false;
         
-        return super.mouseReleased(mouseX, mouseY, button);
-    }
-    
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (button == 0 && draggedItem != null) {
-            return true;
-        }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-    
-    @Override
-    public void mouseMoved(double mouseX, double mouseY) {
-        // 更新槽位悬停状态
-        for (WorkspaceSlot slot : editor.getSlots()) {
-            int slotX = guiLeft + slot.getX();
-            int slotY = guiTop + slot.getY();
-            
-            boolean hovered = mouseX >= slotX && mouseX < slotX + slot.getWidth() &&
-                              mouseY >= slotY && mouseY < slotY + slot.getHeight();
-            
-            slot.onMouseMove((int) mouseX, (int) mouseY);
-        }
-    }
-    
-    // ========== 按钮事件处理 ==========
-    
-    private void onConfirm() {
-        try {
-            // 提交草稿
-            Optional<Map<String, Object>> data = Optional.of(editor.collectData());
-            
-            if (data.isPresent()) {
-                InGameRecipeEditor.LOGGER.info("配方数据已收集");
-                // TODO: 发送到服务器或保存到文件
-                onClose();
+        // 获取配方布局的当前位置
+        @SuppressWarnings("removal")
+        Rect2i layoutRect = recipeLayout.getRect();
+        int currentLayoutX = layoutRect.getX();
+        int currentLayoutY = layoutRect.getY();
+        
+        for (IRecipeSlotView slotView : slots) {
+            if (!(slotView instanceof IRecipeSlotDrawable slot)) {
+                continue;
             }
-        } catch (Exception e) {
-            InGameRecipeEditor.LOGGER.error("提交配方失败: {}", e.getMessage());
-        }
-    }
-    
-    private void onClear() {
-        editor.clearAllData();
-        updateConfirmButton();
-    }
-    
-    @Override
-    public void onClose() {
-        if (parentScreen != null) {
-            Minecraft.getInstance().setScreen(parentScreen);
-        } else {
-            super.onClose();
-        }
-    }
-    
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) { // ESC
-            onClose();
-            return true;
-        }
-        
-        if (keyCode == 257 || keyCode == 335) { // Enter
-            if (confirmButton.active) {
-                onConfirm();
+            if (slot.getRole() != RecipeIngredientRole.INPUT && 
+                slot.getRole() != RecipeIngredientRole.OUTPUT) {
+                continue;
             }
-            return true;
+            
+            @SuppressWarnings("removal")
+            Rect2i slotRect = slot.getRect();
+            // slot.getRect()返回相对位置，加上配方布局的绝对位置
+            int slotX = currentLayoutX + slotRect.getX();
+            int slotY = currentLayoutY + slotRect.getY();
+            
+            if (mouseX >= slotX && mouseX < slotX + slotRect.getWidth() &&
+                mouseY >= slotY && mouseY < slotY + slotRect.getHeight()) {
+                
+                if (ingredient instanceof ItemStack stack) {
+                    RecipeEditManager.replaceSlot(recipeId, slots, slot, stack);
+                    return true;
+                } else if (ingredient instanceof net.minecraftforge.fluids.FluidStack stack) {
+                    RecipeEditManager.replaceSlot(recipeId, slots, slot, stack);
+                    return true;
+                } else if (RecipeEditManager.isChemicalStack(ingredient)) {
+                    RecipeEditManager.replaceResourceSlot(recipeId, slots, slot, ingredient);
+                    return true;
+                }
+            }
         }
-        
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return false;
+    }
+
+    /**
+     * 获取槽位的绝对位置
+     */
+    @SuppressWarnings("removal")
+    public Rect2i getSlotAbsoluteRect(IRecipeSlotDrawable slot) {
+        Rect2i layoutRect = recipeLayout.getRect();
+        Rect2i slotRect = slot.getRect();
+        return new Rect2i(
+            layoutRect.getX() + slotRect.getX(),
+            layoutRect.getY() + slotRect.getY(),
+            slotRect.getWidth(),
+            slotRect.getHeight()
+        );
+    }
+
+    public String getRecipeId() {
+        return recipeId;
+    }
+
+    public List<IRecipeSlotView> getSlots() {
+        return slots;
+    }
+
+    public IRecipeLayoutDrawable<?> getRecipeLayout() {
+        return recipeLayout;
+    }
+
+    public int getLayoutX() {
+        return layoutX;
+    }
+
+    public int getLayoutY() {
+        return layoutY;
+    }
+
+    public int getPanelWidth() {
+        return panelWidth;
+    }
+
+    public int getPanelHeight() {
+        return panelHeight;
     }
 }

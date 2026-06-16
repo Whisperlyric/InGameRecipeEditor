@@ -1,5 +1,6 @@
 {
   "recipe_type": "minecraft:crafting_shaped",
+  "use_encoding_file": true,
   "slots": [
     {
       "role": "INPUT",

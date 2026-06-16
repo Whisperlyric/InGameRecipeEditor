@@ -3,13 +3,12 @@ package dev.whisperlyric.ingamerecipeeditor.button;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
+import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import dev.whisperlyric.ingamerecipeeditor.workspace.RecipeWorkspaceManager;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
-import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.common.Internal;
 import mezz.jei.common.gui.elements.DrawableNineSliceTexture;
 import mezz.jei.common.gui.textures.Textures;
-import mezz.jei.gui.recipes.RecipesGui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -37,15 +36,13 @@ public class RecipeAddButton extends AbstractWidget {
         super(x, y, 9, 9, Component.empty());
         this.recipeLayout = recipeLayout;
 
-        IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
-        Object recipe = recipeLayout.getRecipe();
-        ResourceLocation registryName = ((IRecipeCategory) category).getRegistryName(recipe);
-        this.recipeId = registryName != null ? registryName.toString() : "";
-        this.supportedRecipe = recipe instanceof Recipe<?>;
+        // 使用JeiRecipeHelper获取正确的配方ID
+        this.recipeId = JeiRecipeHelper.getRecipeId(recipeLayout);
+        this.supportedRecipe = recipeLayout.getRecipe() instanceof Recipe<?>;
     }
 
     public boolean hasValidRecipeId() {
-        return this.supportedRecipe && !this.recipeId.isEmpty();
+        return this.supportedRecipe && this.recipeId != null && !this.recipeId.isEmpty();
     }
 
     @Override
@@ -111,7 +108,7 @@ public class RecipeAddButton extends AbstractWidget {
 
     @Override
     public void onClick(double mouseX, double mouseY) {
-        if (!this.recipeId.isEmpty()) {
+        if (this.recipeId != null && !this.recipeId.isEmpty()) {
             // 播放点击声音
             playDownSound(Minecraft.getInstance().getSoundManager());
             

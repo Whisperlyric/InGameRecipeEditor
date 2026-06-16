@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 import dev.whisperlyric.ingamerecipeeditor.schema.RecipeSchema;
 import dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry;
+import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.gui.recipes.RecipesGui;
@@ -25,14 +26,11 @@ public class RecipeWorkspaceManager {
     
     private static final RecipeWorkspaceManager INSTANCE = new RecipeWorkspaceManager();
     
-    // 所有配方草稿
-    private final Map<String, Draft> drafts = new LinkedHashMap<>();
+    // 所有配方草稿（使用RecipeEditManager管理）
+    private final Map<String, DraftInfo> drafts = new LinkedHashMap<>();
     
     // 当前活跃的配方ID
     private String activeRecipeId;
-    
-    // 当前工作区编辑器
-    private WorkspaceEditor currentEditor;
     
     private RecipeWorkspaceManager() {}
     
@@ -43,49 +41,35 @@ public class RecipeWorkspaceManager {
     /**
      * 创建新配方草稿
      */
-    public WorkspaceEditor createNewDraft(String recipeType) {
-        RecipeSchema schema = SchemaRegistry.getInstance().get(recipeType);
+    public void createNewDraft(String recipeType) {
+        RecipeSchema schema = SchemaRegistry.getSchema(recipeType).orElse(null);
         if (schema == null) {
             InGameRecipeEditor.LOGGER.warn("未知的配方类型: {}", recipeType);
-            return null;
+            return;
         }
         
         String draftId = generateDraftId(recipeType);
-        WorkspaceEditor editor = new WorkspaceEditor(recipeType);
         
-        drafts.put(draftId, new Draft(draftId, recipeType, editor, null));
+        drafts.put(draftId, new DraftInfo(draftId, recipeType, null));
         activeRecipeId = draftId;
-        currentEditor = editor;
         
         InGameRecipeEditor.LOGGER.info("创建新配方草稿: {}", draftId);
-        return editor;
     }
     
     /**
      * 编辑现有配方
      */
-    public WorkspaceEditor editExistingRecipe(String recipeId, Recipe<?> recipe, JsonObject recipeJson) {
+    public void editExistingRecipe(String recipeId, Recipe<?> recipe, JsonObject recipeJson) {
         String recipeType = getRecipeType(recipe, recipeJson);
         if (recipeType == null) {
             InGameRecipeEditor.LOGGER.warn("无法确定配方类型: {}", recipeId);
-            return null;
+            return;
         }
         
-        WorkspaceEditor editor = new WorkspaceEditor(recipeType, recipeJson);
-        
-        drafts.put(recipeId, new Draft(recipeId, recipeType, editor, recipeJson));
+        drafts.put(recipeId, new DraftInfo(recipeId, recipeType, recipeJson));
         activeRecipeId = recipeId;
-        currentEditor = editor;
         
         InGameRecipeEditor.LOGGER.info("开始编辑配方: {}", recipeId);
-        return editor;
-    }
-    
-    /**
-     * 获取当前活跃的工作区编辑器
-     */
-    public WorkspaceEditor getCurrentEditor() {
-        return currentEditor;
     }
     
     /**
@@ -98,23 +82,21 @@ public class RecipeWorkspaceManager {
     /**
      * 切换到指定草稿
      */
-    public Optional<WorkspaceEditor> switchToDraft(String draftId) {
-        Draft draft = drafts.get(draftId);
+    public boolean switchToDraft(String draftId) {
+        DraftInfo draft = drafts.get(draftId);
         if (draft == null) {
-            return Optional.empty();
+            return false;
         }
         
         activeRecipeId = draftId;
-        currentEditor = draft.editor();
-        return Optional.of(currentEditor);
+        return true;
     }
     
     /**
      * 是否有草稿
      */
     public boolean hasDraft(String recipeId) {
-        Draft draft = drafts.get(recipeId);
-        return draft != null && draft.hasModifications();
+        return RecipeEditManager.hasDraft(recipeId);
     }
     
     /**
@@ -127,7 +109,7 @@ public class RecipeWorkspaceManager {
     /**
      * 获取所有草稿ID
      */
-    public Map<String, Draft> getAllDrafts() {
+    public Map<String, DraftInfo> getAllDrafts() {
         return new HashMap<>(drafts);
     }
     
@@ -142,23 +124,22 @@ public class RecipeWorkspaceManager {
      * 提交草稿（生成JSON）
      */
     public Optional<JsonObject> submitDraft(String draftId) {
-        Draft draft = drafts.get(draftId);
+        DraftInfo draft = drafts.get(draftId);
         if (draft == null) {
             return Optional.empty();
         }
         
         try {
-            JsonObject json = draft.editor().generateJson();
+            RecipeEditManager.submit(draftId);
             InGameRecipeEditor.LOGGER.info("提交配方草稿: {}", draftId);
             
             // 提交后移除草稿
             if (draftId.equals(activeRecipeId)) {
                 activeRecipeId = null;
-                currentEditor = null;
             }
             drafts.remove(draftId);
             
-            return Optional.of(json);
+            return Optional.empty(); // TODO: 实际生成JSON
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.error("提交配方失败: {}", e.getMessage());
             return Optional.empty();
@@ -169,14 +150,14 @@ public class RecipeWorkspaceManager {
      * 清除草稿
      */
     public void clearDraft(String draftId) {
-        Draft draft = drafts.remove(draftId);
+        DraftInfo draft = drafts.remove(draftId);
         if (draft != null) {
+            RecipeEditManager.clear(draftId);
             InGameRecipeEditor.LOGGER.info("清除配方草稿: {}", draftId);
         }
         
         if (draftId.equals(activeRecipeId)) {
             activeRecipeId = null;
-            currentEditor = null;
         }
     }
     
@@ -186,7 +167,6 @@ public class RecipeWorkspaceManager {
     public void clearAllDrafts() {
         drafts.clear();
         activeRecipeId = null;
-        currentEditor = null;
         InGameRecipeEditor.LOGGER.info("清除所有配方草稿");
     }
     
@@ -199,7 +179,6 @@ public class RecipeWorkspaceManager {
             return;
         }
         activeRecipeId = recipeId;
-        currentEditor = drafts.get(recipeId).editor();
     }
     
     /**
@@ -207,7 +186,6 @@ public class RecipeWorkspaceManager {
      */
     public void stopEditing() {
         activeRecipeId = null;
-        currentEditor = null;
     }
     
     /**
@@ -232,21 +210,13 @@ public class RecipeWorkspaceManager {
     }
     
     /**
-     * 草稿记录
+     * 草稿信息记录
      */
-    public record Draft(
+    public record DraftInfo(
         String id,               // 草稿ID
         String recipeType,       // 配方类型
-        WorkspaceEditor editor,  // 工作区编辑器
         JsonObject originalJson  // 原始JSON（编辑现有配方时）
     ) {
-        /**
-         * 是否有修改
-         */
-        public boolean hasModifications() {
-            return editor != null && !editor.getSlotData().isEmpty();
-        }
-        
         /**
          * 是否是新配方
          */
@@ -282,9 +252,9 @@ public class RecipeWorkspaceManager {
             return;
         }
 
-        // 使用泛型方法获取配方ID
-        String recipeIdStr = getRecipeId(recipeLayout);
-        if (recipeIdStr == null) {
+        // 使用JeiRecipeHelper获取正确的配方ID
+        String recipeIdStr = JeiRecipeHelper.getRecipeId(recipeLayout);
+        if (recipeIdStr == null || recipeIdStr.isEmpty()) {
             InGameRecipeEditor.LOGGER.warn("无法打开工作区：配方ID为空");
             return;
         }
@@ -317,8 +287,8 @@ public class RecipeWorkspaceManager {
             return;
         }
 
-        IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
-        String recipeType = category.getRecipeType().getUid().toString();
+        // 使用JeiRecipeHelper获取正确的配方类型
+        String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
 
         // 创建空工作区界面（新建模式）
         RecipeWorkspaceScreen screen = new RecipeWorkspaceScreen(parent, recipeType, recipeLayout, false);
@@ -338,9 +308,9 @@ public class RecipeWorkspaceManager {
             return;
         }
 
-        // 使用泛型方法获取配方ID
-        String recipeIdStr = getRecipeId(recipeLayout);
-        if (recipeIdStr == null) {
+        // 使用JeiRecipeHelper获取正确的配方ID
+        String recipeIdStr = JeiRecipeHelper.getRecipeId(recipeLayout);
+        if (recipeIdStr == null || recipeIdStr.isEmpty()) {
             InGameRecipeEditor.LOGGER.warn("无法打开复制工作区：配方ID为空");
             return;
         }
@@ -361,16 +331,6 @@ public class RecipeWorkspaceManager {
         Minecraft.getInstance().setScreen(screen);
         
         InGameRecipeEditor.LOGGER.info("打开复制工作区，基于配方: {}", recipeIdStr);
-    }
-
-    /**
-     * 获取配方ID（泛型方法）
-     */
-    @SuppressWarnings("unchecked")
-    private <T> String getRecipeId(IRecipeLayoutDrawable<T> layout) {
-        T recipe = layout.getRecipe();
-        ResourceLocation id = layout.getRecipeCategory().getRegistryName(recipe);
-        return id == null ? null : id.toString();
     }
 
     /**
