@@ -16,5 +16,33 @@ This project is actively developed and released under Apache-2.0 license.
 - Pinyin-based search support for Chinese users
 - Compatible with multiple popular mods
 
+## AI Assistance Declaration
+
+This project was developed with the assistance of generative AI tools (GLM-5, Claude, etc.) for coding, code review suggestions, and documentation improvements.
+
+**Developer Commitment:**
+- All AI-generated code has been manually reviewed, tested, and verified by the project maintainer.
+- AI-generated code does not contain direct copies of core logic from closed-source copyrighted works.
+- Despite AI assistance, all ownership and responsibility for this project lies with the maintainer and contributors.
+
+For any questions about code implementation, feel free to submit an Issue for discussion.
+
+## Acknowledgments
+
+This project references and draws inspiration from the following projects:
+
+### [JEIRecipeManager](https://github.com/taisuiyileba/JEIRecipeManager)
+- **Usage**: Reference for GUI implementation logic
+- **Note**: Only the logic was referenced and re-implemented independently for Minecraft 1.20.1
+- **License**: No license specified (default: all rights reserved)
+
+### [RecipesHelper](https://github.com/WoZhiZhan/RecipesHelper)
+- **Usage**: Reference for partial recipe editing logic implementation and repository structure
+- **License**: Apache-2.0
+
+## Third-party Libraries
+
+- [TinyPinyin](https://github.com/promeG/TinyPinyin) - Pinyin search support for Chinese users
+
 ## License
 Apache-2.0 License

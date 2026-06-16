@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 契约注册表
@@ -25,6 +26,13 @@ public class SchemaRegistry {
             instance.registerDefaultSchemas();
         }
         return instance;
+    }
+    
+    /**
+     * 静态方法：根据配方类型获取Schema
+     */
+    public static Optional<RecipeSchema> getSchema(String recipeType) {
+        return Optional.ofNullable(getInstance().get(recipeType));
     }
     
     /**

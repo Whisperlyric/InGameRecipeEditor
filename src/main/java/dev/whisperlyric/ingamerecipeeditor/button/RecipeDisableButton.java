@@ -6,8 +6,8 @@ import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 import dev.whisperlyric.ingamerecipeeditor.disabled.DisabledRecipesManager;
 import dev.whisperlyric.ingamerecipeeditor.generated.GeneratedRecipesManager;
 import dev.whisperlyric.ingamerecipeeditor.network.NetworkHandler;
+import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
-import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.common.Internal;
 import mezz.jei.common.gui.elements.DrawableNineSliceTexture;
 import mezz.jei.common.gui.textures.Textures;
@@ -41,15 +41,13 @@ public class RecipeDisableButton extends AbstractWidget {
     public RecipeDisableButton(int x, int y, IRecipeLayoutDrawable<?> recipeLayout) {
         super(x, y, 9, 9, Component.empty());
 
-        IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
-        Object recipe = recipeLayout.getRecipe();
-        ResourceLocation registryName = ((IRecipeCategory) category).getRegistryName(recipe);
-        this.recipeId = registryName != null ? registryName.toString() : "";
-        this.supportedRecipe = recipe instanceof Recipe<?>;
+        // 使用JeiRecipeHelper获取正确的配方ID
+        this.recipeId = JeiRecipeHelper.getRecipeId(recipeLayout);
+        this.supportedRecipe = recipeLayout.getRecipe() instanceof Recipe<?>;
         this.generatedRecipe = GeneratedRecipesManager.isGeneratedRecipeId(this.recipeId);
 
         // 初始状态
-        this.enabled = this.recipeId.isEmpty() || !DisabledRecipesManager.isRecipeDisabled(this.recipeId);
+        this.enabled = this.recipeId == null || this.recipeId.isEmpty() || !DisabledRecipesManager.isRecipeDisabled(this.recipeId);
         this.pendingDelete = GeneratedRecipesManager.isGeneratedRecipeDeletionPending(this.recipeId);
     }
 
@@ -148,7 +146,7 @@ public class RecipeDisableButton extends AbstractWidget {
 
     @Override
     public void onClick(double mouseX, double mouseY) {
-        if (!this.recipeId.isEmpty()) {
+        if (this.recipeId != null && !this.recipeId.isEmpty()) {
             // 播放点击声音
             playDownSound(Minecraft.getInstance().getSoundManager());
             

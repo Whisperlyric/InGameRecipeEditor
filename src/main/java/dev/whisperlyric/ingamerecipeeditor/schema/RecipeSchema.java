@@ -18,6 +18,7 @@ public class RecipeSchema {
     private final List<SlotDefinition> outputSlots;   // 输出槽位定义列表
     private final List<SlotDefinition> renderOnlySlots; // 仅渲染槽位列表（不在JSON中）
     private final List<PropertyDefinition> properties; // 属性定义列表
+    private final boolean useEncodingFile;            // 是否默认使用编码文件
     
     /**
      * 构造方法
@@ -25,6 +26,16 @@ public class RecipeSchema {
     public RecipeSchema(String recipeType, String displayName, int width, int height,
                          List<SlotDefinition> inputSlots, List<SlotDefinition> outputSlots,
                          List<SlotDefinition> renderOnlySlots, List<PropertyDefinition> properties) {
+        this(recipeType, displayName, width, height, inputSlots, outputSlots, renderOnlySlots, properties, true);
+    }
+    
+    /**
+     * 完整构造方法（包含useEncodingFile）
+     */
+    public RecipeSchema(String recipeType, String displayName, int width, int height,
+                         List<SlotDefinition> inputSlots, List<SlotDefinition> outputSlots,
+                         List<SlotDefinition> renderOnlySlots, List<PropertyDefinition> properties,
+                         boolean useEncodingFile) {
         this.recipeType = recipeType;
         this.displayName = displayName;
         this.width = width;
@@ -33,6 +44,7 @@ public class RecipeSchema {
         this.outputSlots = outputSlots != null ? new ArrayList<>(outputSlots) : new ArrayList<>();
         this.renderOnlySlots = renderOnlySlots != null ? new ArrayList<>(renderOnlySlots) : new ArrayList<>();
         this.properties = properties != null ? new ArrayList<>(properties) : new ArrayList<>();
+        this.useEncodingFile = useEncodingFile;
     }
     
     // ========== Getter方法 ==========
@@ -41,6 +53,7 @@ public class RecipeSchema {
     public String getDisplayName() { return displayName; }
     public int getWidth() { return width; }
     public int getHeight() { return height; }
+    public boolean useEncodingFile() { return useEncodingFile; }
     
     public List<SlotDefinition> getInputSlots() { return Collections.unmodifiableList(inputSlots); }
     public List<SlotDefinition> getOutputSlots() { return Collections.unmodifiableList(outputSlots); }
