@@ -1,6 +1,7 @@
 package dev.whisperlyric.ingamerecipeeditor.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import dev.whisperlyric.ingamerecipeeditor.tags.CustomTagManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -37,6 +38,9 @@ public class TagPreviewScreen extends Screen {
     private Button prevPageButton;
     private Button nextPageButton;
     private Button closeButton;
+    private Button editButton;
+    private Button deleteButton;
+    private Button confirmDeleteButton;
     
     private final List<ItemStack> items = new ArrayList<>();
     private final List<Fluid> fluids = new ArrayList<>();
@@ -45,12 +49,30 @@ public class TagPreviewScreen extends Screen {
     private int maxPage = 0;
     private int leftPos, topPos;
     
+    private boolean isCustomTag;
+    private boolean isOriginalTag;
+    private boolean isDeleteConfirmMode = false;
+    
     public TagPreviewScreen(Screen parentScreen, ResourceLocation tagId, TagSelectorScreen.TagType tagType) {
         super(Component.literal("标签预览: #" + tagId));
         this.parentScreen = parentScreen;
         this.tagId = tagId;
         this.tagType = tagType;
+        this.isCustomTag = CustomTagManager.hasTag(tagId);
+        this.isOriginalTag = hasObjectsInRegistry(tagId, tagType);
         collectTagContents();
+    }
+    
+    private boolean hasObjectsInRegistry(ResourceLocation tagId, TagSelectorScreen.TagType tagType) {
+        if (tagType == TagSelectorScreen.TagType.ITEMS) {
+            TagKey<Item> tag = TagKey.create(ForgeRegistries.ITEMS.getRegistryKey(), tagId);
+            return ForgeRegistries.ITEMS.getValues().stream()
+                    .anyMatch(item -> item.builtInRegistryHolder().is(tag));
+        } else {
+            TagKey<Fluid> tag = TagKey.create(ForgeRegistries.FLUIDS.getRegistryKey(), tagId);
+            return ForgeRegistries.FLUIDS.getValues().stream()
+                    .anyMatch(fluid -> fluid.builtInRegistryHolder().is(tag));
+        }
     }
     
     @SuppressWarnings("null")
@@ -112,6 +134,29 @@ public class TagPreviewScreen extends Screen {
                 .bounds(leftPos + (GUI_WIDTH - 48) / 2, topPos + GUI_HEIGHT - 24, 48, 20)
                 .build());
         
+        // 编辑按钮
+        editButton = addRenderableWidget(Button.builder(
+                Component.literal("编辑"),
+                button -> openEditor())
+                .bounds(leftPos + GUI_WIDTH + 4, topPos + 10, 60, 20)
+                .build());
+        
+        // 删除按钮(对自建标签)
+        if (!isOriginalTag) {
+            deleteButton = addRenderableWidget(Button.builder(
+                    Component.literal("删除"),
+                    button -> toggleDeleteConfirm())
+                    .bounds(leftPos + GUI_WIDTH + 4, topPos + 35, 60, 20)
+                    .build());
+            
+            confirmDeleteButton = addRenderableWidget(Button.builder(
+                    Component.literal("确认删除"),
+                    button -> confirmDelete())
+                    .bounds(leftPos + GUI_WIDTH + 4, topPos + 60, 60, 20)
+                    .build());
+            confirmDeleteButton.visible = false;
+        }
+        
         updateButtons();
     }
     
@@ -138,6 +183,49 @@ public class TagPreviewScreen extends Screen {
         }
     }
     
+    private void openEditor() {
+        if (minecraft == null) return;
+        
+        CustomTagCreatorScreen.Mode mode = tagType == TagSelectorScreen.TagType.FLUIDS ? 
+            CustomTagCreatorScreen.Mode.FLUID : CustomTagCreatorScreen.Mode.ITEM;
+        
+        minecraft.setScreen(new CustomTagCreatorScreen(parentScreen, result -> {
+        }, tagId, mode, isOriginalTag));
+    }
+    
+    private void toggleDeleteConfirm() {
+        isDeleteConfirmMode = !isDeleteConfirmMode;
+        
+        if (isDeleteConfirmMode) {
+            if (deleteButton != null) {
+                deleteButton.setMessage(Component.literal("取消删除"));
+            }
+            if (confirmDeleteButton != null) {
+                confirmDeleteButton.visible = true;
+            }
+        } else {
+            if (deleteButton != null) {
+                deleteButton.setMessage(Component.literal("删除"));
+            }
+            if (confirmDeleteButton != null) {
+                confirmDeleteButton.visible = false;
+            }
+        }
+    }
+    
+    private void confirmDelete() {
+        if (minecraft == null || minecraft.player == null) return;
+        
+        if (CustomTagManager.removeTag(tagId)) {
+            minecraft.player.sendSystemMessage(Component.literal("§a已删除自定义标签: #" + tagId));
+            minecraft.player.sendSystemMessage(Component.literal("§a使用/reload指令刷新标签！"));
+            onClose();
+        } else {
+            minecraft.player.sendSystemMessage(Component.literal("§c删除标签失败: #" + tagId));
+            toggleDeleteConfirm();
+        }
+    }
+    
     @SuppressWarnings("null")
     @Override
     public void render(@SuppressWarnings("null") @NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
@@ -151,6 +239,12 @@ public class TagPreviewScreen extends Screen {
         String typeText = "类型: " + tagType.getDisplayName() + " | 数量: " + 
                          (tagType == TagSelectorScreen.TagType.FLUIDS ? fluids.size() : items.size());
         guiGraphics.drawCenteredString(this.font, typeText, this.width / 2, topPos + 20, 0xAAAAAA);
+        
+        if (!isOriginalTag) {
+            guiGraphics.drawCenteredString(this.font, "§e[自定义标签]", this.width / 2, topPos + 34, 0xFFFF55);
+        } else if (isCustomTag) {
+            guiGraphics.drawCenteredString(this.font, "§6[已编辑]", this.width / 2, topPos + 34, 0xFFAA00);
+        }
         
         renderItems(guiGraphics, mouseX, mouseY);
         
@@ -169,7 +263,7 @@ public class TagPreviewScreen extends Screen {
         int rows = 4;
         int itemSize = 18;
         int startX = leftPos + 8;
-        int startY = topPos + 35;
+        int startY = topPos + ((!isOriginalTag || isCustomTag) ? 50 : 35);
         
         if (tagType == TagSelectorScreen.TagType.FLUIDS) {
             int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, fluids.size());
@@ -239,7 +333,7 @@ public class TagPreviewScreen extends Screen {
         int cols = 9;
         int itemSize = 18;
         int startX = leftPos + 8;
-        int startY = topPos + 35;
+        int startY = topPos + ((!isOriginalTag || isCustomTag) ? 50 : 35);
         
         if (tagType == TagSelectorScreen.TagType.FLUIDS) {
             int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, fluids.size());
