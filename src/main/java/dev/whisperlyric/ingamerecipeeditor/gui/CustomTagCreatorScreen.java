@@ -12,6 +12,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.material.Fluid;
@@ -23,6 +24,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * 自定义标签创建界面
@@ -85,10 +87,16 @@ public class CustomTagCreatorScreen extends Screen {
     private Button nextPageButton;
     private Button createButton;
     private Button cancelButton;
+    private Button replaceButton;
+    private Button displayModeButton;
 
     private Mode currentMode = Mode.ITEM;
     private final LinkedHashSet<Item> tagItems = new LinkedHashSet<>();
     private final LinkedHashSet<ResourceLocation> tagFluids = new LinkedHashSet<>();
+    private final LinkedHashSet<Item> originalItems = new LinkedHashSet<>(); // 原有标签包含的物品
+    private final LinkedHashSet<ResourceLocation> originalFluids = new LinkedHashSet<>(); // 原有标签包含的流体
+    private final LinkedHashSet<ResourceLocation> removedItems = new LinkedHashSet<>();
+    private final LinkedHashSet<ResourceLocation> removedFluids = new LinkedHashSet<>();
     private final List<Item> displayList = new ArrayList<>();
     private final List<ResourceLocation> fluidDisplayList = new ArrayList<>();
     private int currentPage = 0;
@@ -99,11 +107,143 @@ public class CustomTagCreatorScreen extends Screen {
 
     private String savedNamespace = "custom";
     private String savedPath = "";
+    
+    // 编辑模式
+    private boolean isEditMode = false;
+    private boolean isReplaceMode = false;
+    private DisplayMode displayMode = DisplayMode.ALL;
+    private ResourceLocation editingTagId;
+    private boolean isLocked = false;
+    private boolean isOriginalTag = false;
+    
+    public enum DisplayMode {
+        ALL("显示所有"),
+        ADDED("已添加"),
+        REMOVED("已移除");
+        
+        private final String displayName;
+        
+        DisplayMode(String displayName) {
+            this.displayName = displayName;
+        }
+        
+        public String getDisplayName() {
+            return displayName;
+        }
+    }
 
     public CustomTagCreatorScreen(Screen parentScreen, Consumer<TagCreationResult> onTagCreated) {
         super(Component.literal("创建自定义标签"));
         this.parentScreen = parentScreen;
         this.onTagCreated = onTagCreated;
+    }
+    
+    /**
+     * 编辑模式构造函数
+     */
+    public CustomTagCreatorScreen(Screen parentScreen, Consumer<TagCreationResult> onTagCreated, 
+                                  ResourceLocation tagId, Mode mode, boolean isOriginalTag) {
+        super(Component.literal(isOriginalTag ? "编辑标签" : "编辑自定义标签"));
+        this.parentScreen = parentScreen;
+        this.onTagCreated = onTagCreated;
+        this.isEditMode = true;
+        this.editingTagId = tagId;
+        this.currentMode = mode;
+        this.isLocked = true; // 锁定命名空间、路径和模式
+        this.savedNamespace = tagId.getNamespace();
+        this.savedPath = tagId.getPath();
+        this.isOriginalTag = isOriginalTag;
+        
+        if (isOriginalTag) {
+            loadOriginalTagData(tagId, mode);
+        } else {
+            loadCustomTagData(tagId, mode);
+        }
+    }
+    
+    /**
+     * 加载自定义标签数据（从文件）
+     */
+    private void loadCustomTagData(ResourceLocation tagId, Mode mode) {
+        String tagType = mode == Mode.ITEM ? "items" : "fluids";
+        CustomTagManager.TagFileInfo info = CustomTagManager.readTagFileInfo(tagId, tagType);
+        
+        if (info != null) {
+            this.isReplaceMode = info.replace;
+            
+            if (mode == Mode.ITEM) {
+                for (String itemId : info.values) {
+                    Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
+                    if (item != null) {
+                        tagItems.add(item);
+                    }
+                }
+                for (String removedId : info.removedValues) {
+                    removedItems.add(ResourceLocation.parse(removedId));
+                }
+            } else {
+                for (String fluidId : info.values) {
+                    tagFluids.add(ResourceLocation.parse(fluidId));
+                }
+                for (String removedId : info.removedValues) {
+                    removedFluids.add(ResourceLocation.parse(removedId));
+                }
+            }
+        }
+    }
+    
+    /**
+     * 加载原有模组标签数据（从游戏注册表）
+     */
+    @SuppressWarnings("null")
+    private void loadOriginalTagData(ResourceLocation tagId, Mode mode) {
+        if (mode == Mode.ITEM) {
+            // 从物品注册表加载标签包含的所有物品，保存到 originalItems
+            TagKey<Item> tag = TagKey.create(ForgeRegistries.ITEMS.getRegistryKey(), tagId);
+            for (Item item : ForgeRegistries.ITEMS.getValues()) {
+                if (item.builtInRegistryHolder().is(tag)) {
+                    originalItems.add(item);
+                }
+            }
+        } else {
+            // 从流体注册表加载标签包含的所有流体，保存到 originalFluids
+            TagKey<Fluid> tag = TagKey.create(ForgeRegistries.FLUIDS.getRegistryKey(), tagId);
+            for (Fluid fluid : ForgeRegistries.FLUIDS.getValues()) {
+                if (fluid.builtInRegistryHolder().is(tag)) {
+                    ResourceLocation fluidId = ForgeRegistries.FLUIDS.getKey(fluid);
+                    if (fluidId != null) {
+                        originalFluids.add(fluidId);
+                    }
+                }
+            }
+        }
+        
+        // 检查是否已有自定义标签文件覆盖此标签
+        String tagType = mode == Mode.ITEM ? "items" : "fluids";
+        CustomTagManager.TagFileInfo info = CustomTagManager.readTagFileInfo(tagId, tagType);
+        if (info != null) {
+            this.isReplaceMode = info.replace;
+            
+            // 如果有自定义文件，加载其中的添加和移除列表
+            if (mode == Mode.ITEM) {
+                for (String itemId : info.values) {
+                    Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
+                    if (item != null) {
+                        tagItems.add(item);
+                    }
+                }
+                for (String removedId : info.removedValues) {
+                    removedItems.add(ResourceLocation.parse(removedId));
+                }
+            } else {
+                for (String fluidId : info.values) {
+                    tagFluids.add(ResourceLocation.parse(fluidId));
+                }
+                for (String removedId : info.removedValues) {
+                    removedFluids.add(ResourceLocation.parse(removedId));
+                }
+            }
+        }
     }
 
     @Override
@@ -115,12 +255,14 @@ public class CustomTagCreatorScreen extends Screen {
         namespaceBox.setHint(Component.literal("mymod"));
         namespaceBox.setValue(savedNamespace);
         namespaceBox.setFilter(text -> text.matches("[a-z0-9_]*"));
+        namespaceBox.setEditable(!isLocked);
         addRenderableWidget(namespaceBox);
 
         pathBox = new EditBox(this.font, leftPos + 80, topPos + 55, 180, 20, Component.literal("路径"));
         pathBox.setHint(Component.literal("my_materials"));
         pathBox.setValue(savedPath);
         pathBox.setFilter(text -> text.matches("[a-z0-9_/]*"));
+        pathBox.setEditable(!isLocked);
         addRenderableWidget(pathBox);
 
         modeButton = addRenderableWidget(Button.builder(
@@ -128,6 +270,7 @@ public class CustomTagCreatorScreen extends Screen {
                         button -> toggleMode())
                 .bounds(leftPos + 10, topPos + 85, 80, 20)
                 .build());
+        modeButton.active = !isLocked;
 
         String buttonText = currentMode == Mode.ITEM ? "添加物品" : "添加流体";
         addItemButton = addRenderableWidget(Button.builder(
@@ -141,21 +284,41 @@ public class CustomTagCreatorScreen extends Screen {
                         button -> clearAllItems())
                 .bounds(leftPos + 200, topPos + 85, 50, 20)
                 .build());
+        
+        // 覆盖模式
+        if (isEditMode) {
+            replaceButton = addRenderableWidget(Button.builder(
+                            Component.literal(isReplaceMode ? "覆盖模式: 开" : "覆盖模式: 关"),
+                            button -> toggleReplaceMode())
+                    .bounds(leftPos + 10, topPos + 110, 100, 20)
+                    .build());
+            
+            // 显示模式按钮
+            if (isOriginalTag) {
+                displayModeButton = addRenderableWidget(Button.builder(
+                                Component.literal(displayMode.getDisplayName()),
+                                button -> toggleDisplayMode())
+                        .bounds(leftPos + 115, topPos + 110, 100, 20)
+                        .build());
+                displayModeButton.active = !isReplaceMode;
+            }
+        }
 
         prevPageButton = addRenderableWidget(Button.builder(
                         Component.literal("<"),
                         button -> previousPage())
-                .bounds(leftPos + 10, topPos + 220, 20, 20)
+                .bounds(leftPos + 10, topPos + 235, 20, 20)
                 .build());
 
         nextPageButton = addRenderableWidget(Button.builder(
                         Component.literal(">"),
                         button -> nextPage())
-                .bounds(leftPos + 35, topPos + 220, 20, 20)
+                .bounds(leftPos + 35, topPos + 235, 20, 20)
                 .build());
 
+        String createButtonText = isEditMode ? "保存更改" : "创建标签";
         createButton = addRenderableWidget(Button.builder(
-                        Component.literal("创建标签"),
+                        Component.literal(createButtonText),
                         button -> createTag())
                 .bounds(leftPos + GUI_WIDTH - 180, topPos + GUI_HEIGHT - 30, 80, 20)
                 .build());
@@ -178,11 +341,67 @@ public class CustomTagCreatorScreen extends Screen {
     private void updateButtons() {
         if (currentMode == Mode.ITEM) {
             displayList.clear();
-            displayList.addAll(tagItems);
+            if (isEditMode && isOriginalTag) {
+                if (displayMode == DisplayMode.ALL) {
+                    for (Item item : originalItems) {
+                        ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(item);
+                        if (itemId != null && !removedItems.contains(itemId)) {
+                            displayList.add(item);
+                        }
+                    }
+                    for (Item addedItem : tagItems) {
+                        if (!displayList.contains(addedItem)) {
+                            displayList.add(addedItem);
+                        }
+                    }
+                } else if (displayMode == DisplayMode.ADDED) {
+                    // 显示已添加：用户添加的对象
+                    displayList.addAll(tagItems);
+                } else if (displayMode == DisplayMode.REMOVED) {
+                    // 显示已移除：用户移除的对象
+                    for (ResourceLocation removedId : removedItems) {
+                        Item item = ForgeRegistries.ITEMS.getValue(removedId);
+                        if (item != null) {
+                            displayList.add(item);
+                        }
+                    }
+                }
+            } else if (isEditMode && !isOriginalTag) {
+                // 自定义标签的显示逻辑（不可切换显示模式，直接显示所有）
+                displayList.addAll(tagItems);
+            } else {
+                // 创建模式：显示所有添加的对象
+                displayList.addAll(tagItems);
+            }
             maxPage = Math.max(0, (displayList.size() - 1) / SLOTS_PER_PAGE);
         } else {
             fluidDisplayList.clear();
-            fluidDisplayList.addAll(tagFluids);
+            if (isEditMode && isOriginalTag) {
+                if (displayMode == DisplayMode.ALL) {
+                    for (ResourceLocation fluidId : originalFluids) {
+                        if (!removedFluids.contains(fluidId)) {
+                            fluidDisplayList.add(fluidId);
+                        }
+                    }
+                    for (ResourceLocation addedFluidId : tagFluids) {
+                        if (!fluidDisplayList.contains(addedFluidId)) {
+                            fluidDisplayList.add(addedFluidId);
+                        }
+                    }
+                } else if (displayMode == DisplayMode.ADDED) {
+                    // 显示已添加：用户添加的对象
+                    fluidDisplayList.addAll(tagFluids);
+                } else if (displayMode == DisplayMode.REMOVED) {
+                    // 显示已移除：用户移除的对象
+                    fluidDisplayList.addAll(removedFluids);
+                }
+            } else if (isEditMode && !isOriginalTag) {
+                // 自定义标签的显示逻辑（不可切换显示模式，直接显示所有）
+                fluidDisplayList.addAll(tagFluids);
+            } else {
+                // 创建模式：显示所有添加的对象
+                fluidDisplayList.addAll(tagFluids);
+            }
             maxPage = Math.max(0, (fluidDisplayList.size() - 1) / SLOTS_PER_PAGE);
         }
         
@@ -190,6 +409,33 @@ public class CustomTagCreatorScreen extends Screen {
 
         if (prevPageButton != null) prevPageButton.active = currentPage > 0;
         if (nextPageButton != null) nextPageButton.active = currentPage < maxPage;
+    }
+    
+    private void toggleReplaceMode() {
+        isReplaceMode = !isReplaceMode;
+        if (replaceButton != null) {
+            replaceButton.setMessage(Component.literal(isReplaceMode ? "覆盖模式: 开" : "覆盖模式: 关"));
+        }
+        // 覆盖模式下禁用显示模式切换（仅原有标签）
+        if (displayModeButton != null) {
+            displayModeButton.active = !isReplaceMode;
+            if (isReplaceMode) {
+                displayMode = DisplayMode.ALL;
+                displayModeButton.setMessage(Component.literal(displayMode.getDisplayName()));
+                updateButtons();
+            }
+        }
+    }
+    
+    private void toggleDisplayMode() {
+        DisplayMode[] modes = DisplayMode.values();
+        int currentIndex = displayMode.ordinal();
+        displayMode = modes[(currentIndex + 1) % modes.length];
+        if (displayModeButton != null) {
+            displayModeButton.setMessage(Component.literal(displayMode.getDisplayName()));
+        }
+        currentPage = 0;
+        updateButtons();
     }
 
     private void toggleMode() {
@@ -223,34 +469,65 @@ public class CustomTagCreatorScreen extends Screen {
             minecraft.setScreen(new ItemSelectorScreen(this, item -> {
                 if (!item.isEmpty()) {
                     Item itemType = item.getItem();
-                    if (tagItems.contains(itemType)) {
-                        displayMessage("§e该物品已在标签中，无法重复添加");
-                        return;
+                    ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(itemType);
+                    
+                    if (isEditMode && displayMode == DisplayMode.REMOVED) {
+                        if (removedItems.contains(itemId)) {
+                            displayMessage("§e该物品已在移除列表中，无法重复添加");
+                            return;
+                        }
+                        removedItems.add(itemId);
+                        updateButtons();
+                        displayMessage("§a已添加到移除列表: " + itemId);
+                    } else {
+                        if (tagItems.contains(itemType)) {
+                            displayMessage("§e该物品已在标签中，无法重复添加");
+                            return;
+                        }
+                        tagItems.add(itemType);
+                        updateButtons();
+                        displayMessage("§a已添加: " + itemId);
                     }
-                    tagItems.add(itemType);
-                    updateButtons();
-                    displayMessage("§a已添加: " + ForgeRegistries.ITEMS.getKey(itemType));
                 }
             }));
         } else {
-            // 流体选择：使用简单的流体列表界面
             minecraft.setScreen(new FluidSelectorScreen(this, fluidId -> {
                 if (fluidId != null) {
-                    if (tagFluids.contains(fluidId)) {
-                        displayMessage("§e该流体已在标签中，无法重复添加");
-                        return;
+                    if (isEditMode && displayMode == DisplayMode.REMOVED) {
+                        if (removedFluids.contains(fluidId)) {
+                            displayMessage("§e该流体已在移除列表中，无法重复添加");
+                            return;
+                        }
+                        removedFluids.add(fluidId);
+                        updateButtons();
+                        displayMessage("§a已添加到移除列表: " + fluidId);
+                    } else {
+                        if (tagFluids.contains(fluidId)) {
+                            displayMessage("§e该流体已在标签中，无法重复添加");
+                            return;
+                        }
+                        tagFluids.add(fluidId);
+                        updateButtons();
+                        displayMessage("§a已添加: " + fluidId);
                     }
-                    tagFluids.add(fluidId);
-                    updateButtons();
-                    displayMessage("§a已添加: " + fluidId);
                 }
             }));
         }
     }
 
     private void clearAllItems() {
-        if (currentMode == Mode.ITEM) tagItems.clear();
-        else tagFluids.clear();
+        if (isEditMode) {
+            if (displayMode == DisplayMode.REMOVED) {
+                if (currentMode == Mode.ITEM) removedItems.clear();
+                else removedFluids.clear();
+            } else {
+                if (currentMode == Mode.ITEM) tagItems.clear();
+                else tagFluids.clear();
+            }
+        } else {
+            if (currentMode == Mode.ITEM) tagItems.clear();
+            else tagFluids.clear();
+        }
         currentPage = 0;
         updateButtons();
     }
@@ -270,7 +547,7 @@ public class CustomTagCreatorScreen extends Screen {
         }
 
         boolean isEmpty = currentMode == Mode.ITEM ? tagItems.isEmpty() : tagFluids.isEmpty();
-        if (isEmpty) {
+        if (isEmpty && !isEditMode) {
             String type = currentMode == Mode.ITEM ? "物品" : "流体";
             displayMessage("§c请至少添加一个" + type + "到标签中");
             return;
@@ -279,41 +556,110 @@ public class CustomTagCreatorScreen extends Screen {
         isCreating = true;
 
         try {
-            ResourceLocation tagId = ResourceLocation.parse(namespace + ":" + path);
+            ResourceLocation tagId = isEditMode ? editingTagId : ResourceLocation.parse(namespace + ":" + path);
 
-            if (currentMode == Mode.ITEM) {
-                List<ItemStack> stackList = new ArrayList<>();
-                for (Item item : tagItems) stackList.add(new ItemStack(item));
-                CustomTagManager.registerTag(tagId, stackList);
+            if (isEditMode) {
+                // 编辑模式：保存或删除标签文件
+                if (currentMode == Mode.ITEM) {
+                    List<String> itemIds = new ArrayList<>();
+                    for (Item item : tagItems) {
+                        ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(item);
+                        if (itemId != null) {
+                            itemIds.add(itemId.toString());
+                        }
+                    }
+                    List<String> removedIds = new ArrayList<>(removedItems.stream()
+                            .map(ResourceLocation::toString)
+                            .collect(Collectors.toList()));
+                    
+                    // 检查是否应该删除空文件
+                    if (!isReplaceMode && itemIds.isEmpty() && removedIds.isEmpty()) {
+                        // replace=false 且内容为空，删除文件
+                        CustomTagManager.removeTag(tagId);
+                        if (minecraft != null && minecraft.player != null) {
+                            minecraft.player.sendSystemMessage(Component.literal("§a已移除空的标签文件: #" + tagId));
+                            minecraft.player.sendSystemMessage(Component.literal("§a使用/reload指令恢复原有标签！"));
+                        }
+                    } else {
+                        // 保存标签文件
+                        CustomTagManager.saveTagFileInfo(tagId, "items", isReplaceMode, itemIds, removedIds);
+                        if (minecraft != null && minecraft.player != null) {
+                            int count = itemIds.size();
+                            int removedCount = removedIds.size();
+                            minecraft.player.sendSystemMessage(
+                                    Component.literal("§a物品标签已更新: #" + tagId + 
+                                            " (包含 " + count + " 个物品" + 
+                                            (removedCount > 0 ? ", 移除 " + removedCount + " 个物品" : "") + ")")
+                            );
+                            minecraft.player.sendSystemMessage(Component.literal("§a使用/reload指令加载标签！"));
+                        }
+                    }
+                } else {
+                    List<String> fluidIds = new ArrayList<>(tagFluids.stream()
+                            .map(ResourceLocation::toString)
+                            .collect(Collectors.toList()));
+                    List<String> removedIds = new ArrayList<>(removedFluids.stream()
+                            .map(ResourceLocation::toString)
+                            .collect(Collectors.toList()));
+                    
+                    // 检查是否应该删除空文件
+                    if (!isReplaceMode && fluidIds.isEmpty() && removedIds.isEmpty()) {
+                        // replace=false 且内容为空，删除文件
+                        CustomTagManager.removeTag(tagId);
+                        if (minecraft != null && minecraft.player != null) {
+                            minecraft.player.sendSystemMessage(Component.literal("§a已移除空的标签文件: #" + tagId));
+                            minecraft.player.sendSystemMessage(Component.literal("§a使用/reload指令恢复原有标签！"));
+                        }
+                    } else {
+                        // 保存标签文件
+                        CustomTagManager.saveTagFileInfo(tagId, "fluids", isReplaceMode, fluidIds, removedIds);
+                        if (minecraft != null && minecraft.player != null) {
+                            int count = fluidIds.size();
+                            int removedCount = removedIds.size();
+                            minecraft.player.sendSystemMessage(
+                                    Component.literal("§a流体标签已更新: #" + tagId + 
+                                            " (包含 " + count + " 个流体" + 
+                                            (removedCount > 0 ? ", 移除 " + removedCount + " 个流体" : "") + ")")
+                            );
+                            minecraft.player.sendSystemMessage(Component.literal("§a使用/reload指令加载标签！"));
+                        }
+                    }
+                }
             } else {
-                List<ResourceLocation> fluidIdList = new ArrayList<>(tagFluids);
-                CustomTagManager.registerFluidTag(tagId, fluidIdList);
-            }
-
-            if (onTagCreated != null) {
                 if (currentMode == Mode.ITEM) {
                     List<ItemStack> stackList = new ArrayList<>();
                     for (Item item : tagItems) stackList.add(new ItemStack(item));
-                    onTagCreated.accept(TagCreationResult.forItems(tagId, stackList));
+                    CustomTagManager.registerTag(tagId, stackList);
                 } else {
-                    onTagCreated.accept(TagCreationResult.forFluids(tagId, new ArrayList<>(tagFluids)));
+                    List<ResourceLocation> fluidIdList = new ArrayList<>(tagFluids);
+                    CustomTagManager.registerFluidTag(tagId, fluidIdList);
                 }
-            }
 
-            if (minecraft != null && minecraft.player != null) {
-                String type = currentMode == Mode.ITEM ? "物品" : "流体";
-                int count = currentMode == Mode.ITEM ? tagItems.size() : tagFluids.size();
-                minecraft.player.sendSystemMessage(
-                        Component.literal("§a自定义" + type + "标签已创建: #" + tagId + " (包含 " + count + " 个" + type + ")")
-                );
-                minecraft.player.sendSystemMessage(Component.literal("§a使用/reload指令加载标签！"));
+                if (onTagCreated != null) {
+                    if (currentMode == Mode.ITEM) {
+                        List<ItemStack> stackList = new ArrayList<>();
+                        for (Item item : tagItems) stackList.add(new ItemStack(item));
+                        onTagCreated.accept(TagCreationResult.forItems(tagId, stackList));
+                    } else {
+                        onTagCreated.accept(TagCreationResult.forFluids(tagId, new ArrayList<>(tagFluids)));
+                    }
+                }
+
+                if (minecraft != null && minecraft.player != null) {
+                    String type = currentMode == Mode.ITEM ? "物品" : "流体";
+                    int count = currentMode == Mode.ITEM ? tagItems.size() : tagFluids.size();
+                    minecraft.player.sendSystemMessage(
+                            Component.literal("§a自定义" + type + "标签已创建: #" + tagId + " (包含 " + count + " 个" + type + ")")
+                    );
+                    minecraft.player.sendSystemMessage(Component.literal("§a使用/reload指令加载标签！"));
+                }
             }
 
             if (minecraft != null) minecraft.execute(() -> minecraft.setScreen(parentScreen));
 
         } catch (Exception e) {
             isCreating = false;
-            displayMessage("§c创建标签失败: " + e.getMessage());
+            displayMessage("§c" + (isEditMode ? "保存标签失败" : "创建标签失败") + ": " + e.getMessage());
         }
     }
 
@@ -335,14 +681,17 @@ public class CustomTagCreatorScreen extends Screen {
         guiGraphics.drawString(this.font, "命名空间:", leftPos + 10, topPos + 35, 0x404040, false);
         guiGraphics.drawString(this.font, "路径:", leftPos + 10, topPos + 60, 0x404040, false);
 
+        int previewY = isEditMode ? topPos + 135 : topPos + 110;
         String previewId = "#" + namespaceBox.getValue() + ":" + pathBox.getValue();
-        guiGraphics.drawString(this.font, "预览: " + previewId, leftPos + 10, topPos + 110, 0x666666, false);
+        guiGraphics.drawString(this.font, "预览: " + previewId, leftPos + 10, previewY, 0x666666, false);
 
         String type = currentMode == Mode.ITEM ? "物品" : "流体";
         int count = currentMode == Mode.ITEM ? displayList.size() : fluidDisplayList.size();
-        String hint = String.format("§7%s列表 (共%d个，已去重) - 第%d/%d页",
-                type, count, currentPage + 1, maxPage + 1);
-        guiGraphics.drawString(this.font, hint, leftPos + 10, topPos + 125, 0x666666, false);
+        String displayModeText = isEditMode ? " (" + displayMode.getDisplayName() + ")" : "";
+        String hint = String.format("§7%s列表 (共%d个，已去重)%s - 第%d/%d页",
+                type, count, displayModeText, currentPage + 1, maxPage + 1);
+        int hintY = isEditMode ? topPos + 150 : topPos + 125;
+        guiGraphics.drawString(this.font, hint, leftPos + 10, hintY, 0x666666, false);
 
         renderItemSlots(guiGraphics, mouseX, mouseY);
 
@@ -355,7 +704,7 @@ public class CustomTagCreatorScreen extends Screen {
 
     private void renderItemSlots(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         int startX = leftPos + 10;
-        int startY = topPos + 140;
+        int startY = isEditMode ? topPos + 165 : topPos + 140;
 
         int startIndex = currentPage * SLOTS_PER_PAGE;
         int endIndex = currentMode == Mode.ITEM ? 
@@ -424,7 +773,7 @@ public class CustomTagCreatorScreen extends Screen {
 
     private void renderTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         int startX = leftPos + 10;
-        int startY = topPos + 140;
+        int startY = isEditMode ? topPos + 165 : topPos + 140;
 
         int startIndex = currentPage * SLOTS_PER_PAGE;
 
@@ -474,7 +823,7 @@ public class CustomTagCreatorScreen extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 1) {
             int startX = leftPos + 10;
-            int startY = topPos + 140;
+            int startY = topPos + (isEditMode ? 150 : 140);
             int startIndex = currentPage * SLOTS_PER_PAGE;
 
             for (int i = 0; i < SLOTS_PER_PAGE; i++) {

@@ -129,6 +129,14 @@ public class CustomTagManager {
     }
     
     /**
+     * 检查是否为自定义标签（通过命名空间判断）
+     */
+    public static boolean isCustomTag(ResourceLocation tagId) {
+        // 检查标签文件是否存在于自定义标签目录
+        return hasTag(tagId);
+    }
+    
+    /**
      * 获取所有自定义标签ID
      */
     public static Set<ResourceLocation> getAllTags() {
@@ -282,5 +290,95 @@ public class CustomTagManager {
         }
         
         return values;
+    }
+    
+    /**
+     * 读取标签文件的完整信息
+     */
+    public static TagFileInfo readTagFileInfo(ResourceLocation tagId, String tagType) {
+        try {
+            File tagFile = getTagFile(tagId, tagType);
+            if (!tagFile.exists()) {
+                return null;
+            }
+            
+            try (FileReader reader = new FileReader(tagFile)) {
+                JsonObject tagJson = GSON.fromJson(reader, JsonObject.class);
+                if (tagJson == null) {
+                    return null;
+                }
+                
+                boolean replace = tagJson.has("replace") && tagJson.get("replace").getAsBoolean();
+                List<String> values = new ArrayList<>();
+                List<String> removedValues = new ArrayList<>();
+                
+                if (tagJson.has("values")) {
+                    JsonArray valuesArray = tagJson.getAsJsonArray("values");
+                    for (int i = 0; i < valuesArray.size(); i++) {
+                        String value = valuesArray.get(i).getAsString();
+                        if (value.startsWith("!")) {
+                            removedValues.add(value.substring(1));
+                        } else {
+                            values.add(value);
+                        }
+                    }
+                }
+                
+                return new TagFileInfo(replace, values, removedValues);
+            }
+            
+        } catch (Exception e) {
+            LOGGER.error("读取标签文件信息失败: " + tagId, e);
+            return null;
+        }
+    }
+    
+    /**
+     * 保存标签文件
+     */
+    public static boolean saveTagFileInfo(ResourceLocation tagId, String tagType, boolean replace, 
+                                          List<String> values, List<String> removedValues) {
+        try {
+            JsonObject tagJson = new JsonObject();
+            tagJson.addProperty("replace", replace);
+            
+            JsonArray valuesArray = new JsonArray();
+            for (String value : values) {
+                valuesArray.add(value);
+            }
+            for (String removed : removedValues) {
+                valuesArray.add("!" + removed);
+            }
+            tagJson.add("values", valuesArray);
+            
+            File tagFile = getTagFile(tagId, tagType);
+            Files.createDirectories(tagFile.getParentFile().toPath());
+            
+            try (FileWriter writer = new FileWriter(tagFile)) {
+                GSON.toJson(tagJson, writer);
+            }
+            
+            LOGGER.info("已保存标签文件: {}", tagFile.getPath());
+            return true;
+            
+        } catch (Exception e) {
+            LOGGER.error("保存标签文件失败: " + tagId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 标签文件信息类
+     */
+    public static class TagFileInfo {
+        public final boolean replace;
+        public final List<String> values;
+        public final List<String> removedValues;
+        
+        public TagFileInfo(boolean replace, List<String> values, List<String> removedValues) {
+            this.replace = replace;
+            this.values = values;
+            this.removedValues = removedValues;
+        }
     }
 }
