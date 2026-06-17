@@ -1,0 +1,12 @@
+{
+  "recipeId": "examplemod:cooler",
+  "enabledPatches": {
+    "default_energy_slot": true,
+    "fast_processing": false
+  },
+  "localPatches": {
+    "/outputs/0/chance": 0.75,
+    "/metadata/customTag": "cooler_v1"
+  }
+}
+

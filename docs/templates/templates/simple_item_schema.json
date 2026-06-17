@@ -1,0 +1,26 @@
+{
+  "recipeType": "modid:example_simple",
+  "displayName": "示例 — 简单物品配方",
+  "size": [150, 60],
+  "inputSlots": [
+    {
+      "id": "input_0",
+      "index": 0,
+      "jsonField": "ingredient",
+      "x": 34,
+      "y": 6,
+      "amountScale": 1
+    }
+  ],
+  "outputSlots": [
+    {
+      "id": "output_0",
+      "index": 0,
+      "jsonField": "result",
+      "x": 97,
+      "y": 15
+    }
+  ],
+  "properties": []
+}
+

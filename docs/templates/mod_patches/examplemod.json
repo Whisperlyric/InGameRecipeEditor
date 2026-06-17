@@ -1,0 +1,27 @@
+{
+  "modId": "examplemod",
+  "requiredFields": [
+    "/energySlots/0/maxEnergy",
+    "/processing/time"
+  ],
+  "patchDefinitions": {
+    "default_energy_slot": {
+      "description": "为所有能量槽设置默认最大能量",
+      "patch": {
+        "/energySlots/0/maxEnergy": 100000,
+        "/energySlots/0/transferRate": 512
+      },
+      "scope": "slot",
+      "usageCountHint": 5
+    },
+    "fast_processing": {
+      "description": "加速加工时间（乘以0.5）",
+      "patch": {
+        "/processing/timeMultiplier": 0.5
+      },
+      "scope": "recipe",
+      "usageCountHint": 3
+    }
+  }
+}
+

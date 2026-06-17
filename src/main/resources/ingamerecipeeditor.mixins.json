@@ -13,7 +13,8 @@
     "RecipeGuiLayoutsMixin",
     "RecipeGuiLayoutsAccessor",
     "RecipesGuiAccessor",
-    "RecipesGuiMouseMixin"
+    "RecipesGuiMouseMixin",
+    "RecipeLayoutDrawOverlaysMixin"
   ],
   "injectors": {
     "defaultRequire": 1
