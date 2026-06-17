@@ -2,8 +2,10 @@ package dev.whisperlyric.ingamerecipeeditor.workspace;
 
 import com.google.gson.JsonObject;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
+import com.google.gson.JsonObject;
 import dev.whisperlyric.ingamerecipeeditor.schema.RecipeSchema;
 import dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry;
+import dev.whisperlyric.ingamerecipeeditor.schema.PatchRegistry;
 import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.recipe.category.IRecipeCategory;
@@ -100,6 +102,14 @@ public class RecipeWorkspaceManager {
     }
     
     /**
+     * 获取指定草稿
+     */
+    public Optional<DraftInfo> getDraft(String recipeId) {
+        DraftInfo draft = drafts.get(recipeId);
+        return Optional.ofNullable(draft);
+    }
+    
+    /**
      * 是否正在编辑
      */
     public boolean isEditing(String recipeId) {
@@ -130,16 +140,23 @@ public class RecipeWorkspaceManager {
         }
         
         try {
-            RecipeEditManager.submit(draftId);
-            InGameRecipeEditor.LOGGER.info("提交配方草稿: {}", draftId);
-            
-            // 提交后移除草稿
-            if (draftId.equals(activeRecipeId)) {
-                activeRecipeId = null;
+            var result = RecipeEditManager.submit(draftId);
+            if (result.isPresent()) {
+                InGameRecipeEditor.LOGGER.info("提交配方草稿并生成JSON: {}", draftId);
+                // 提交后移除草稿
+                if (draftId.equals(activeRecipeId)) {
+                    activeRecipeId = null;
+                }
+                drafts.remove(draftId);
+                return result;
+            } else {
+                InGameRecipeEditor.LOGGER.info("提交配方草稿（无更改）: {}", draftId);
+                if (draftId.equals(activeRecipeId)) {
+                    activeRecipeId = null;
+                }
+                drafts.remove(draftId);
+                return Optional.empty();
             }
-            drafts.remove(draftId);
-            
-            return Optional.empty(); // TODO: 实际生成JSON
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.error("提交配方失败: {}", e.getMessage());
             return Optional.empty();
@@ -268,12 +285,25 @@ public class RecipeWorkspaceManager {
             recipe,
             category
         ));
+        // 如果没有schema，则尝试应用refs下的mod/recipe补丁作为起始JSON
+        String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+        var schemaOpt = SchemaRegistry.getSchema(recipeType);
+        if (schemaOpt.isEmpty()) {
+            try {
+                JsonObject merged = PatchRegistry.applyPatches(null, recipeIdStr, recipeType);
+                // 注册草稿信息，使编辑器可以基于该JSON工作
+                drafts.put(recipeIdStr, new DraftInfo(recipeIdStr, recipeType, merged));
+                InGameRecipeEditor.LOGGER.info("为无编码配方应用补丁并创建草稿: {}", recipeIdStr);
+            } catch (Exception e) {
+                InGameRecipeEditor.LOGGER.warn("应用补丁失败: {}", e.getMessage());
+            }
+        }
 
         // 打开工作区界面（编辑模式）
         RecipeWorkspaceScreen screen = new RecipeWorkspaceScreen(parent, recipeIdStr, recipeLayout, true);
         currentScreen = screen;
         Minecraft.getInstance().setScreen(screen);
-        
+
         InGameRecipeEditor.LOGGER.info("打开工作区编辑配方: {}", recipeIdStr);
     }
 

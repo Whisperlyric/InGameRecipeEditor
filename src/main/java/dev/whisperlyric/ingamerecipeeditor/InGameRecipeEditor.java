@@ -18,6 +18,7 @@ public class InGameRecipeEditor {
     @SuppressWarnings("removal")
     public InGameRecipeEditor() {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onCommonSetup);
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onClientSetup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(ModKeyMappings::register);
         
         LOGGER.info("InGameRecipeEditor mod initialized");
@@ -30,6 +31,13 @@ public class InGameRecipeEditor {
             
             NetworkHandler.init();
             LOGGER.info("Network handler initialized");
+        });
+    }
+
+    private void onClientSetup(final net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
+        event.enqueueWork(() -> {
+            // Ensure IngredientCycleManager class is loaded and initialized on client
+            dev.whisperlyric.ingamerecipeeditor.workspace.IngredientCycleManager.init();
         });
     }
 }

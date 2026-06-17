@@ -677,7 +677,7 @@ public class TagSelectorScreen extends Screen {
     @SuppressWarnings("null")
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+        if (button == 0 || button == 1) {
             int startIndex = currentPage * TAGS_PER_PAGE;
             int endIndex = Math.min(startIndex + TAGS_PER_PAGE, filteredTags.size());
             
@@ -694,10 +694,25 @@ public class TagSelectorScreen extends Screen {
                                     mouseY >= rowY && mouseY < rowY + rowHeight - 2;
                 
                 if (isMouseOver) {
-                    if (minecraft != null) {
-                        minecraft.setScreen(new TagPreviewScreen(this, tag.tagId, tag.tagType));
+                    if (button == 0) {
+                        // 左键：预览
+                        if (minecraft != null) {
+                            minecraft.setScreen(new TagPreviewScreen(this, tag.tagId, tag.tagType));
+                        }
+                        return true;
+                    } else if (button == 1) {
+                        // 右键：选择并返回（通过回调通知）
+                        if (onTagSelected != null) {
+                            try {
+                                onTagSelected.accept(tag.tagId);
+                            } catch (Exception ignored) {}
+                        }
+                        // 返回到父界面
+                        if (minecraft != null) {
+                            minecraft.setScreen(parentScreen);
+                        }
+                        return true;
                     }
-                    return true;
                 }
             }
         }

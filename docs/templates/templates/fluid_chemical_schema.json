@@ -1,0 +1,34 @@
+{
+  "recipeType": "modid:example_fluid_chemical",
+  "displayName": "示例 — 流体/化学品配方",
+  "size": [200, 80],
+  "inputSlots": [
+    {
+      "id": "fluid_input_0",
+      "index": 0,
+      "jsonField": "fluid",
+      "x": 20,
+      "y": 10,
+      "amountScale": 1000
+    },
+    {
+      "id": "chem_input_0",
+      "index": 1,
+      "jsonField": "resource",
+      "x": 60,
+      "y": 10,
+      "amountScale": 1
+    }
+  ],
+  "outputSlots": [
+    {
+      "id": "output_0",
+      "index": 0,
+      "jsonField": "result",
+      "x": 140,
+      "y": 25
+    }
+  ],
+  "properties": []
+}
+

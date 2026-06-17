@@ -15,9 +15,19 @@ This project is actively developed and released under Apache-2.0 license.
 - Pinyin-based search support for Chinese users
 - Compatible with multiple popular mods
 
+## Recipe Editing System
+
+Schema-based architecture with workspace editor and network sync. 
+
+**Completed**: Disable/enable, deletion, workspace UI, chemical rendering, schema registry.
+
+**In Development**: Workspace edit callbacks, Submission mechanism, JSON generation, property editing.
+
 ## AI Assistance Declaration
 
 This project was developed with the assistance of generative AI tools (GLM-5, Claude, etc.) for coding, code review suggestions, and documentation improvements.
+
+- Notes: All the project documentation is currently generated and understood by AI, mainly to help collaborators understand the project's development direction and make maintenance easier. When the module is officially released, developers will review and maintain it again.
 
 **Developer Commitment:**
 

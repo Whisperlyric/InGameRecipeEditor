@@ -39,6 +39,10 @@ public class CustomTagManager {
         }
     }
     
+    // 缓存：避免每次读取标签文件时重新解析磁盘
+    private static final java.util.concurrent.ConcurrentMap<ResourceLocation, java.util.List<String>> itemsCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentMap<ResourceLocation, java.util.List<String>> fluidsCache = new java.util.concurrent.ConcurrentHashMap<>();
+    
     /**
      * 注册自定义标签
      * @param tagId 标签ID (例如: minecraft:planks)
@@ -56,7 +60,8 @@ public class CustomTagManager {
                     .collect(Collectors.toList());
             
             saveTagFile(tagId, uniqueItems, "items");
-            
+            // invalidate cache for this tag
+            itemsCache.remove(tagId);
             LOGGER.info("已创建自定义物品标签: {} (包含 {} 个物品)", tagId, uniqueItems.size());
             return true;
             
@@ -82,7 +87,8 @@ public class CustomTagManager {
                     .collect(Collectors.toList());
             
             saveFluidTagFile(tagId, uniqueFluids);
-            
+            // invalidate cache for this tag
+            fluidsCache.remove(tagId);
             LOGGER.info("已创建自定义流体标签: {} (包含 {} 个流体)", tagId, uniqueFluids.size());
             return true;
             
@@ -113,6 +119,10 @@ public class CustomTagManager {
                 removed = true;
             }
             
+            // 清理缓存
+            itemsCache.remove(tagId);
+            fluidsCache.remove(tagId);
+
             return removed;
             
         } catch (Exception e) {
@@ -213,6 +223,8 @@ public class CustomTagManager {
         }
         
         LOGGER.info("已保存标签文件: {}", tagFile.getPath());
+        // 写盘后刷新缓存
+        itemsCache.remove(tagId);
     }
     
     /**
@@ -236,6 +248,8 @@ public class CustomTagManager {
         }
         
         LOGGER.info("已保存流体标签文件: {}", tagFile.getPath());
+        // 写盘后刷新缓存
+        fluidsCache.remove(tagId);
     }
     
     /**
@@ -268,13 +282,23 @@ public class CustomTagManager {
      */
     private static List<String> readTagValues(ResourceLocation tagId, String tagType) {
         List<String> values = new ArrayList<>();
-        
+        // 尝试从缓存读取
+        try {
+            if ("items".equals(tagType)) {
+                var cached = itemsCache.get(tagId);
+                if (cached != null) return new ArrayList<>(cached);
+            } else if ("fluids".equals(tagType)) {
+                var cached = fluidsCache.get(tagId);
+                if (cached != null) return new ArrayList<>(cached);
+            }
+        } catch (Exception ignored) {}
+
         try {
             File tagFile = getTagFile(tagId, tagType);
             if (!tagFile.exists()) {
                 return values;
             }
-            
+
             try (FileReader reader = new FileReader(tagFile)) {
                 JsonObject tagJson = GSON.fromJson(reader, JsonObject.class);
                 if (tagJson != null && tagJson.has("values")) {
@@ -284,11 +308,17 @@ public class CustomTagManager {
                     }
                 }
             }
-            
+
+            // 写入缓存
+            if (!values.isEmpty()) {
+                if ("items".equals(tagType)) itemsCache.put(tagId, new ArrayList<>(values));
+                else if ("fluids".equals(tagType)) fluidsCache.put(tagId, new ArrayList<>(values));
+            }
+
         } catch (Exception e) {
             LOGGER.error("读取标签文件失败: " + tagId, e);
         }
-        
+
         return values;
     }
     
@@ -367,6 +397,14 @@ public class CustomTagManager {
         }
     }
     
+    /**
+     * 手动使缓存失效（外部调用）
+     */
+    public static void invalidateTagCache(ResourceLocation tagId) {
+        if (tagId == null) return;
+        itemsCache.remove(tagId);
+        fluidsCache.remove(tagId);
+    }
     /**
      * 标签文件信息类
      */

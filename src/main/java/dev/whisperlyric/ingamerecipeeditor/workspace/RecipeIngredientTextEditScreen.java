@@ -31,6 +31,7 @@ public class RecipeIngredientTextEditScreen extends Screen {
 
     private int centerX;
     private int centerY;
+    private int amountDisplayScale = 1;
 
     public RecipeIngredientTextEditScreen(Screen parent, String recipeId, List<IRecipeSlotView> slots,
                                            IRecipeSlotDrawable slot, RecipeEditManager.IngredientEditValue initialValue) {
@@ -47,6 +48,28 @@ public class RecipeIngredientTextEditScreen extends Screen {
         this.centerX = this.width / 2;
         this.centerY = this.height / 2;
 
+        // 计算数量显示比例（从schema中读取，默认1）
+        try {
+            var wsOpt = dev.whisperlyric.ingamerecipeeditor.workspace.RecipeWorkspaceManager.getInstance().getWorkspaceRecipe(recipeId);
+            String recipeType = wsOpt.map(wr -> dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper.getRecipeTypeFromJson(recipeId).orElse(null)).orElseGet(() -> dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper.getRecipeTypeFromJson(recipeId).orElse(null));
+            if (recipeType != null) {
+                var schemaOpt = dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry.getSchema(recipeType);
+                if (schemaOpt.isPresent()) {
+                    var schema = schemaOpt.get();
+                    int idx = computeSlotIndex(slots, slot);
+                    if (idx >= 0) {
+                        if (idx < schema.getInputSlotCount()) {
+                            var def = schema.getInputSlotByIndex(idx);
+                            if (def != null) amountDisplayScale = def.getAmountScale();
+                        } else {
+                            var def = schema.getOutputSlotByIndex(idx - schema.getInputSlotCount());
+                            if (def != null) amountDisplayScale = def.getAmountScale();
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
         // 原料ID输入框
         this.ingredientIdBox = new EditBox(
             this.font,
@@ -60,6 +83,19 @@ public class RecipeIngredientTextEditScreen extends Screen {
         this.ingredientIdBox.setMaxLength(256);
         this.addRenderableWidget(this.ingredientIdBox);
 
+        // 标签选择按钮（复用标签选择/预览界面）
+        Button tagButton = Button.builder(Component.translatable("ingamerecipeeditor.screen.ingredient_edit.open_tags"), b -> {
+            if (minecraft != null) {
+                minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen(this, tagId -> {
+                    try {
+                        // 右键选择会回调这里，设置为#tagId格式
+                        this.ingredientIdBox.setValue("#" + tagId.toString());
+                    } catch (Exception ignored) {}
+                }));
+            }
+        }).bounds(centerX + EDIT_BOX_WIDTH / 2 + 6, centerY - 40, 80, 20).build();
+        this.addRenderableWidget(tagButton);
+
         // 数量输入框
         this.amountBox = new EditBox(
             this.font,
@@ -69,7 +105,8 @@ public class RecipeIngredientTextEditScreen extends Screen {
             EDIT_BOX_HEIGHT,
             Component.translatable("ingamerecipeeditor.screen.ingredient_edit.amount")
         );
-        this.amountBox.setValue(String.valueOf(initialValue.amount()));
+        long displayAmount = initialValue.amount() * Math.max(1, amountDisplayScale);
+        this.amountBox.setValue(String.valueOf(displayAmount));
         this.amountBox.setMaxLength(10);
         this.amountBox.setFilter(s -> s.matches("\\d*"));
         this.addRenderableWidget(this.amountBox);
@@ -93,7 +130,8 @@ public class RecipeIngredientTextEditScreen extends Screen {
         String ingredientId = ingredientIdBox.getValue();
         long amount = 1;
         try {
-            amount = Long.parseLong(amountBox.getValue());
+            long display = Long.parseLong(amountBox.getValue());
+            amount = (long) Math.max(1, Math.round((double) display / Math.max(1, amountDisplayScale)));
         } catch (NumberFormatException e) {
             amount = 1;
         }
@@ -118,6 +156,19 @@ public class RecipeIngredientTextEditScreen extends Screen {
         if (minecraft != null) {
             minecraft.setScreen(parent);
         }
+    }
+
+    private static int computeSlotIndex(java.util.List<mezz.jei.api.gui.ingredient.IRecipeSlotView> slots, mezz.jei.api.gui.ingredient.IRecipeSlotDrawable target) {
+        int index = 0;
+        for (var slotView : slots) {
+            if (!(slotView instanceof mezz.jei.api.gui.ingredient.IRecipeSlotDrawable)) continue;
+            var drawable = (mezz.jei.api.gui.ingredient.IRecipeSlotDrawable) slotView;
+            if (drawable == target) return index;
+            if (drawable.getRole() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT || drawable.getRole() == mezz.jei.api.recipe.RecipeIngredientRole.OUTPUT) {
+                index++;
+            }
+        }
+        return -1;
     }
 
     @Override

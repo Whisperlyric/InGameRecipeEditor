@@ -44,6 +44,7 @@ public class SlotDefinition {
     private final int y;                   // 可视化位置Y
     private final int width;               // 槽位宽度
     private final int height;              // 槽位高度
+    private final int amountScale;         // 显示数量与JSON数量之间的比例（默认1）
     
     /**
      * 构造方法
@@ -51,7 +52,7 @@ public class SlotDefinition {
     public SlotDefinition(String id, int index, SlotRole role, IngredientType type, 
                           boolean required, String jsonField, String[] jsonPaths,
                           String amountPath, String chemicalTypePath,
-                          int x, int y, int width, int height) {
+                          int x, int y, int width, int height, int amountScale) {
         this.id = id;
         this.index = index;
         this.role = role;
@@ -65,6 +66,7 @@ public class SlotDefinition {
         this.y = y;
         this.width = width;
         this.height = height;
+        this.amountScale = Math.max(1, amountScale);
     }
     
     /**
@@ -72,7 +74,7 @@ public class SlotDefinition {
      */
     public SlotDefinition(String id, int index, SlotRole role, IngredientType type,
                           boolean required, String jsonField, int x, int y) {
-        this(id, index, role, type, required, jsonField, null, null, null, x, y, 18, 18);
+        this(id, index, role, type, required, jsonField, null, null, null, x, y, 18, 18, 1);
     }
     
     // ========== Getter方法 ==========
@@ -90,6 +92,7 @@ public class SlotDefinition {
     public int getY() { return y; }
     public int getWidth() { return width; }
     public int getHeight() { return height; }
+    public int getAmountScale() { return amountScale; }
     
     /**
      * 获取主要JSON路径（优先返回jsonField，否则返回jsonPaths的第一个）
@@ -164,6 +167,7 @@ public class SlotDefinition {
         private int y;
         private int width = 18;
         private int height = 18;
+        private int amountScale = 1;
         
         public Builder id(String id) { this.id = id; return this; }
         public Builder index(int index) { this.index = index; return this; }
@@ -176,6 +180,10 @@ public class SlotDefinition {
         public Builder chemicalTypePath(String chemicalTypePath) { this.chemicalTypePath = chemicalTypePath; return this; }
         public Builder position(int x, int y) { this.x = x; this.y = y; return this; }
         public Builder size(int width, int height) { this.width = width; this.height = height; return this; }
+        /**
+         * 设置数量显示比例（显示值 -> JSON值的转换比例），默认为1
+         */
+        public Builder amountScale(int scale) { this.amountScale = Math.max(1, scale); return this; }
         
         /**
          * 创建输入槽位
@@ -223,7 +231,7 @@ public class SlotDefinition {
         
         public SlotDefinition build() {
             return new SlotDefinition(id, index, role, type, required, jsonField, jsonPaths,
-                                      amountPath, chemicalTypePath, x, y, width, height);
+                                      amountPath, chemicalTypePath, x, y, width, height, amountScale);
         }
     }
 }
