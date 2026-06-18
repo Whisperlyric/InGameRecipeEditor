@@ -100,10 +100,8 @@ public class RecipeEditManager {
 
             // 先尝试从配方JSON读取槽位值（包括tag）
             IngredientEditValue originalValue = getSlotOriginalValueFromJson(recipeJson, recipeLayout, slot, index);
-            if (originalValue == null) {
-                // 如果JSON中没有，从槽位显示获取
-                originalValue = getSlotOriginalValue(recipe, slot);
-            }
+            
+            // 如果JSON中没有，不使用默认值，让用户知道解析失败
             if (originalValue != null) {
                 originalValues.put(index, originalValue);
             }
@@ -194,11 +192,10 @@ public class RecipeEditManager {
      * 从JSON元素解析原料值（包括tag）
      */
     private static IngredientEditValue parseIngredientFromJson(JsonElement value, SlotDefinition slotDef) {
-        if (value == null || !value.isJsonObject()) {
+        if (value == null) {
             return null;
         }
 
-        JsonObject obj = value.getAsJsonObject();
         IngredientKind kind = IngredientKind.ITEM;
 
         // 确定原料类型
@@ -210,43 +207,132 @@ public class RecipeEditManager {
             case SLURRY -> kind = IngredientKind.SLURRY;
         }
 
-        // 读取原料ID或tag
-        String ingredientId = null;
-        long amount = 1;
+        // 处理对象形式
+        if (value.isJsonObject()) {
+            JsonObject obj = value.getAsJsonObject();
+            
+            // 检查是否有嵌套的ingredient字段（如 {"ingredient":[{"tag":"..."}]}）
+            if (obj.has("ingredient")) {
+                JsonElement ingredientElem = obj.get("ingredient");
+                return parseIngredientArrayOrSingle(ingredientElem, kind);
+            }
+            
+            // 检查是否有嵌套的ingredients字段
+            if (obj.has("ingredients")) {
+                JsonElement ingredientsElem = obj.get("ingredients");
+                return parseIngredientArrayOrSingle(ingredientsElem, kind);
+            }
+            
+            // 直接解析单个对象
+            String ingredientId = parseSingleIngredientId(obj, kind);
+            long amount = 1;
+            
+            if (obj.has("count")) {
+                amount = obj.get("count").getAsLong();
+            } else if (obj.has("amount")) {
+                amount = obj.get("amount").getAsLong();
+            }
+            
+            if (ingredientId != null) {
+                return new IngredientEditValue(kind, ingredientId, amount);
+            }
+        }
+        
+        // 处理数组形式（直接是数组）
+        if (value.isJsonArray()) {
+            return parseIngredientArrayOrSingle(value, kind);
+        }
 
+        return null;
+    }
+
+    /**
+     * 解析ingredient数组或单个元素
+     */
+    private static IngredientEditValue parseIngredientArrayOrSingle(JsonElement elem, IngredientKind kind) {
+        if (elem == null) {
+            return null;
+        }
+        
+        // 处理数组形式
+        if (elem.isJsonArray()) {
+            JsonArray arr = elem.getAsJsonArray();
+            StringBuilder ingredientIds = new StringBuilder();
+            long amount = 1;
+
+            for (int i = 0; i < arr.size(); i++) {
+                JsonElement item = arr.get(i);
+                if (item.isJsonObject()) {
+                    JsonObject obj = item.getAsJsonObject();
+                    String singleId = parseSingleIngredientId(obj, kind);
+                    if (singleId != null) {
+                        if (ingredientIds.length() > 0) {
+                            ingredientIds.append(",");
+                        }
+                        ingredientIds.append(singleId);
+                    }
+                    // 从第一个元素读取数量
+                    if (i == 0) {
+                        if (obj.has("count")) {
+                            amount = obj.get("count").getAsLong();
+                        } else if (obj.has("amount")) {
+                            amount = obj.get("amount").getAsLong();
+                        }
+                    }
+                }
+            }
+
+            if (ingredientIds.length() > 0) {
+                return new IngredientEditValue(kind, ingredientIds.toString(), amount);
+            }
+            return null;
+        }
+        
+        // 处理单个对象形式
+        if (elem.isJsonObject()) {
+            JsonObject obj = elem.getAsJsonObject();
+            String ingredientId = parseSingleIngredientId(obj, kind);
+            long amount = 1;
+            
+            if (obj.has("count")) {
+                amount = obj.get("count").getAsLong();
+            } else if (obj.has("amount")) {
+                amount = obj.get("amount").getAsLong();
+            }
+            
+            if (ingredientId != null) {
+                return new IngredientEditValue(kind, ingredientId, amount);
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * 解析单个原料ID（包括tag）
+     */
+    private static String parseSingleIngredientId(JsonObject obj, IngredientKind kind) {
         // 检查tag格式（如 {"tag": "forge:ores/coal"}）
         if (obj.has("tag")) {
-            ingredientId = "#" + obj.get("tag").getAsString();
+            return "#" + obj.get("tag").getAsString();
         } else if (obj.has("item")) {
-            ingredientId = obj.get("item").getAsString();
+            return obj.get("item").getAsString();
         } else if (obj.has("fluid")) {
-            ingredientId = obj.get("fluid").getAsString();
             kind = IngredientKind.FLUID;
+            return obj.get("fluid").getAsString();
         } else if (obj.has("gas")) {
-            ingredientId = obj.get("gas").getAsString();
             kind = IngredientKind.GAS;
+            return obj.get("gas").getAsString();
         } else if (obj.has("infuse_type")) {
-            ingredientId = obj.get("infuse_type").getAsString();
             kind = IngredientKind.INFUSION;
+            return obj.get("infuse_type").getAsString();
         } else if (obj.has("pigment")) {
-            ingredientId = obj.get("pigment").getAsString();
             kind = IngredientKind.PIGMENT;
+            return obj.get("pigment").getAsString();
         } else if (obj.has("slurry")) {
-            ingredientId = obj.get("slurry").getAsString();
             kind = IngredientKind.SLURRY;
+            return obj.get("slurry").getAsString();
         }
-
-        // 读取数量
-        if (obj.has("count")) {
-            amount = obj.get("count").getAsLong();
-        } else if (obj.has("amount")) {
-            amount = obj.get("amount").getAsLong();
-        }
-
-        if (ingredientId != null) {
-            return new IngredientEditValue(kind, ingredientId, amount);
-        }
-
         return null;
     }
 
@@ -289,228 +375,6 @@ public class RecipeEditManager {
             }
         }
         return current;
-    }
-
-    /**
-     * 获取槽位原始值
-     */
-    private static IngredientEditValue getSlotOriginalValue(Object recipe, IRecipeSlotDrawable slot) {
-        try {
-            var ingredients = slot.getAllIngredients().toList();
-            
-            // 先尝试从多个物品推断tag
-            Optional<String> itemTag = getInputTextFromItemSlotTag(slot);
-            if (itemTag.isPresent()) {
-                // 获取数量（取第一个物品的数量）
-                for (var ingredient : ingredients) {
-                    if (ingredient != null) {
-                        Object value = ingredient.getIngredient();
-                        if (value instanceof ItemStack stack) {
-                            return new IngredientEditValue(
-                                IngredientKind.ITEM,
-                                itemTag.get(),
-                                stack.getCount()
-                            );
-                        }
-                    }
-                }
-                // 如果没有物品数量，默认为1
-                return new IngredientEditValue(IngredientKind.ITEM, itemTag.get(), 1);
-            }
-            
-            // 尝试从多个流体推断tag
-            Optional<String> fluidTag = getInputTextFromFluidSlotTag(slot);
-            if (fluidTag.isPresent()) {
-                for (var ingredient : ingredients) {
-                    if (ingredient != null) {
-                        Object value = ingredient.getIngredient();
-                        if (value instanceof FluidStack stack) {
-                            return new IngredientEditValue(
-                                IngredientKind.FLUID,
-                                fluidTag.get(),
-                                stack.getAmount()
-                            );
-                        }
-                    }
-                }
-                return new IngredientEditValue(IngredientKind.FLUID, fluidTag.get(), 1000);
-            }
-            
-            // 尝试从多个化学品推断tag
-            Optional<String> chemicalTag = getInputTextFromChemicalSlotTag(slot);
-            if (chemicalTag.isPresent()) {
-                for (var ingredient : ingredients) {
-                    if (ingredient != null) {
-                        Object value = ingredient.getIngredient();
-                        if (isChemicalStack(value)) {
-                            IngredientKind kind = getChemicalKind(value);
-                            long amount = chemicalStackAmount(value);
-                            return new IngredientEditValue(kind, chemicalTag.get(), amount);
-                        }
-                    }
-                }
-            }
-            
-            // 没有tag，返回单个物品/流体/化学品
-            for (var ingredient : ingredients) {
-                if (ingredient != null) {
-                    Object value = ingredient.getIngredient();
-                    if (value instanceof ItemStack stack) {
-                        return new IngredientEditValue(
-                            IngredientKind.ITEM,
-                            stack.getItem().builtInRegistryHolder().key().location().toString(),
-                            stack.getCount()
-                        );
-                    } else if (value instanceof FluidStack stack) {
-                        return new IngredientEditValue(
-                            IngredientKind.FLUID,
-                            stack.getFluid().builtInRegistryHolder().key().location().toString(),
-                            stack.getAmount()
-                        );
-                    } else if (isChemicalStack(value)) {
-                        IngredientKind kind = getChemicalKind(value);
-                        String chemicalId = getChemicalId(value);
-                        long amount = chemicalStackAmount(value);
-                        return new IngredientEditValue(kind, chemicalId, amount);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            InGameRecipeEditor.LOGGER.warn("获取槽位原始值失败", e);
-        }
-        return null;
-    }
-
-    /**
-     * 从多个物品推断tag
-     */
-    private static Optional<String> getInputTextFromItemSlotTag(IRecipeSlotDrawable slot) {
-        try {
-            List<net.minecraft.world.item.ItemStack> stacks = new ArrayList<>();
-            for (var ingredient : slot.getAllIngredients().toList()) {
-                if (ingredient != null) {
-                    Object value = ingredient.getIngredient();
-                    if (value instanceof net.minecraft.world.item.ItemStack stack) {
-                        stacks.add(stack);
-                    }
-                }
-            }
-            if (stacks.size() <= 1) {
-                return Optional.empty();
-            }
-
-            List<net.minecraft.world.item.Item> items = stacks.stream()
-                .map(net.minecraft.world.item.ItemStack::getItem)
-                .toList();
-
-            return net.minecraft.core.registries.BuiltInRegistries.ITEM.getTags()
-                .filter(tagEntry -> tagMatchesItems(tagEntry.getSecond(), items))
-                .map(entry -> "#" + entry.getFirst().location())
-                .findFirst();
-        } catch (Exception e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * 从多个流体推断tag
-     */
-    private static Optional<String> getInputTextFromFluidSlotTag(IRecipeSlotDrawable slot) {
-        try {
-            List<net.minecraftforge.fluids.FluidStack> stacks = new ArrayList<>();
-            for (var ingredient : slot.getAllIngredients().toList()) {
-                if (ingredient != null) {
-                    Object value = ingredient.getIngredient();
-                    if (value instanceof net.minecraftforge.fluids.FluidStack stack) {
-                        stacks.add(stack);
-                    }
-                }
-            }
-            if (stacks.size() <= 1) {
-                return Optional.empty();
-            }
-
-            List<net.minecraft.world.level.material.Fluid> fluids = stacks.stream()
-                .map(net.minecraftforge.fluids.FluidStack::getFluid)
-                .toList();
-
-            return net.minecraft.core.registries.BuiltInRegistries.FLUID.getTags()
-                .filter(tagEntry -> tagMatchesFluids(tagEntry.getSecond(), fluids))
-                .map(entry -> "#" + entry.getFirst().location())
-                .findFirst();
-        } catch (Exception e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * 从多个化学品推断tag
-     */
-    private static Optional<String> getInputTextFromChemicalSlotTag(IRecipeSlotDrawable slot) {
-        try {
-            List<Object> stacks = new ArrayList<>();
-            for (var ingredient : slot.getAllIngredients().toList()) {
-                if (ingredient != null) {
-                    Object value = ingredient.getIngredient();
-                    if (isChemicalStack(value)) {
-                        stacks.add(value);
-                    }
-                }
-            }
-            if (stacks.size() <= 1) {
-                return Optional.empty();
-            }
-
-            return chemicalTagKeyEquivalent(stacks);
-        } catch (Exception e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * 检查tag是否匹配物品列表（所有物品都在tag中）
-     */
-    private static boolean tagMatchesItems(net.minecraft.core.HolderSet.Named<net.minecraft.world.item.Item> tag, List<net.minecraft.world.item.Item> items) {
-        // 检查所有物品是否都在tag中
-        for (net.minecraft.world.item.Item item : items) {
-            if (!tag.contains(item.builtInRegistryHolder())) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * 检查tag是否匹配流体列表（所有流体都在tag中）
-     */
-    private static boolean tagMatchesFluids(net.minecraft.core.HolderSet.Named<net.minecraft.world.level.material.Fluid> tag, List<net.minecraft.world.level.material.Fluid> fluids) {
-        for (net.minecraft.world.level.material.Fluid fluid : fluids) {
-            if (!tag.contains(fluid.builtInRegistryHolder())) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * 从化学品列表推断tag
-     */
-    private static Optional<String> chemicalTagKeyEquivalent(List<Object> stacks) {
-        Optional<Object> helper = getMekanismJeiChemicalHelper();
-        if (helper.isEmpty()) {
-            return Optional.empty();
-        }
-        try {
-            Object tagKey = helper.get().getClass()
-                .getMethod("getTagKeyEquivalent", java.util.Collection.class)
-                .invoke(helper.get(), stacks);
-            if (tagKey instanceof Optional<?> optional && optional.isPresent()) {
-                Object location = optional.get().getClass().getMethod("location").invoke(optional.get());
-                return location == null ? Optional.empty() : Optional.of(location.toString());
-            }
-        } catch (ReflectiveOperationException ignored) {
-        }
-        return Optional.empty();
     }
 
     /**
@@ -577,13 +441,113 @@ public class RecipeEditManager {
                 continue;
             }
             
-            // 清除displayOverrides，恢复原始显示
+            // 清除displayOverrides
             slot.clearDisplayOverrides();
             // 取消注册轮换管理
             try {
                 IngredientCycleManager.unregisterSlot(slot);
             } catch (Exception ignored) {}
         }
+    }
+    
+    /**
+     * 清除所有槽位显示（用于新建空工作区）
+     * 标记所有槽位为清除状态，阻止applyDraftToLayout重新注册轮换
+     * 并设置空的displayOverrides使槽位显示为空
+     */
+    public static void clearAllSlotDisplays(IRecipeLayoutDrawable<?> recipeLayout) {
+        List<IRecipeSlotView> slots = recipeLayout.getRecipeSlotsView().getSlotViews();
+        for (IRecipeSlotView slotView : slots) {
+            if (!(slotView instanceof IRecipeSlotDrawable slot)) {
+                continue;
+            }
+            if (slot.getRole() != RecipeIngredientRole.INPUT && 
+                slot.getRole() != RecipeIngredientRole.OUTPUT) {
+                continue;
+            }
+            
+            // 标记槽位为已清除，阻止applyDraftToLayout重新注册轮换
+            // markSlotCleared会同时从slotCandidates中移除，不需要再调用unregisterSlot
+            IngredientCycleManager.markSlotCleared(slot);
+            
+            // 清除displayOverrides
+            slot.clearDisplayOverrides();
+            
+            // 设置空的displayOverrides，使槽位显示为空
+            // 尝试根据槽位原有内容类型设置空值
+            try {
+                var ingredients = slot.getAllIngredients().toList();
+                if (!ingredients.isEmpty()) {
+                    var first = ingredients.get(0);
+                    Object inner = first.getIngredient();
+                    if (inner instanceof ItemStack) {
+                        slot.createDisplayOverrides().addIngredient(
+                            mezz.jei.api.constants.VanillaTypes.ITEM_STACK,
+                            net.minecraft.world.item.ItemStack.EMPTY
+                        );
+                    } else if (inner instanceof FluidStack) {
+                        slot.createDisplayOverrides().addIngredient(
+                            mezz.jei.api.forge.ForgeTypes.FLUID_STACK,
+                            net.minecraftforge.fluids.FluidStack.EMPTY
+                        );
+                    } else if (isChemicalStack(inner)) {
+                        // 化学品类型：尝试创建空的化学品堆
+                        try {
+                            Object emptyChemical = createEmptyChemicalStack(inner);
+                            if (emptyChemical != null) {
+                                slot.createDisplayOverrides().addIngredientsUnsafe(java.util.Collections.singletonList(emptyChemical));
+                            }
+                        } catch (Exception ignored2) {}
+                    } else {
+                        // 其他类型，不设置任何内容（保持空）
+                    }
+                }
+                // 如果没有原有内容或无法设置空值，保持displayOverrides为空
+            } catch (Exception e) {
+                // fallback: 保持displayOverrides为空
+            }
+        }
+    }
+    
+    /**
+     * 创建空的化学品堆
+     */
+    private static Object createEmptyChemicalStack(Object chemicalStack) {
+        try {
+            // 获取化学品类型
+            var getTypeMethod = chemicalStack.getClass().getMethod("getType");
+            Object chemicalType = getTypeMethod.invoke(chemicalStack);
+            if (chemicalType == null) return null;
+            
+            // 尝试创建空的化学品堆
+            // Mekanism的化学品堆通常有静态方法EMPTY或构造函数接受类型和数量
+            var stackClass = chemicalStack.getClass();
+            
+            // 尝试获取EMPTY字段
+            try {
+                var emptyField = stackClass.getField("EMPTY");
+                return emptyField.get(null);
+            } catch (NoSuchFieldException ignored) {}
+            
+            // 尝试通过构造函数创建空堆
+            try {
+                var constructor = stackClass.getConstructor(chemicalType.getClass(), long.class);
+                return constructor.newInstance(chemicalType, 0L);
+            } catch (NoSuchMethodException ignored) {}
+            
+            // 尝试通过copy方法创建并设置数量为0
+            try {
+                var copyMethod = stackClass.getMethod("copy");
+                Object copy = copyMethod.invoke(chemicalStack);
+                var setAmountMethod = copy.getClass().getMethod("setAmount", long.class);
+                setAmountMethod.invoke(copy, 0L);
+                return copy;
+            } catch (Exception ignored) {}
+            
+        } catch (Exception e) {
+            InGameRecipeEditor.LOGGER.warn("创建空化学品堆失败", e);
+        }
+        return null;
     }
 
     /**
@@ -801,12 +765,44 @@ public class RecipeEditManager {
      * 清除槽位内容
      */
     public static void clearSlot(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable slot) {
+        clearSlot(recipeId, slots, slot, true);
+    }
+    
+    /**
+     * 清除槽位内容（右键清除，两种模式都清空槽位）
+     * @param isEditMode 是否为编辑模式（现在两种模式行为一致：都清空槽位）
+     */
+    public static void clearSlot(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable slot, boolean isEditMode) {
         int index = getSlotIndex(slots, slot);
         if (index < 0) return;
 
+        // 从draft中移除编辑值
         Map<Integer, IngredientEditValue> draft = drafts.get(recipeId);
         if (draft != null) {
             draft.remove(index);
+        }
+        
+        // 标记槽位为已清除，阻止重新注册轮换
+        // markSlotCleared会同时从slotCandidates中移除，不需要再调用unregisterSlot
+        IngredientCycleManager.markSlotCleared(slot);
+        
+        // 清除displayOverrides
+        slot.clearDisplayOverrides();
+        
+        // 设置空的displayOverrides，使JEI渲染为空
+        try {
+            slot.createDisplayOverrides().addIngredient(
+                mezz.jei.api.constants.VanillaTypes.ITEM_STACK, 
+                net.minecraft.world.item.ItemStack.EMPTY
+            );
+        } catch (Exception e) {
+            // 如果ITEM_STACK不支持，尝试FLUID_STACK
+            try {
+                slot.createDisplayOverrides().addIngredient(
+                    mezz.jei.api.forge.ForgeTypes.FLUID_STACK,
+                    net.minecraftforge.fluids.FluidStack.EMPTY
+                );
+            } catch (Exception ignored) {}
         }
     }
 
@@ -847,10 +843,28 @@ public class RecipeEditManager {
      * 获取槽位原料类型
      */
     public static IngredientKind getSlotIngredientKind(String recipeId, Object recipe, List<IRecipeSlotView> slots, IRecipeSlotDrawable slot) {
+        // 先检查是否有编辑值
         Optional<IngredientEditValue> value = getSlotEditValue(recipeId, recipe, slots, slot);
         if (value.isPresent()) {
             return value.get().kind();
         }
+
+        // 如果没有编辑值，从槽位本身获取类型
+        try {
+            var ingredients = slot.getAllIngredients().toList();
+            for (var ingredient : ingredients) {
+                if (ingredient != null) {
+                    Object inner = ingredient.getIngredient();
+                    if (inner instanceof ItemStack) {
+                        return IngredientKind.ITEM;
+                    } else if (inner instanceof FluidStack) {
+                        return IngredientKind.FLUID;
+                    } else if (isChemicalStack(inner)) {
+                        return getChemicalKind(inner);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
 
         // 默认返回ITEM
         return IngredientKind.ITEM;
@@ -889,6 +903,10 @@ public class RecipeEditManager {
                 // No draft: inspect original slot's ingredients. If there are
                 // multiple distinct ingredients, register them for cycling so
                 // native recipes show rotating contents as JEI does.
+                // 但如果槽位被标记为清除，不重新注册轮换
+                if (IngredientCycleManager.isSlotCleared(slot)) {
+                    continue;
+                }
                 try {
                     var ingredients = slot.getAllIngredients().toList();
                     if (ingredients.size() > 1) {
@@ -957,12 +975,6 @@ public class RecipeEditManager {
      */
     private static void applyEditValueToSlot(IRecipeSlotDrawable slot, IngredientEditValue editValue) {
         try {
-            // 清除原有显示
-            slot.clearDisplayOverrides();
-            
-            // 创建新显示覆盖
-            var displayOverrides = slot.createDisplayOverrides();
-
             switch (editValue.kind()) {
                 case ITEM -> {
                     // 支持单值 / 多值 / 标签 (#tag) 语法，如 "minecraft:iron_ingot", "{minecraft:iron_ingot,minecraft:gold_ingot}", "#forge:ingots"
@@ -1037,22 +1049,16 @@ public class RecipeEditManager {
                     
                     if (values.isEmpty()) return;
                     if (values.size() == 1) {
-                        // 单个候选，直接显示
+                        // 单个候选：取消轮换，直接显示
+                        IngredientCycleManager.unregisterSlot(slot);
+                        slot.clearDisplayOverrides();
+                        var displayOverrides = slot.createDisplayOverrides();
                         try {
                             displayOverrides.addIngredient((IIngredientType<Object>) types.get(0), values.get(0));
                         } catch (Exception ignored) {}
                     } else {
-                        // 多个候选，交给轮换管理器负责周期切换
-                        try {
-                            IngredientCycleManager.registerSlotCandidates(slot, types, values);
-                        } catch (Exception e) {
-                            // 退化为一次性添加全部（虽然重量较大），以保证至少能显示
-                            for (int i = 0; i < values.size(); i++) {
-                                try {
-                                    displayOverrides.addIngredient((IIngredientType<Object>) types.get(i), values.get(i));
-                                } catch (Exception ignored) {}
-                            }
-                        }
+                        // 多个候选：交给轮换管理器（registerSlotCandidates有相同检查，不会重复注册）
+                        IngredientCycleManager.registerSlotCandidates(slot, types, values);
                     }
                 }
                 case FLUID -> {
@@ -1113,24 +1119,22 @@ public class RecipeEditManager {
 
                     if (values.isEmpty()) return;
                     if (values.size() == 1) {
+                        // 单个候选：取消轮换，直接显示
+                        IngredientCycleManager.unregisterSlot(slot);
+                        slot.clearDisplayOverrides();
+                        var displayOverrides = slot.createDisplayOverrides();
                         try {
                             displayOverrides.addIngredient((IIngredientType<Object>) types.get(0), values.get(0));
                         } catch (Exception ignored) {}
                     } else {
-                        try {
-                            IngredientCycleManager.registerSlotCandidates(slot, types, values);
-                        } catch (Exception e) {
-                            for (int i = 0; i < values.size(); i++) {
-                                try {
-                                    displayOverrides.addIngredient((IIngredientType<Object>) types.get(i), values.get(i));
-                                } catch (Exception ignored) {}
-                            }
-                        }
+                        // 多个候选：交给轮换管理器
+                        IngredientCycleManager.registerSlotCandidates(slot, types, values);
                     }
                 }
                 default -> {
                     // 化学物质
                     if (editValue.kind().isChemical()) {
+                        IngredientCycleManager.unregisterSlot(slot);
                         applyChemicalToSlot(slot, editValue);
                     }
                 }

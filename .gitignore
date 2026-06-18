@@ -3,6 +3,6 @@ build/
 run/
 .vscode/
 .idea/
+.trae/
 refs/
 bin/
-src-old/

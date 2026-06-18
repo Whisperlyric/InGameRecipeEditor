@@ -6,12 +6,17 @@ import com.google.gson.JsonParser;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.recipe.category.IRecipeCategory;
+import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -77,20 +82,19 @@ public class JeiRecipeHelper {
      * 从配方JSON文件获取配方类型
      */
     public static Optional<String> getRecipeTypeFromJson(String recipeId) {
-        Optional<JsonObject> jsonOpt = loadRecipeJson(recipeId);
-        if (jsonOpt.isPresent()) {
-            JsonObject json = jsonOpt.get();
-            if (json.has("type")) {
-                return Optional.of(json.get("type").getAsString());
-            }
-        }
+        // 需要先尝试加载配方JSON，但这里没有配方类型信息
+        // 暂时返回空，后续可以改进
         return Optional.empty();
     }
 
     /**
      * 加载配方JSON文件
+     * 从服务器ResourceManager加载（data/<namespace>/recipes/<path>.json）
+     * 
+     * @param recipeId 配方ID（如 minecraft:coal_block）
+     * @param recipeType 配方类型（如 minecraft:smelting）
      */
-    public static Optional<JsonObject> loadRecipeJson(String recipeId) {
+    public static Optional<JsonObject> loadRecipeJson(String recipeId, String recipeType) {
         if (recipeId == null || recipeId.isEmpty()) {
             return Optional.empty();
         }
@@ -100,30 +104,54 @@ public class JeiRecipeHelper {
             return Optional.empty();
         }
 
-        // 尝试从多个路径加载配方JSON
-        Path[] searchPaths = {
-            Path.of("config/ingamerecipeeditor/recipes"),
-            Path.of("config/ingamerecipeeditor/custom_recipes")
-        };
-
         String namespace = rl.getNamespace();
         String path = rl.getPath();
 
-        for (Path basePath : searchPaths) {
-            Path recipePath = findRecipeFile(basePath, namespace, path);
-            if (recipePath != null && Files.exists(recipePath)) {
-                try (BufferedReader reader = Files.newBufferedReader(recipePath)) {
-                    JsonElement element = JsonParser.parseReader(reader);
-                    if (element.isJsonObject()) {
-                        return Optional.of(element.getAsJsonObject());
+        // 尝试从服务器ResourceManager加载
+        // 配方路径：data/<namespace>/recipes/<path>.json
+        try {
+            net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (server != null) {
+                var resourceManager = server.getResourceManager();
+                
+                ResourceLocation recipeResourceLoc = ResourceLocation.parse(namespace + ":recipes/" + path);
+                
+                // 在聊天栏打印尝试的路径
+                String resourcePath = "data/" + namespace + "/recipes/" + path + ".json";
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc.player != null) {
+                    mc.player.displayClientMessage(
+                        net.minecraft.network.chat.Component.literal("§e[RecipesHelper] §f尝试加载: §b" + resourcePath), 
+                        false
+                    );
+                }
+                
+                var resourceOpt = resourceManager.getResource(recipeResourceLoc);
+                if (resourceOpt.isPresent()) {
+                    Resource resource = resourceOpt.get();
+                    try (InputStream is = resource.open();
+                         BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                        JsonElement element = JsonParser.parseReader(reader);
+                        if (element.isJsonObject()) {
+                            return Optional.of(element.getAsJsonObject());
+                        }
                     }
-                } catch (IOException e) {
-                    InGameRecipeEditor.LOGGER.warn("加载配方JSON失败: {}", recipePath, e);
                 }
             }
+        } catch (Exception e) {
+            // ignore
         }
 
         return Optional.empty();
+    }
+    
+    /**
+     * 加载配方JSON文件（兼容旧接口）
+     * @deprecated 使用 {@link #loadRecipeJson(String, String)} 代替
+     */
+    @Deprecated
+    public static Optional<JsonObject> loadRecipeJson(String recipeId) {
+        return loadRecipeJson(recipeId, null);
     }
 
     /**
