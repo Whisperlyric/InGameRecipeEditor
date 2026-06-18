@@ -24,6 +24,8 @@ public class IngredientCycleManager {
     private static final Map<IRecipeSlotDrawable, List<Candidate>> slotCandidates = Collections.synchronizedMap(new WeakHashMap<>());
     // 记录上次为每个槽位显示的索引，避免重复刷新
     private static final Map<IRecipeSlotDrawable, Integer> lastIndex = Collections.synchronizedMap(new WeakHashMap<>());
+    // 标记被清除的槽位，不应该被重新注册轮换
+    private static final Set<IRecipeSlotDrawable> clearedSlots = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
     // 默认轮换周期和tick间隔由配置提供
     // tickInterval: 以客户端tick为单位，控制更新频率以降低开销（例如每5 tick更新一次）
@@ -35,12 +37,17 @@ public class IngredientCycleManager {
     private record Candidate(IIngredientType<Object> type, Object value) {}
 
     /**
-     * 注册某个槽位的候选列表并立即把第一个显示出来。
+     * 注册某个槽位的候选列表并立即把当前时间对应的候选显示出来。
      */
     public static void registerSlotCandidates(IRecipeSlotDrawable slot, List<IIngredientType<?>> types, List<Object> values) {
         if (slot == null || types == null || values == null) return;
         if (types.size() != values.size()) return;
         if (values.size() <= 1) return;
+        
+        // 如果槽位被标记为清除，不重新注册轮换
+        if (clearedSlots.contains(slot)) {
+            return;
+        }
 
         List<Candidate> list = new CopyOnWriteArrayList<>();
         for (int i = 0; i < values.size(); i++) {
@@ -48,7 +55,7 @@ public class IngredientCycleManager {
             list.add(new Candidate(t, values.get(i)));
         }
 
-        // 如果已经注册并且候选集合未发生变化，则跳过重新注册，避免每帧重置为第一个候选
+        // 如果已经注册并且候选集合未发生变化，则跳过重新注册，避免每帧重置
         synchronized (slotCandidates) {
             List<Candidate> existing = slotCandidates.get(slot);
             if (existing != null && existing.size() == list.size()) {
@@ -73,9 +80,14 @@ public class IngredientCycleManager {
 
             slotCandidates.put(slot, list);
 
-            // 仅在真正发生变化时立即更新为第一个候选（确保在注册时能看到变化）
+            // 使用当前时间计算索引，与forceUpdateAllNow一致，避免首次显示第一个候选导致闪烁
+            long now = System.currentTimeMillis();
+            long idxBase = now / Math.max(1, getCycleMs());
+            int n = list.size();
+            int idx = (int) ((idxBase + (slot.hashCode() & 0xffff)) % n);
+            int i = Math.floorMod(idx, n);
             try {
-                updateSlotDisplayImmediate(slot, 0);
+                updateSlotDisplayImmediate(slot, i);
             } catch (Exception e) {
                 // ignore
             }
@@ -84,8 +96,10 @@ public class IngredientCycleManager {
 
     /**
      * 在渲染路径强制立即更新所有注册槽位显示（用于在render阶段覆盖JEI自身的重置）
+     * 但跳过被标记为清除的槽位
      */
     public static void forceUpdateAllNow() {
+        if (isShiftKeyDown()) return;
         long now = System.currentTimeMillis();
         long idxBase = now / Math.max(1, getCycleMs());
         synchronized (slotCandidates) {
@@ -93,6 +107,12 @@ public class IngredientCycleManager {
                 IRecipeSlotDrawable slot = e.getKey();
                 List<Candidate> list = e.getValue();
                 if (slot == null || list == null || list.isEmpty()) continue;
+                
+                // 如果槽位被标记为清除，跳过
+                if (clearedSlots.contains(slot)) {
+                    continue;
+                }
+                
                 int n = list.size();
                 int idx = (int) ((idxBase + (slot.hashCode() & 0xffff)) % n);
                 int i = Math.floorMod(idx, n);
@@ -108,6 +128,11 @@ public class IngredientCycleManager {
     }
 
     private static void updateSlotDisplayImmediate(IRecipeSlotDrawable slot, int idx) {
+        // 如果槽位被标记为清除，不更新显示
+        if (clearedSlots.contains(slot)) {
+            return;
+        }
+        
         List<Candidate> list = slotCandidates.get(slot);
         if (list == null || list.isEmpty()) return;
         int n = list.size();
@@ -127,6 +152,53 @@ public class IngredientCycleManager {
         if (slot == null) return;
         slotCandidates.remove(slot);
         lastIndex.remove(slot);
+        clearedSlots.remove(slot); // 移除清除标记
+    }
+    
+    /**
+     * 标记槽位为已清除，阻止重新注册轮换
+     */
+    public static void markSlotCleared(IRecipeSlotDrawable slot) {
+        if (slot == null) return;
+        clearedSlots.add(slot);
+        slotCandidates.remove(slot);
+        lastIndex.remove(slot);
+    }
+    
+    /**
+     * 取消槽位的清除标记，允许重新注册轮换
+     */
+    public static void unmarkSlotCleared(IRecipeSlotDrawable slot) {
+        if (slot == null) return;
+        clearedSlots.remove(slot);
+    }
+    
+    /**
+     * 清除所有轮换注册
+     */
+    public static void clearAllCycles() {
+        synchronized (slotCandidates) {
+            slotCandidates.clear();
+            lastIndex.clear();
+        }
+        clearedSlots.clear();
+    }
+    
+    /**
+     * 检查槽位是否有轮换
+     */
+    public static boolean hasCycle(IRecipeSlotDrawable slot) {
+        if (slot == null) return false;
+        List<Candidate> list = slotCandidates.get(slot);
+        return list != null && list.size() > 1;
+    }
+    
+    /**
+     * 检查槽位是否被标记为清除
+     */
+    public static boolean isSlotCleared(IRecipeSlotDrawable slot) {
+        if (slot == null) return false;
+        return clearedSlots.contains(slot);
     }
 
     /**
@@ -155,14 +227,13 @@ public class IngredientCycleManager {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
 
+        // 如果按住Shift则暂停轮换
+        if (Screen.hasShiftDown()) return;
+
         // 节省开销：按配置的 tickInterval 限制更新频率
         tickCounter++;
         int interval = Math.max(1, getTickInterval());
         if ((tickCounter % interval) != 0) return;
-
-        // 如果按住Shift则暂停轮换（使用GLFW直接检测键盘状态）
-        boolean pause = isShiftKeyDown();
-        if (pause) return;
 
         long now = System.currentTimeMillis();
         long idxBase = now / Math.max(1, getCycleMs());
@@ -207,13 +278,21 @@ public class IngredientCycleManager {
     private static boolean isShiftKeyDown() {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.getWindow() == null) return false;
+            if (mc == null) return false;
+            
+            // 如果当前有屏幕打开，使用Screen.hasShiftDown()
+            if (mc.screen != null) {
+                return Screen.hasShiftDown();
+            }
+            
+            // 否则使用GLFW直接检测
+            if (mc.getWindow() == null) return false;
             long window = mc.getWindow().getWindow();
             // GLFW_KEY_LEFT_SHIFT = 340, GLFW_KEY_RIGHT_SHIFT = 344
             return org.lwjgl.glfw.GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
                 || org.lwjgl.glfw.GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
         } catch (Exception e) {
-            return Screen.hasShiftDown(); // 备用方案
+            return false;
         }
     }
 }

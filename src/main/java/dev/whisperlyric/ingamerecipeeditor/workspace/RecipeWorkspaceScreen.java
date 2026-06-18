@@ -1,5 +1,6 @@
 package dev.whisperlyric.ingamerecipeeditor.workspace;
 
+import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
@@ -21,6 +22,7 @@ import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Recipe;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +79,39 @@ public class RecipeWorkspaceScreen extends Screen {
         
         // 初始化编辑状态
         if (recipeId != null && !recipeId.isEmpty()) {
+            // 获取配方类型
+            String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+            
+            // 尝试加载配方JSON并存储到RecipeWorkspaceManager
+            JsonObject recipeJson = null;
+            if (recipe instanceof Recipe<?> mcRecipe) {
+                // 尝试从JeiRecipeHelper加载配方JSON
+                recipeJson = JeiRecipeHelper.loadRecipeJson(recipeId, recipeType).orElse(null);
+                
+                // 如果加载失败，尝试从RecipeManager获取
+                if (recipeJson == null) {
+                    try {
+                        var recipeManager = Minecraft.getInstance().level.getRecipeManager();
+                        var recipeByKey = recipeManager.byKey(mcRecipe.getId());
+                        if (recipeByKey.isPresent()) {
+                            // 尝试序列化配方
+                            // 注意：Recipe接口没有toJson方法，需要通过其他方式获取
+                            // 这里暂时使用null，后续可以改进
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+            
+            // 存储配方信息到RecipeWorkspaceManager
+            if (recipeJson != null) {
+                RecipeWorkspaceManager.getInstance().editExistingRecipe(recipeId, (Recipe<?>) recipe, recipeJson);
+            } else {
+                // 如果无法获取JSON，使用recipeType创建草稿
+                if (recipeType != null) {
+                    RecipeWorkspaceManager.getInstance().createNewDraft(recipeType);
+                }
+            }
+            
             RecipeEditManager.startEdit(recipeId, recipeLayout);
         }
     }
@@ -98,6 +133,14 @@ public class RecipeWorkspaceScreen extends Screen {
         
         // 设置配方布局的位置（这样drawRecipe内部会使用正确的位置）
         recipeLayout.setPosition(this.layoutX, this.layoutY);
+        
+        // 清除所有轮换（初始化时清除上一工作区的轮换状态）
+        IngredientCycleManager.clearAllCycles();
+        
+        // 如果是新建模式（editMode=false），清除所有槽位的显示，使初始渲染为空
+        if (!editMode) {
+            RecipeEditManager.clearAllSlotDisplays(recipeLayout);
+        }
         
         // 计算面板尺寸
         this.panelWidth = layoutWidth + PADDING * 2;
@@ -216,10 +259,23 @@ public class RecipeWorkspaceScreen extends Screen {
     private void clear() {
         if (recipeId != null) {
             RecipeEditManager.clear(recipeId);
-            // 清除JEI的displayOverrides，恢复原始显示
-            RecipeEditManager.clearDisplayOverrides(recipeLayout);
+            
+            // 清除所有轮换
+            IngredientCycleManager.clearAllCycles();
+            
+            if (editMode) {
+                // 编辑/复制模式：恢复原内容
+                RecipeEditManager.clearDisplayOverrides(recipeLayout);
+            } else {
+                // 新建模式：清空所有槽位
+                RecipeEditManager.clearAllSlotDisplays(recipeLayout);
+            }
+            
             // 重新开始编辑（保存原始值）
             RecipeEditManager.startEdit(recipeId, recipeLayout);
+            
+            // 立即应用一次草稿，避免下一帧tick前出现旧内容
+            RecipeEditManager.applyDraftToLayout(recipeLayout);
         }
         updateButtonStates();
     }
@@ -329,7 +385,13 @@ public class RecipeWorkspaceScreen extends Screen {
     private void renderRecipeLayout(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // JEI渲染配方内容（槽位物品/流体等）
         recipeLayout.drawRecipe(guiGraphics, mouseX, mouseY);
-        // 在JEI绘制后强制应用我们的display overrides，防止JEI的渲染或内部循环覆盖它们
+        
+        // 在JEI绘制后重新应用编辑值，因为JEI的drawRecipe可能会重置displayOverrides
+        // if (recipeId != null) {
+        //     RecipeEditManager.applyDraftToLayout(recipeLayout);
+        // }
+        // 在JEI绘制后强制应用轮换，防止JEI的渲染覆盖它们
+        // 只在索引变化时更新，避免闪烁
         try {
             dev.whisperlyric.ingamerecipeeditor.workspace.IngredientCycleManager.forceUpdateAllNow();
         } catch (Exception ignored) {}
@@ -490,128 +552,42 @@ public class RecipeWorkspaceScreen extends Screen {
     private void renderSlotTooltip(GuiGraphics guiGraphics, IRecipeSlotDrawable slot, int mouseX, int mouseY) {
         List<Component> tooltipLines = new ArrayList<>();
         
-        // 先尝试从IngredientCycleManager获取当前轮换显示的值（适用于所有轮换情况）
-        try {
-            var currentValue = IngredientCycleManager.getCurrentDisplayedValue(slot);
-            if (currentValue.isPresent()) {
-                Object value = currentValue.get();
-                if (value instanceof ItemStack stack && !stack.isEmpty()) {
-                    // 显示当前轮换物品的tooltip
-                    tooltipLines.addAll(getTooltipFromItem(stack));
-                    
-                    // 检查是否有编辑值，显示"可容纳"信息
-                    if (recipeId != null) {
-                        RecipeEditManager.IngredientEditValue editValue = RecipeEditManager.getSlotEditValue(
-                            recipeId, recipe, slots, slot
-                        ).orElse(null);
-                        if (editValue != null) {
-                            String ingredientId = editValue.ingredientId();
-                            // 显示可容纳信息
-                            tooltipLines.add(Component.literal("可容纳: " + ingredientId)
-                                .withStyle(s -> s.withColor(0x808080)));
-                        }
-                    }
-                    
-                    guiGraphics.renderComponentTooltip(this.font, tooltipLines, mouseX, mouseY);
-                    return;
-                } else if (value instanceof net.minecraftforge.fluids.FluidStack stack) {
-                    tooltipLines.add(Component.literal(stack.getDisplayName().getString()));
-                    String fluidId = stack.getFluid().builtInRegistryHolder().key().location().toString();
-                    tooltipLines.add(Component.literal("id: " + fluidId)
-                        .withStyle(s -> s.withColor(0x808080)));
-                    tooltipLines.add(Component.literal(stack.getAmount() + "mB"));
-                    
-                    // 检查是否有编辑值，显示"可容纳"信息
-                    if (recipeId != null) {
-                        RecipeEditManager.IngredientEditValue editValue = RecipeEditManager.getSlotEditValue(
-                            recipeId, recipe, slots, slot
-                        ).orElse(null);
-                        if (editValue != null) {
-                            tooltipLines.add(Component.literal("可容纳: " + editValue.ingredientId())
-                                .withStyle(s -> s.withColor(0x808080)));
-                        }
-                    }
-                    
-                    guiGraphics.renderComponentTooltip(this.font, tooltipLines, mouseX, mouseY);
-                    return;
-                } else if (RecipeEditManager.isChemicalStack(value)) {
-                    String chemicalId = RecipeEditManager.getChemicalId(value);
-                    long amount = RecipeEditManager.chemicalStackAmount(value);
-                    tooltipLines.addAll(ChemicalSlotRenderer.getChemicalTooltip(chemicalId, amount, amount));
-                    
-                    // 检查是否有编辑值，显示"可容纳"信息
-                    if (recipeId != null) {
-                        RecipeEditManager.IngredientEditValue editValue = RecipeEditManager.getSlotEditValue(
-                            recipeId, recipe, slots, slot
-                        ).orElse(null);
-                        if (editValue != null) {
-                            tooltipLines.add(Component.literal("可容纳: " + editValue.ingredientId())
-                                .withStyle(s -> s.withColor(0x808080)));
-                        }
-                    }
-                    
-                    guiGraphics.renderComponentTooltip(this.font, tooltipLines, mouseX, mouseY);
-                    return;
-                }
-            }
-        } catch (Exception ignored) {}
+        // 检查槽位是否被清除
+        boolean isSlotCleared = IngredientCycleManager.isSlotCleared(slot);
         
-        // 如果没有轮换值，检查是否有编辑值
+        // 检查是否有编辑值
+        RecipeEditManager.IngredientEditValue editValue = null;
         if (recipeId != null) {
-            RecipeEditManager.IngredientEditValue editValue = RecipeEditManager.getSlotEditValue(
+            editValue = RecipeEditManager.getSlotEditValue(
                 recipeId, recipe, slots, slot
             ).orElse(null);
-            
-            if (editValue != null) {
-                String ingredientId = editValue.ingredientId();
-                
-                // 显示"可容纳"信息
-                tooltipLines.add(Component.literal("可容纳: " + ingredientId)
-                    .withStyle(s -> s.withColor(0x808080)));
-                
-                // 显示数量
-                if (editValue.hasAmount()) {
-                    if (editValue.kind() == RecipeEditManager.IngredientKind.FLUID || editValue.kind().isChemical()) {
-                        tooltipLines.add(Component.literal(editValue.amount() + "mB"));
-                    } else {
-                        tooltipLines.add(Component.translatable(
-                            "ingamerecipeeditor.tooltip.workspace.amount",
-                            editValue.amount()
-                        ));
-                    }
-                }
-                
-                guiGraphics.renderComponentTooltip(this.font, tooltipLines, mouseX, mouseY);
-                return;
-            }
         }
         
-        // 如果没有编辑值也没有轮换值，显示原始槽位内容
-        try {
-            var allIngredients = slot.getAllIngredients().toList();
-            for (var ingredient : allIngredients) {
-                if (ingredient != null) {
-                    Object value = ingredient.getIngredient();
-                    if (value instanceof ItemStack stack) {
-                        tooltipLines.addAll(getTooltipFromItem(stack));
-                    } else if (value instanceof net.minecraftforge.fluids.FluidStack stack) {
-                        tooltipLines.add(Component.literal(stack.getDisplayName().getString()));
-                        String fluidId = stack.getFluid().builtInRegistryHolder().key().location().toString();
-                        tooltipLines.add(Component.literal("id: " + fluidId)
-                            .withStyle(s -> s.withColor(0x808080)));
-                        tooltipLines.add(Component.literal(stack.getAmount() + "mB"));
-                    } else if (RecipeEditManager.isChemicalStack(value)) {
-                        String chemicalId = RecipeEditManager.getChemicalId(value);
-                        long amount = RecipeEditManager.chemicalStackAmount(value);
-                        tooltipLines.addAll(ChemicalSlotRenderer.getChemicalTooltip(chemicalId, amount, amount));
-                    }
+        if (isSlotCleared) {
+            // 槽位被清除，显示空提示
+            tooltipLines.add(Component.translatable("ingamerecipeeditor.tooltip.slot_empty"));
+        } else if (editValue != null && editValue.kind().isChemical()) {
+            // 有化学品编辑值，使用自定义tooltip
+            tooltipLines.addAll(ChemicalSlotRenderer.getChemicalTooltip(
+                editValue.ingredientId(), editValue.amount(), editValue.amount()));
+        } else if (editValue != null) {
+            // 有其他编辑值时，过滤JEI tooltip中的多候选信息
+            List<Component> jeiTooltip = slot.getTooltip();
+            for (Component line : jeiTooltip) {
+                String text = line.getString();
+                // 过滤掉"接受以下任何物品"和tag列表信息
+                if (!text.contains("接受以下任何物品") && 
+                    !text.startsWith("#") && 
+                    !text.contains("Accepts any of")) {
+                    tooltipLines.add(line);
                 }
             }
-        } catch (Exception ignored) {}
-        
-        if (!tooltipLines.isEmpty()) {
-            guiGraphics.renderComponentTooltip(this.font, tooltipLines, mouseX, mouseY);
+        } else {
+            // 无编辑值且未被清除，使用JEI的tooltip
+            tooltipLines.addAll(slot.getTooltip());
         }
+        
+        guiGraphics.renderComponentTooltip(this.font, tooltipLines, mouseX, mouseY);
     }
     
     /**
@@ -675,8 +651,72 @@ public class RecipeWorkspaceScreen extends Screen {
      * 格式化标签显示名称
      */
     private String formatTagDisplayName(String tagId) {
-        // 从标签ID中提取路径部分并格式化
+        // 从标签ID中提取路径部分并格式化（保留斜杠等特殊字符）
         String path = tagId.contains(":") ? tagId.substring(tagId.indexOf(":") + 1) : tagId;
+        
+        // 将下划线替换为空格，但保留斜杠
+        path = path.replace("_", " ");
+        
+        StringBuilder result = new StringBuilder();
+        boolean capitalizeNext = true;
+        for (char c : path.toCharArray()) {
+            if (Character.isSpaceChar(c) || c == '/') {
+                // 空格或斜杠后需要大写
+                result.append(c);
+                if (c == '/') {
+                    result.append(' '); // 斜杠后添加空格以便阅读
+                }
+                capitalizeNext = true;
+            } else if (capitalizeNext) {
+                result.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else {
+                result.append(c);
+            }
+        }
+        
+        return result.toString();
+    }
+    
+    /**
+     * 获取流体显示名称
+     */
+    private String getFluidDisplayName(String fluidId) {
+        if (fluidId == null || fluidId.isEmpty()) {
+            return "空";
+        }
+        
+        // 处理标签情况（以#开头）
+        if (fluidId.startsWith("#")) {
+            String tagRaw = fluidId.substring(1).replaceAll("[{}\\s]", "");
+            if (tagRaw.contains(",")) {
+                String[] tags = tagRaw.split(",");
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < tags.length; i++) {
+                    String tag = tags[i].trim();
+                    if (i > 0) sb.append(", ");
+                    sb.append(formatTagDisplayName(tag));
+                }
+                return sb.toString();
+            }
+            return formatTagDisplayName(tagRaw);
+        }
+        
+        try {
+            ResourceLocation id = ResourceLocation.tryParse(fluidId);
+            if (id == null) {
+                return fluidId;
+            }
+            
+            var fluid = net.minecraft.core.registries.BuiltInRegistries.FLUID.get(id);
+            if (fluid != null) {
+                net.minecraftforge.fluids.FluidStack stack = new net.minecraftforge.fluids.FluidStack(fluid, 1000);
+                return stack.getDisplayName().getString();
+            }
+        } catch (Exception ignored) {}
+        
+        // 格式化ID作为备用名称
+        String path = fluidId.contains(":") ? fluidId.substring(fluidId.indexOf(":") + 1) : fluidId;
         path = path.replace("_", " ");
         
         StringBuilder result = new StringBuilder();
@@ -766,7 +806,8 @@ public class RecipeWorkspaceScreen extends Screen {
                     if (hasCarriedItem()) {
                         return false;
                     }
-                    RecipeEditManager.clearSlot(recipeId, slots, slot);
+                    // 根据模式清除槽位：编辑模式恢复原内容，新建模式设置为空
+                    RecipeEditManager.clearSlot(recipeId, slots, slot, editMode);
                     // 如果被清除的槽位是当前选中槽位，则取消选中
                     if (this.selectedSlot == slot) {
                         this.selectedSlot = null;

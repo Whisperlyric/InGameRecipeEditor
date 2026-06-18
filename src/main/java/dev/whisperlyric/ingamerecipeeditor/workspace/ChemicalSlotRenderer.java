@@ -192,33 +192,30 @@ public class ChemicalSlotRenderer {
      */
     public static List<Component> getChemicalTooltip(String chemicalId, long amount, long capacity) {
         List<Component> tooltip = new ArrayList<>();
-        
-        // 第一行：化学物质译名
+
         String name = getChemicalDisplayName(chemicalId);
         tooltip.add(Component.literal(name));
-        
-        // 第二行：如果是tag，显示tag信息（支持多个tag），处理包含花括号的情况
+
+        tooltip.add(Component.literal(amount + "mB")
+            .withStyle(style -> style.withColor(0xcdcdcd)));
+
+        String displayId = chemicalId.startsWith("#") ? chemicalId.substring(1) : chemicalId;
+        tooltip.add(Component.literal(displayId).withStyle(style -> style.withColor(0x808080)));
+
         if (chemicalId.startsWith("#")) {
             String tagRaw = chemicalId.substring(1).replaceAll("[{}\\s]", "");
             if (tagRaw.contains(",")) {
                 String[] tags = tagRaw.split(",");
                 for (String tag : tags) {
                     tooltip.add(Component.literal("tag: " + tag.trim())
-                        .withStyle(s -> s.withColor(0x808080)));
+                            .withStyle(s -> s.withColor(0x808080)));
                 }
             } else if (!tagRaw.isEmpty()) {
                 tooltip.add(Component.literal("tag: " + tagRaw)
-                    .withStyle(s -> s.withColor(0x808080)));
+                        .withStyle(s -> s.withColor(0x808080)));
             }
         }
-        
-        // 第三行：ID（去掉#前缀）
-        String displayId = chemicalId.startsWith("#") ? chemicalId.substring(1) : chemicalId;
-        tooltip.add(Component.literal("id: " + displayId).withStyle(style -> style.withColor(0x808080)));
-        
-        // 第四行：数量（统一格式：数字mB）
-        tooltip.add(Component.literal(amount + "mB"));
-        
+
         return tooltip;
     }
 

@@ -355,8 +355,8 @@ public class RecipeWorkspaceManager {
             category
         ));
 
-        // 打开工作区界面（复制模式）
-        RecipeWorkspaceScreen screen = new RecipeWorkspaceScreen(parent, recipeIdStr, recipeLayout, false);
+        // 打开工作区界面（复制模式，与编辑模式行为一致，但提交时创建新配方）
+        RecipeWorkspaceScreen screen = new RecipeWorkspaceScreen(parent, recipeIdStr, recipeLayout, true);
         currentScreen = screen;
         Minecraft.getInstance().setScreen(screen);
         
