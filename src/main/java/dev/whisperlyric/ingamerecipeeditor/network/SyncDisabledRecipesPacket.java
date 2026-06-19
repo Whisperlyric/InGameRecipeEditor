@@ -1,6 +1,7 @@
 package dev.whisperlyric.ingamerecipeeditor.network;
 
 import dev.whisperlyric.ingamerecipeeditor.disabled.DisabledRecipesManager;
+import dev.whisperlyric.ingamerecipeeditor.jei.JeiRecipeVisibility;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -64,6 +65,9 @@ public class SyncDisabledRecipesPacket {
 
             // 更新客户端状态
             DisabledRecipesManager.clientUpdateDisabledRecipes(recipeIds, recipeJsonMap);
+
+            // 延迟更新JEI可见性，确保JEI完成重载后再应用
+            JeiRecipeVisibility.scheduleUpdateVisibility();
         });
         context.setPacketHandled(true);
     }

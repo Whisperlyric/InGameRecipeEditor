@@ -6,7 +6,6 @@ import com.google.gson.JsonParser;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.recipe.category.IRecipeCategory;
-import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.world.item.crafting.Recipe;
@@ -88,8 +87,8 @@ public class JeiRecipeHelper {
     }
 
     /**
-     * 加载配方JSON文件
-     * 从服务器ResourceManager加载（data/<namespace>/recipes/<path>.json）
+     * 加载配方JSON
+     * 与JEIRecipeManager参考项目一致，优先从RecipeJsonCache获取（服务器在apply时缓存）
      * 
      * @param recipeId 配方ID（如 minecraft:coal_block）
      * @param recipeType 配方类型（如 minecraft:smelting）
@@ -99,47 +98,36 @@ public class JeiRecipeHelper {
             return Optional.empty();
         }
 
-        ResourceLocation rl = ResourceLocation.tryParse(recipeId);
-        if (rl == null) {
-            return Optional.empty();
+        // 1. 优先从RecipeJsonCache获取（与JEIRecipeManager参考项目一致）
+        // 在单人游戏中，客户端和服务器共享JVM，可直接访问服务器缓存
+        var cached = dev.whisperlyric.ingamerecipeeditor.RecipeJsonCache.getRecipeJson(recipeId);
+        if (cached.isPresent()) {
+            return cached;
         }
 
-        String namespace = rl.getNamespace();
-        String path = rl.getPath();
-
-        // 尝试从服务器ResourceManager加载
-        // 配方路径：data/<namespace>/recipes/<path>.json
+        // 2. 备选：从服务器ResourceManager加载（单人游戏时可用）
         try {
-            net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
-            if (server != null) {
-                var resourceManager = server.getResourceManager();
-                
-                ResourceLocation recipeResourceLoc = ResourceLocation.parse(namespace + ":recipes/" + path);
-                
-                // 在聊天栏打印尝试的路径
-                String resourcePath = "data/" + namespace + "/recipes/" + path + ".json";
-                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-                if (mc.player != null) {
-                    mc.player.displayClientMessage(
-                        net.minecraft.network.chat.Component.literal("§e[InGameRecipesEditor] §f尝试加载: §b" + resourcePath),
-                        false
-                    );
-                }
-                
-                var resourceOpt = resourceManager.getResource(recipeResourceLoc);
-                if (resourceOpt.isPresent()) {
-                    Resource resource = resourceOpt.get();
-                    try (InputStream is = resource.open();
-                         BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                        JsonElement element = JsonParser.parseReader(reader);
-                        if (element.isJsonObject()) {
-                            return Optional.of(element.getAsJsonObject());
+            ResourceLocation rl = ResourceLocation.tryParse(recipeId);
+            if (rl != null) {
+                ResourceLocation recipeResourceLoc = ResourceLocation.parse(rl.getNamespace() + ":recipes/" + rl.getPath());
+                net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+                if (server != null) {
+                    var resourceManager = server.getResourceManager();
+                    var resourceOpt = resourceManager.getResource(recipeResourceLoc);
+                    if (resourceOpt.isPresent()) {
+                        Resource resource = resourceOpt.get();
+                        try (InputStream is = resource.open();
+                             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                            JsonElement element = JsonParser.parseReader(reader);
+                            if (element.isJsonObject()) {
+                                return Optional.of(element.getAsJsonObject());
+                            }
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            // ignore
+            InGameRecipeEditor.LOGGER.debug("从服务器ResourceManager加载配方JSON失败: {}", e.getMessage());
         }
 
         return Optional.empty();

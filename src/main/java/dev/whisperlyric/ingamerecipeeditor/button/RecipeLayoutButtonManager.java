@@ -1,7 +1,6 @@
 package dev.whisperlyric.ingamerecipeeditor.button;
 
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
-import dev.whisperlyric.ingamerecipeeditor.generated.GeneratedRecipesManager;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.gui.recipes.RecipeLayoutWithButtons;
 import net.minecraft.client.gui.components.AbstractWidget;

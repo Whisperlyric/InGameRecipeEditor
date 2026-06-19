@@ -13,7 +13,6 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.registries.ForgeRegistries;
 import dev.whisperlyric.ingamerecipeeditor.tags.CustomTagManager;
-import dev.whisperlyric.ingamerecipeeditor.workspace.IngredientCycleManager;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -572,13 +571,9 @@ public class RecipeEditManager {
 
             String recipeType = draftInfo.recipeType();
             RecipeSchema schema = SchemaRegistry.getSchema(recipeType).orElse(null);
-            if (schema == null) {
-                InGameRecipeEditor.LOGGER.warn("提交失败：未知的配方类型 {}", recipeType);
-                return Optional.empty();
-            }
 
             // 基于原始JSON（如果有）做深拷贝；否则新建
-            JsonObject base = null;
+            JsonObject base;
             if (draftInfo.originalJson() != null) {
                 base = draftInfo.originalJson().deepCopy();
             } else {
@@ -586,46 +581,12 @@ public class RecipeEditManager {
                 base.addProperty("type", recipeType);
             }
 
-            int inputCount = schema.getInputSlotCount();
-            int outputCount = schema.getOutputSlotCount();
-
-            // 将草稿应用到JSON中
-            for (Map.Entry<Integer, IngredientEditValue> e : draft.entrySet()) {
-                int idx = e.getKey();
-                IngredientEditValue v = e.getValue();
-
-                SlotDefinition target = null;
-                if (idx < inputCount) {
-                    target = schema.getInputSlotByIndex(idx);
-                } else {
-                    int outIdx = idx - inputCount;
-                    target = schema.getOutputSlotByIndex(outIdx);
-                }
-                if (target == null) continue;
-
-                String path = target.getPrimaryJsonPath();
-                if (path == null || path.isEmpty()) continue;
-
-                // 生成值对象（简单格式，兼容item/fluid/chemical）
-                JsonObject val = new JsonObject();
-                switch (v.kind()) {
-                    case ITEM -> {
-                        val.addProperty("item", v.ingredientId());
-                        if (v.hasAmount()) val.addProperty("count", v.amount());
-                    }
-                    case FLUID -> {
-                        val.addProperty("fluid", v.ingredientId());
-                        if (v.hasAmount()) val.addProperty("amount", v.amount());
-                    }
-                    default -> {
-                        // 化学物质和其他资源
-                        val.addProperty("resource", v.ingredientId());
-                        if (v.hasAmount()) val.addProperty("amount", v.amount());
-                    }
-                }
-
-                // 支持路径形式（如"a/b/c"或"/a/b/c"或"a.b.c"）
-                setJsonAtPath(base, path, val);
+            if (schema != null) {
+                // 有schema：使用schema定义的路径映射
+                applyDraftWithSchema(base, draft, schema);
+            } else {
+                // 无schema：使用通用逻辑基于JSON结构推断路径
+                applyDraftGeneric(base, draft, recipeType);
             }
 
             // 移除草稿
@@ -635,6 +596,229 @@ public class RecipeEditManager {
             InGameRecipeEditor.LOGGER.error("生成配方JSON失败: {}", ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * 使用schema定义的路径映射应用草稿
+     */
+    private static void applyDraftWithSchema(JsonObject base, Map<Integer, IngredientEditValue> draft, RecipeSchema schema) {
+        int inputCount = schema.getInputSlotCount();
+        int outputCount = schema.getOutputSlotCount();
+
+        for (Map.Entry<Integer, IngredientEditValue> e : draft.entrySet()) {
+            int idx = e.getKey();
+            IngredientEditValue v = e.getValue();
+
+            SlotDefinition target = null;
+            if (idx < inputCount) {
+                target = schema.getInputSlotByIndex(idx);
+            } else {
+                int outIdx = idx - inputCount;
+                target = schema.getOutputSlotByIndex(outIdx);
+            }
+            if (target == null) continue;
+
+            String path = target.getPrimaryJsonPath();
+            if (path == null || path.isEmpty()) continue;
+
+            JsonObject val = buildIngredientJson(v);
+            setJsonAtPath(base, path, val);
+        }
+    }
+
+    /**
+     * 无schema时使用通用逻辑应用草稿修改
+     * 基于JSON结构推断槽位路径（与JEIRecipeManager参考项目一致）
+     */
+    private static void applyDraftGeneric(JsonObject base, Map<Integer, IngredientEditValue> draft, String recipeType) {
+        // 分离输入和输出草稿
+        // 需要根据槽位角色（INPUT/OUTPUT）区分，但draft只存了全局索引
+        // 这里通过原始配方布局推断角色
+        // 简化处理：基于JSON结构推断
+
+        boolean isShaped = base.has("pattern") && base.has("key");
+        boolean isShapeless = base.has("ingredients") && base.get("ingredients").isJsonArray();
+        boolean hasIngredient = base.has("ingredient");
+        boolean hasResult = base.has("result");
+        boolean hasResults = base.has("results") && base.get("results").isJsonArray();
+
+        // 获取输入槽位数和输出槽位数
+        int inputCount = countInputSlots(base, isShaped, isShapeless, hasIngredient);
+        int outputCount = countOutputSlots(base, hasResult, hasResults);
+
+        for (Map.Entry<Integer, IngredientEditValue> e : draft.entrySet()) {
+            int idx = e.getKey();
+            IngredientEditValue v = e.getValue();
+
+            if (idx < inputCount) {
+                // 输入槽位
+                applyGenericInput(base, v, idx, isShaped, isShapeless, hasIngredient);
+            } else {
+                // 输出槽位
+                int outIdx = idx - inputCount;
+                applyGenericOutput(base, v, outIdx, hasResult, hasResults);
+            }
+        }
+    }
+
+    /**
+     * 计算输入槽位数量
+     */
+    private static int countInputSlots(JsonObject base, boolean isShaped, boolean isShapeless, boolean hasIngredient) {
+        if (isShaped) {
+            JsonArray pattern = base.getAsJsonArray("pattern");
+            int height = pattern.size();
+            int width = height > 0 ? pattern.get(0).getAsString().length() : 0;
+            // 合成台固定3x3=9个输入槽位
+            return 9;
+        }
+        if (isShapeless) {
+            return base.getAsJsonArray("ingredients").size();
+        }
+        if (hasIngredient) {
+            return 1;
+        }
+        // 尝试ingredients数组
+        if (base.has("ingredients") && base.get("ingredients").isJsonArray()) {
+            return base.getAsJsonArray("ingredients").size();
+        }
+        return 0;
+    }
+
+    /**
+     * 计算输出槽位数量
+     */
+    private static int countOutputSlots(JsonObject base, boolean hasResult, boolean hasResults) {
+        if (hasResults) {
+            return base.getAsJsonArray("results").size();
+        }
+        if (hasResult) {
+            return 1;
+        }
+        return 0;
+    }
+
+    /**
+     * 通用输入槽位修改
+     */
+    private static void applyGenericInput(JsonObject base, IngredientEditValue v, int slotIndex, boolean isShaped, boolean isShapeless, boolean hasIngredient) {
+        JsonObject val = buildIngredientJson(v);
+
+        if (isShaped) {
+            // 有序合成：修改pattern+key
+            applyShapedInput(base, v, slotIndex);
+            return;
+        }
+
+        if (isShapeless) {
+            // 无序合成：修改ingredients数组
+            JsonArray ingredients = base.getAsJsonArray("ingredients");
+            if (slotIndex >= 0 && slotIndex < ingredients.size()) {
+                ingredients.set(slotIndex, val);
+            }
+            return;
+        }
+
+        if (hasIngredient && slotIndex == 0) {
+            // 单输入配方（如熔炼）
+            base.add("ingredient", val);
+            return;
+        }
+
+        // 通用：尝试ingredients数组
+        if (base.has("ingredients") && base.get("ingredients").isJsonArray()) {
+            JsonArray ingredients = base.getAsJsonArray("ingredients");
+            if (slotIndex >= 0 && slotIndex < ingredients.size()) {
+                ingredients.set(slotIndex, val);
+            }
+        }
+    }
+
+    /**
+     * 有序合成输入修改（修改pattern+key）
+     */
+    private static void applyShapedInput(JsonObject base, IngredientEditValue v, int slotIndex) {
+        if (!base.has("pattern") || !base.has("key")) return;
+
+        JsonArray pattern = base.getAsJsonArray("pattern");
+        JsonObject key = base.getAsJsonObject("key");
+        int height = pattern.size();
+        int width = height > 0 ? pattern.get(0).getAsString().length() : 0;
+
+        // 合成台固定3x3网格，计算行列
+        int gridWidth = 3;
+        int rowOffset = Math.max(0, (3 - height) / 2);
+        int colOffset = Math.max(0, (3 - width) / 2);
+        int row = slotIndex / gridWidth - rowOffset;
+        int col = slotIndex % gridWidth - colOffset;
+
+        if (row < 0 || row >= height || col < 0 || col >= width) return;
+
+        String rowText = pattern.get(row).getAsString();
+        if (col >= rowText.length()) return;
+
+        char keyChar = rowText.charAt(col);
+        if (keyChar == ' ') return;
+
+        // 更新key中对应字符的原料
+        JsonObject val = buildIngredientJson(v);
+        key.add(String.valueOf(keyChar), val);
+    }
+
+    /**
+     * 通用输出槽位修改
+     */
+    private static void applyGenericOutput(JsonObject base, IngredientEditValue v, int outIdx, boolean hasResult, boolean hasResults) {
+        if (v.kind() != IngredientKind.ITEM) return; // 输出槽位只支持物品
+
+        JsonObject val = new JsonObject();
+        val.addProperty("id", v.ingredientId());
+        if (v.hasAmount()) val.addProperty("count", v.amount());
+
+        if (hasResult && outIdx == 0) {
+            base.add("result", val);
+            return;
+        }
+
+        if (hasResults) {
+            JsonArray results = base.getAsJsonArray("results");
+            if (outIdx >= 0 && outIdx < results.size()) {
+                results.set(outIdx, val);
+            }
+        }
+    }
+
+    /**
+     * 构建原料JSON对象
+     */
+    private static JsonObject buildIngredientJson(IngredientEditValue v) {
+        JsonObject val = new JsonObject();
+        switch (v.kind()) {
+            case ITEM -> {
+                if (v.ingredientId().startsWith("#")) {
+                    val.addProperty("tag", v.ingredientId().substring(1));
+                } else {
+                    val.addProperty("item", v.ingredientId());
+                }
+                if (v.hasAmount() && v.amount() > 1) val.addProperty("count", v.amount());
+            }
+            case FLUID -> {
+                if (v.ingredientId().startsWith("#")) {
+                    val.addProperty("type", "neoforge:tag");
+                    val.addProperty("tag", v.ingredientId().substring(1));
+                } else {
+                    val.addProperty("type", "neoforge:single");
+                    val.addProperty("fluid", v.ingredientId());
+                }
+                if (v.hasAmount()) val.addProperty("amount", v.amount());
+            }
+            default -> {
+                // 化学物质和其他资源
+                val.addProperty("id", v.ingredientId());
+                if (v.hasAmount()) val.addProperty("amount", v.amount());
+            }
+        }
+        return val;
     }
 
     /**
@@ -897,7 +1081,14 @@ public class RecipeEditManager {
      * 使用JEI的displayOverrides机制动态更新槽位显示内容
      */
     public static void applyDraftToLayout(IRecipeLayoutDrawable<?> recipeLayout) {
-        String recipeId = getRecipeIdFromLayout(recipeLayout);
+        applyDraftToLayout(recipeLayout, null);
+    }
+
+    public static void applyDraftToLayout(IRecipeLayoutDrawable<?> recipeLayout, String explicitRecipeId) {
+        String recipeId = explicitRecipeId;
+        if (recipeId == null || recipeId.isEmpty()) {
+            recipeId = getRecipeIdFromLayout(recipeLayout);
+        }
         if (recipeId == null || recipeId.isEmpty()) {
             return;
         }
@@ -926,41 +1117,40 @@ public class RecipeEditManager {
                 // multiple distinct ingredients, register them for cycling so
                 // native recipes show rotating contents as JEI does.
                 // 但如果槽位被标记为清除，不重新注册轮换
-                if (IngredientCycleManager.isSlotCleared(slot)) {
-                    continue;
-                }
-                try {
-                    var ingredients = slot.getAllIngredients().toList();
-                    if (ingredients.size() > 1) {
-                        java.util.List<mezz.jei.api.ingredients.IIngredientType<?>> types = new java.util.ArrayList<>();
-                        java.util.List<Object> values = new java.util.ArrayList<>();
-                        for (var ingr : ingredients) {
-                            try {
-                                Object inner = ingr.getIngredient();
-                                if (inner instanceof ItemStack is) {
-                                    types.add(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
-                                    values.add(is.copy());
-                                } else if (inner instanceof FluidStack fs) {
-                                    types.add(mezz.jei.api.forge.ForgeTypes.FLUID_STACK);
-                                    values.add(fs.copy());
-                                    } else {
-                                        // try to add raw ingredient as fallback
-                                        // ITypedIngredient API provides getType() to obtain the ingredient type
-                                        types.add(ingr.getType());
-                                        values.add(inner);
-                                    }
-                            } catch (Exception ignored) {}
-                        }
+                if (!IngredientCycleManager.isSlotCleared(slot)) {
+                    try {
+                        var ingredients = slot.getAllIngredients().toList();
+                        if (ingredients.size() > 1) {
+                            java.util.List<mezz.jei.api.ingredients.IIngredientType<?>> types = new java.util.ArrayList<>();
+                            java.util.List<Object> values = new java.util.ArrayList<>();
+                            for (var ingr : ingredients) {
+                                try {
+                                    Object inner = ingr.getIngredient();
+                                    if (inner instanceof ItemStack is) {
+                                        types.add(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
+                                        values.add(is.copy());
+                                    } else if (inner instanceof FluidStack fs) {
+                                        types.add(mezz.jei.api.forge.ForgeTypes.FLUID_STACK);
+                                        values.add(fs.copy());
+                                        } else {
+                                            // try to add raw ingredient as fallback
+                                            // ITypedIngredient API provides getType() to obtain the ingredient type
+                                            types.add(ingr.getType());
+                                            values.add(inner);
+                                        }
+                                } catch (Exception ignored) {}
+                            }
 
-                        if (values.size() > 1) {
-                            try {
-                                IngredientCycleManager.registerSlotCandidates(slot, types, values);
-                            } catch (Exception e) {
-                                // ignore
+                            if (values.size() > 1) {
+                                try {
+                                    IngredientCycleManager.registerSlotCandidates(slot, types, values);
+                                } catch (Exception e) {
+                                    // ignore
+                                }
                             }
                         }
-                    }
-                } catch (Exception ignored) {}
+                    } catch (Exception ignored) {}
+                }
             }
             index++;
         }
@@ -997,6 +1187,9 @@ public class RecipeEditManager {
      */
     private static void applyEditValueToSlot(IRecipeSlotDrawable slot, IngredientEditValue editValue) {
         try {
+            // 取消清除标记，允许重新注册轮换
+            IngredientCycleManager.unmarkSlotCleared(slot);
+
             // 清除原有显示
             slot.clearDisplayOverrides();
 

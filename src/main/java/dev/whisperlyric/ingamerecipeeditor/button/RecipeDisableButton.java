@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 import dev.whisperlyric.ingamerecipeeditor.disabled.DisabledRecipesManager;
 import dev.whisperlyric.ingamerecipeeditor.generated.GeneratedRecipesManager;
+import dev.whisperlyric.ingamerecipeeditor.jei.JeiRecipeVisibility;
 import dev.whisperlyric.ingamerecipeeditor.network.NetworkHandler;
 import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
@@ -160,6 +161,12 @@ public class RecipeDisableButton extends AbstractWidget {
                 // 普通配方：切换禁用状态
                 enabled = !enabled;
                 NetworkHandler.sendRecipeToggle(recipeId, !enabled);
+                // 立即更新JEI可见性（无需等待服务器同步）
+                if (enabled) {
+                    JeiRecipeVisibility.unhideRecipe(recipeId);
+                } else {
+                    JeiRecipeVisibility.hideRecipe(recipeId);
+                }
                 InGameRecipeEditor.LOGGER.info("切换配方状态: {} -> {}", recipeId, enabled ? "启用" : "禁用");
             }
         }

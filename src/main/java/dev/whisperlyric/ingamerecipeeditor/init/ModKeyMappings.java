@@ -8,15 +8,23 @@ import net.minecraftforge.client.settings.KeyConflictContext;
 import org.lwjgl.glfw.GLFW;
 
 public class ModKeyMappings {
-    
+
+    public static final KeyMapping OPEN_DISABLED_RECIPES_LIST = new KeyMapping(
+            "key." + InGameRecipeEditor.MOD_ID + ".open_disabled_recipes_list",
+            KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_SEMICOLON),
+            "key.categories." + InGameRecipeEditor.MOD_ID
+    );
+
     public static final KeyMapping OPEN_TAGS_OVERVIEW = new KeyMapping(
             "key." + InGameRecipeEditor.MOD_ID + ".open_tags_overview",
             KeyConflictContext.IN_GAME,
             InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_APOSTROPHE),
             "key.categories." + InGameRecipeEditor.MOD_ID
     );
-    
+
     public static void register(RegisterKeyMappingsEvent event) {
+        event.register(OPEN_DISABLED_RECIPES_LIST);
         event.register(OPEN_TAGS_OVERVIEW);
     }
 }

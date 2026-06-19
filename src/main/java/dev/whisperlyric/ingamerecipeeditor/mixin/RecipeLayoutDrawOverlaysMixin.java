@@ -2,9 +2,6 @@ package dev.whisperlyric.ingamerecipeeditor.mixin;
 
 import dev.whisperlyric.ingamerecipeeditor.workspace.RecipeWorkspaceScreen;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
-import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
-import mezz.jei.api.gui.ingredient.IRecipeSlotView;
-import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.library.gui.recipes.RecipeLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;

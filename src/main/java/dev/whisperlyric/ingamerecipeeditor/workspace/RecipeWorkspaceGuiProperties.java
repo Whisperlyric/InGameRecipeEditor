@@ -2,6 +2,7 @@ package dev.whisperlyric.ingamerecipeeditor.workspace;
 
 import mezz.jei.api.gui.handlers.IGuiProperties;
 import net.minecraft.client.gui.screens.Screen;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * 工作区界面属性 - 用于JEI叠加层显示
@@ -31,7 +32,7 @@ public class RecipeWorkspaceGuiProperties implements IGuiProperties {
     }
     
     @Override
-    public Class<? extends Screen> getScreenClass() {
+    public @NotNull Class<? extends Screen> getScreenClass() {
         return screen.getClass();
     }
     
