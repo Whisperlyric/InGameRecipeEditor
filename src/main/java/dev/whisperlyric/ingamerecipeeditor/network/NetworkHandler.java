@@ -39,6 +39,13 @@ public class NetworkHandler {
             .consumerMainThread(RecipeTogglePacket::handle)
             .add();
 
+        // 注册批量配方禁用/启用网络包
+        network.messageBuilder(RecipeBatchTogglePacket.class, nextId(), NetworkDirection.PLAY_TO_SERVER)
+            .encoder(RecipeBatchTogglePacket::encode)
+            .decoder(RecipeBatchTogglePacket::decode)
+            .consumerMainThread(RecipeBatchTogglePacket::handle)
+            .add();
+
         // 注册同步禁用配方网络包
         network.messageBuilder(SyncDisabledRecipesPacket.class, nextId(), NetworkDirection.PLAY_TO_CLIENT)
             .encoder(SyncDisabledRecipesPacket::encode)
@@ -60,6 +67,20 @@ public class NetworkHandler {
             .consumerMainThread(SyncPendingDeletesPacket::handle)
             .add();
 
+        // 注册配方导出网络包
+        network.messageBuilder(RecipeExportPacket.class, nextId(), NetworkDirection.PLAY_TO_SERVER)
+            .encoder(RecipeExportPacket::encode)
+            .decoder(RecipeExportPacket::decode)
+            .consumerMainThread(RecipeExportPacket::handle)
+            .add();
+
+        // 注册设置JEI可见性网络包
+        network.messageBuilder(SetJeiVisibilityPacket.class, nextId(), NetworkDirection.PLAY_TO_CLIENT)
+            .encoder(SetJeiVisibilityPacket::encode)
+            .decoder(SetJeiVisibilityPacket::decode)
+            .consumerMainThread(SetJeiVisibilityPacket::handle)
+            .add();
+
         InGameRecipeEditor.LOGGER.info("网络处理器初始化完成，共 {} 种网络包", packetId);
     }
 
@@ -77,11 +98,30 @@ public class NetworkHandler {
     }
 
     /**
+     * 发送批量配方禁用/启用请求到服务器
+     * 服务器处理后只发送一次合并的提示消息
+     */
+    public static void sendRecipeBatchToggle(List<String> recipeIds, boolean disable) {
+        if (network != null && !recipeIds.isEmpty()) {
+            network.sendToServer(new RecipeBatchTogglePacket(recipeIds, disable));
+        }
+    }
+
+    /**
      * 发送配方删除请求到服务器
      */
     public static void sendRecipeDelete(String recipeId, boolean pending) {
         if (network != null) {
             network.sendToServer(new RecipeDeletePacket(recipeId, pending));
+        }
+    }
+
+    /**
+     * 发送配方导出请求到服务器
+     */
+    public static void sendRecipeExport(String recipeId, String recipeJson) {
+        if (network != null) {
+            network.sendToServer(new RecipeExportPacket(recipeId, recipeJson));
         }
     }
 
@@ -95,7 +135,8 @@ public class NetworkHandler {
 
         // 构建禁用配方列表
         List<String> recipeIds = new ArrayList<>(DisabledRecipesManager.getDisabledRecipes());
-        Map<String, String> recipeJsonMap = DisabledRecipesManager.getClientRecipeJsonCache();
+        // 使用服务器端缓存的配方JSON（在Mixin移除配方时捕获）
+        Map<String, String> recipeJsonMap = DisabledRecipesManager.getServerRecipeJsonCache();
         
         List<DisabledRecipesManager.DisabledRecipeEntry> entries = new ArrayList<>();
         for (String id : recipeIds) {
@@ -118,6 +159,15 @@ public class NetworkHandler {
     public static void syncToAllClients(List<ServerPlayer> players) {
         for (ServerPlayer player : players) {
             syncToClient(player);
+        }
+    }
+
+    /**
+     * 发送JEI可见性设置到客户端
+     */
+    public static void sendJeiVisibility(ServerPlayer player, boolean showDisabled) {
+        if (network != null) {
+            network.sendTo(new SetJeiVisibilityPacket(showDisabled), player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
         }
     }
 }

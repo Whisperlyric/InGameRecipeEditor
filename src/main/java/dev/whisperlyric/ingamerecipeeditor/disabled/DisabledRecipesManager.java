@@ -38,6 +38,9 @@ public class DisabledRecipesManager {
     private static final CopyOnWriteArraySet<ResourceLocation> clientDisabledRecipeOutputs = new CopyOnWriteArraySet<>();
     private static volatile boolean clientRecipeStateSynced = false;
 
+    // 服务器端配方JSON缓存（在Mixin移除配方时捕获原始JSON）
+    private static final Map<String, String> serverRecipeJsonCache = new ConcurrentHashMap<>();
+
     /**
      * 服务器初始化
      */
@@ -157,6 +160,27 @@ public class DisabledRecipesManager {
      */
     public static Map<String, String> getClientRecipeJsonCache() {
         return new ConcurrentHashMap<>(clientRecipeJsonCache);
+    }
+
+    /**
+     * 服务器端：缓存被移除配方的原始JSON（由RecipeManagerMixin调用）
+     */
+    public static void serverCacheRecipeJson(String recipeId, String recipeJson) {
+        serverRecipeJsonCache.put(recipeId, recipeJson);
+    }
+
+    /**
+     * 服务器端：获取缓存的配方JSON
+     */
+    public static Map<String, String> getServerRecipeJsonCache() {
+        return new ConcurrentHashMap<>(serverRecipeJsonCache);
+    }
+
+    /**
+     * 服务器端：清除缓存的配方JSON（在配置重载前调用）
+     */
+    public static void serverClearRecipeJsonCache() {
+        serverRecipeJsonCache.clear();
     }
 
     /**

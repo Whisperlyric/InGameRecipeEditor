@@ -1,9 +1,11 @@
 package dev.whisperlyric.ingamerecipeeditor.workspace;
 
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
+import dev.whisperlyric.ingamerecipeeditor.network.NetworkHandler;
 import dev.whisperlyric.ingamerecipeeditor.schema.RecipeSchema;
 import dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry;
 import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
@@ -82,34 +84,19 @@ public class RecipeWorkspaceScreen extends Screen {
             // 获取配方类型
             String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
             
-            // 尝试加载配方JSON并存储到RecipeWorkspaceManager
+            // 加载配方JSON（与JEIRecipeManager参考项目一致）
+            // 优先从ResourceManager加载原始JSON文件
             JsonObject recipeJson = null;
             if (recipe instanceof Recipe<?> mcRecipe) {
-                // 尝试从JeiRecipeHelper加载配方JSON
                 recipeJson = JeiRecipeHelper.loadRecipeJson(recipeId, recipeType).orElse(null);
-                
-                // 如果加载失败，尝试从RecipeManager获取
-                if (recipeJson == null) {
-                    try {
-                        var recipeManager = Minecraft.getInstance().level.getRecipeManager();
-                        var recipeByKey = recipeManager.byKey(mcRecipe.getId());
-                        if (recipeByKey.isPresent()) {
-                            // 尝试序列化配方
-                            // 注意：Recipe接口没有toJson方法，需要通过其他方式获取
-                            // 这里暂时使用null，后续可以改进
-                        }
-                    } catch (Exception ignored) {}
-                }
             }
             
             // 存储配方信息到RecipeWorkspaceManager
             if (recipeJson != null) {
-                RecipeWorkspaceManager.getInstance().editExistingRecipe(recipeId, (Recipe<?>) recipe, recipeJson);
-            } else {
-                // 如果无法获取JSON，使用recipeType创建草稿
-                if (recipeType != null) {
-                    RecipeWorkspaceManager.getInstance().createNewDraft(recipeType);
-                }
+                RecipeWorkspaceManager.getInstance().editExistingRecipe(recipeId, recipeJson);
+            } else if (recipeType != null) {
+                // 对于非Recipe<?>类型的配方（如Mekanism化学品配方），使用recipeType创建草稿
+                RecipeWorkspaceManager.getInstance().createDraftWithType(recipeId, recipeType);
             }
             
             RecipeEditManager.startEdit(recipeId, recipeLayout);
@@ -200,8 +187,8 @@ public class RecipeWorkspaceScreen extends Screen {
         this.tagSelectButton = Button.builder(Component.translatable("ingamerecipeeditor.screen.workspace.select_tag"), b -> {
             if (selectedSlot != null && minecraft != null) {
                 RecipeEditManager.IngredientKind kind = RecipeEditManager.getSlotIngredientKind(recipeId, recipe, slots, selectedSlot);
-                // 化学品槽位不支持标签选择
-                if (kind.isChemical()) {
+                // 化学品槽位和输出槽位不支持标签选择
+                if (kind.isChemical() || selectedSlot.getRole() == RecipeIngredientRole.OUTPUT) {
                     return;
                 }
                 // 根据槽位类型预设标签类型过滤
@@ -312,19 +299,28 @@ public class RecipeWorkspaceScreen extends Screen {
         // 检查槽位是否被清除，如果被清除则禁用编辑按钮
         boolean isSlotCleared = hasSelection && IngredientCycleManager.isSlotCleared(selectedSlot);
         if (this.editButton != null) this.editButton.active = hasSelection && !isSlotCleared;
-        // 化学品槽位不支持标签选择，禁用标签选择按钮
+        // 化学品槽位和输出槽位不支持标签选择，禁用标签选择按钮
         if (this.tagSelectButton != null) {
             RecipeEditManager.IngredientKind kind = hasSelection ? RecipeEditManager.getSlotIngredientKind(recipeId, recipe, slots, selectedSlot) : null;
-            this.tagSelectButton.active = hasSelection && kind != null && !kind.isChemical();
+            boolean isOutput = hasSelection && selectedSlot.getRole() == RecipeIngredientRole.OUTPUT;
+            this.tagSelectButton.active = hasSelection && kind != null && !kind.isChemical() && !isOutput;
         }
         if (this.objectSelectButton != null) this.objectSelectButton.active = hasSelection;
     }
 
     private void submit() {
         if (recipeId != null) {
-            RecipeEditManager.submit(recipeId);
+            var result = RecipeEditManager.submit(recipeId);
+            if (result.isPresent()) {
+                String json = new GsonBuilder().setPrettyPrinting().create().toJson(result.get());
+                NetworkHandler.sendRecipeExport(recipeId, json);
+                Minecraft.getInstance().player.displayClientMessage(
+                    Component.translatable("ingamerecipeeditor.message.recipe_export_sent", recipeId), false);
+            } else {
+                Minecraft.getInstance().player.displayClientMessage(
+                    Component.translatable("ingamerecipeeditor.message.recipe_export_no_changes"), false);
+            }
         }
-        close();
     }
 
     private void cancel() {
@@ -353,7 +349,7 @@ public class RecipeWorkspaceScreen extends Screen {
             RecipeEditManager.startEdit(recipeId, recipeLayout);
             
             // 立即应用一次草稿，避免下一帧tick前出现旧内容
-            RecipeEditManager.applyDraftToLayout(recipeLayout);
+            RecipeEditManager.applyDraftToLayout(recipeLayout, recipeId);
         }
         updateButtonStates();
     }
@@ -372,7 +368,7 @@ public class RecipeWorkspaceScreen extends Screen {
         super.tick();
         // 应用草稿到布局
         if (recipeId != null) {
-            RecipeEditManager.applyDraftToLayout(recipeLayout);
+            RecipeEditManager.applyDraftToLayout(recipeLayout, recipeId);
         }
         updateButtonStates();
     }

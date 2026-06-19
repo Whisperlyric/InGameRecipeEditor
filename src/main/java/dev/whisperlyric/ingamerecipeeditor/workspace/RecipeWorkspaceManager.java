@@ -2,7 +2,6 @@ package dev.whisperlyric.ingamerecipeeditor.workspace;
 
 import com.google.gson.JsonObject;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
-import com.google.gson.JsonObject;
 import dev.whisperlyric.ingamerecipeeditor.schema.RecipeSchema;
 import dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry;
 import dev.whisperlyric.ingamerecipeeditor.schema.PatchRegistry;
@@ -12,8 +11,6 @@ import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.gui.recipes.RecipesGui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.crafting.Recipe;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -61,8 +58,8 @@ public class RecipeWorkspaceManager {
     /**
      * 编辑现有配方
      */
-    public void editExistingRecipe(String recipeId, Recipe<?> recipe, JsonObject recipeJson) {
-        String recipeType = getRecipeType(recipe, recipeJson);
+    public void editExistingRecipe(String recipeId, JsonObject recipeJson) {
+        String recipeType = getRecipeTypeFromJson(recipeJson);
         if (recipeType == null) {
             InGameRecipeEditor.LOGGER.warn("无法确定配方类型: {}", recipeId);
             return;
@@ -72,6 +69,16 @@ public class RecipeWorkspaceManager {
         activeRecipeId = recipeId;
         
         InGameRecipeEditor.LOGGER.info("开始编辑配方: {}", recipeId);
+    }
+    
+    /**
+     * 使用指定的recipeId和recipeType创建草稿
+     * 用于无法获取配方JSON或recipe不是Recipe<?>类型的情况
+     */
+    public void createDraftWithType(String recipeId, String recipeType) {
+        drafts.put(recipeId, new DraftInfo(recipeId, recipeType, null));
+        activeRecipeId = recipeId;
+        InGameRecipeEditor.LOGGER.info("创建草稿: id={}, type={}", recipeId, recipeType);
     }
     
     /**
@@ -214,14 +221,11 @@ public class RecipeWorkspaceManager {
     }
     
     /**
-     * 获取配方类型
+     * 从配方JSON获取配方类型
      */
-    private String getRecipeType(Recipe<?> recipe, JsonObject recipeJson) {
+    private String getRecipeTypeFromJson(JsonObject recipeJson) {
         if (recipeJson != null && recipeJson.has("type")) {
             return recipeJson.get("type").getAsString();
-        }
-        if (recipe != null) {
-            return recipe.getType().toString();
         }
         return null;
     }

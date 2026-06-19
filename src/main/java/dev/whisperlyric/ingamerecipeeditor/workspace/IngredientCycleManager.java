@@ -1,6 +1,5 @@
 package dev.whisperlyric.ingamerecipeeditor.workspace;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import net.minecraft.client.Minecraft;
@@ -13,7 +12,6 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
-import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 
 /**
  * 管理那些需要在JEI中轮换显示的槽位候选列表。实现周期性切换并在按住Shift时暂停（仿照JEI行为）。
@@ -226,6 +224,9 @@ public class IngredientCycleManager {
         if (event.phase != TickEvent.Phase.END) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;
+
+        // 处理JEI可见性延迟更新
+        dev.whisperlyric.ingamerecipeeditor.jei.JeiRecipeVisibility.clientTick();
 
         // 如果按住Shift则暂停轮换
         if (Screen.hasShiftDown()) return;

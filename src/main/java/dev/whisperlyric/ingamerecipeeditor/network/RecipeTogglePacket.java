@@ -54,8 +54,8 @@ public class RecipeTogglePacket {
             } else {
                 DisabledRecipesManager.serverEnableRecipe(packet.recipeId);
                 player.sendSystemMessage(Component.translatable("ingamerecipeeditor.message.recipe_enabled", packet.recipeId));
+                player.sendSystemMessage(Component.translatable("ingamerecipeeditor.message.reload_required_for_enable"));
             }
-            player.sendSystemMessage(Component.translatable("ingamerecipeeditor.message.reload_required"));
         });
         context.setPacketHandled(true);
     }
