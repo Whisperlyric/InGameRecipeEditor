@@ -121,7 +121,7 @@ public class JeiRecipeHelper {
                 net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
                 if (mc.player != null) {
                     mc.player.displayClientMessage(
-                        net.minecraft.network.chat.Component.literal("§e[RecipesHelper] §f尝试加载: §b" + resourcePath), 
+                        net.minecraft.network.chat.Component.literal("§e[InGameRecipesEditor] §f尝试加载: §b" + resourcePath),
                         false
                     );
                 }

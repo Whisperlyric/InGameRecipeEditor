@@ -40,9 +40,10 @@ public class RecipeEditButton extends AbstractWidget {
         this.recipeLayout = recipeLayout;
 
         // 使用JeiRecipeHelper获取正确的配方ID
-        this.recipeId = JeiRecipeHelper.getRecipeId(recipeLayout);
+        String id = JeiRecipeHelper.getRecipeId(recipeLayout);
+        this.recipeId = id != null ? id : "";
         this.supportedRecipe = recipeLayout.getRecipe() instanceof Recipe<?>;
-        this.generatedRecipe = GeneratedRecipesManager.isGeneratedRecipeId(this.recipeId);
+        this.generatedRecipe = !this.recipeId.isEmpty() && GeneratedRecipesManager.isGeneratedRecipeId(this.recipeId);
     }
 
     @Override
@@ -113,7 +114,7 @@ public class RecipeEditButton extends AbstractWidget {
 
     @Override
     public void onClick(double mouseX, double mouseY) {
-        if (!this.recipeId.isEmpty()) {
+        if (this.recipeId != null && !this.recipeId.isEmpty()) {
             // 播放点击声音
             playDownSound(Minecraft.getInstance().getSoundManager());
             

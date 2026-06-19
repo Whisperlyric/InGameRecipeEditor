@@ -27,7 +27,7 @@ import java.util.function.Consumer;
 public class FluidSelectorScreen extends Screen {
 
     private static final int SLOT_SIZE = 18;
-    private static final int HEADER_HEIGHT = 60;
+    private static final int HEADER_HEIGHT = 96;
     private static final int FOOTER_HEIGHT = 28;
 
     private int guiWidth, guiHeight;
@@ -139,7 +139,7 @@ public class FluidSelectorScreen extends Screen {
 
         updateFilteredFluids(searchBox != null ? searchBox.getValue() : "");
 
-        searchBox = new EditBox(this.font, leftPos + 10, topPos + 32, guiWidth - 20, 18, Component.literal("搜索"));
+        searchBox = new EditBox(this.font, leftPos + 10, topPos + 6, guiWidth - 20, 18, Component.literal("搜索"));
         searchBox.setHint(Component.literal("输入流体名或ID..."));
         searchBox.setResponder(this::updateFilteredFluids);
         addWidget(searchBox);
@@ -169,12 +169,7 @@ public class FluidSelectorScreen extends Screen {
         g.fill(leftPos - 1, topPos - 1, leftPos + guiWidth + 1, topPos + guiHeight + 1, C_BG_OUTER);
         g.fill(leftPos, topPos, leftPos + guiWidth, topPos + guiHeight, C_BG_MAIN);
 
-        int tb = topPos + 28;
-        g.fill(leftPos, topPos, leftPos + guiWidth, tb, C_TITLE_BAR);
-        g.fill(leftPos, topPos, leftPos + guiWidth, topPos + 1, 0xFF4A7ACF);
-        g.drawCenteredString(this.font, "选择流体", leftPos + guiWidth / 2, topPos + 9, C_TEXT);
-
-        g.fill(leftPos, tb, leftPos + guiWidth, topPos + HEADER_HEIGHT - 2, 0xFF1E1E1E);
+        g.fill(leftPos, topPos, leftPos + guiWidth, topPos + HEADER_HEIGHT - 2, 0xFF1E1E1E);
         g.fill(leftPos + 5, topPos + HEADER_HEIGHT - 3, leftPos + guiWidth - 5, topPos + HEADER_HEIGHT - 2, C_DIVIDER);
 
         int gridTop = topPos + HEADER_HEIGHT;
@@ -189,7 +184,7 @@ public class FluidSelectorScreen extends Screen {
         super.render(g, mouseX, mouseY, partialTick);
 
         String pageInfo = String.format("§7第 %d / %d 页  (%d 个)", currentPage + 1, maxPage + 1, filteredFluids.size());
-        g.drawCenteredString(this.font, pageInfo, leftPos + guiWidth / 2, topPos + 81, C_TEXT_DIM);
+        g.drawCenteredString(this.font, pageInfo, leftPos + guiWidth / 2, topPos + HEADER_HEIGHT - 14, C_TEXT_DIM);
 
         renderFluidTooltip(g, mouseX, mouseY);
     }

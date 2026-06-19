@@ -1,217 +1,40 @@
 package dev.whisperlyric.ingamerecipeeditor.workspace;
 
+import dev.whisperlyric.ingamerecipeeditor.gui.NumberAdjustmentScreen;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
 /**
- * 配方原料文本编辑界面 - 用于手动输入原料ID和数量
+ * 配方槽位数量编辑工具类 - 直接打开NumberAdjustmentScreen
  */
-public class RecipeIngredientTextEditScreen extends Screen {
-    private static final int PADDING = 10;
-    private static final int EDIT_BOX_WIDTH = 200;
-    private static final int EDIT_BOX_HEIGHT = 20;
+public class RecipeIngredientTextEditScreen {
 
-    private final Screen parent;
-    private final String recipeId;
-    private final List<IRecipeSlotView> slots;
-    private final IRecipeSlotDrawable slot;
-    private final RecipeEditManager.IngredientEditValue initialValue;
+    public static void open(Screen parent, String recipeId, List<IRecipeSlotView> slots,
+                           IRecipeSlotDrawable slot, RecipeEditManager.IngredientEditValue initialValue) {
+        if (Minecraft.getInstance() != null) {
+            long currentAmount = Math.max(1, initialValue.amount());
+            long maxAmount = 1000;
 
-    private EditBox ingredientIdBox;
-    private EditBox amountBox;
-    private Button submitButton;
-    private Button cancelButton;
-
-    private int centerX;
-    private int centerY;
-    private int amountDisplayScale = 1;
-
-    public RecipeIngredientTextEditScreen(Screen parent, String recipeId, List<IRecipeSlotView> slots,
-                                           IRecipeSlotDrawable slot, RecipeEditManager.IngredientEditValue initialValue) {
-        super(Component.translatable("ingamerecipeeditor.screen.ingredient_edit.title"));
-        this.parent = parent;
-        this.recipeId = recipeId;
-        this.slots = slots;
-        this.slot = slot;
-        this.initialValue = initialValue;
-    }
-
-    @Override
-    protected void init() {
-        this.centerX = this.width / 2;
-        this.centerY = this.height / 2;
-
-        // 计算数量显示比例（从schema中读取，默认1）
-        try {
-            var wsOpt = dev.whisperlyric.ingamerecipeeditor.workspace.RecipeWorkspaceManager.getInstance().getWorkspaceRecipe(recipeId);
-            String recipeType = wsOpt.map(wr -> dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper.getRecipeTypeFromJson(recipeId).orElse(null)).orElseGet(() -> dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper.getRecipeTypeFromJson(recipeId).orElse(null));
-            if (recipeType != null) {
-                var schemaOpt = dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry.getSchema(recipeType);
-                if (schemaOpt.isPresent()) {
-                    var schema = schemaOpt.get();
-                    int idx = computeSlotIndex(slots, slot);
-                    if (idx >= 0) {
-                        if (idx < schema.getInputSlotCount()) {
-                            var def = schema.getInputSlotByIndex(idx);
-                            if (def != null) amountDisplayScale = def.getAmountScale();
-                        } else {
-                            var def = schema.getOutputSlotByIndex(idx - schema.getInputSlotCount());
-                            if (def != null) amountDisplayScale = def.getAmountScale();
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-
-        // 原料ID输入框
-        this.ingredientIdBox = new EditBox(
-            this.font,
-            centerX - EDIT_BOX_WIDTH / 2,
-            centerY - 40,
-            EDIT_BOX_WIDTH,
-            EDIT_BOX_HEIGHT,
-            Component.translatable("ingamerecipeeditor.screen.ingredient_edit.ingredient_id")
-        );
-        this.ingredientIdBox.setValue(initialValue.ingredientId());
-        this.ingredientIdBox.setMaxLength(256);
-        this.addRenderableWidget(this.ingredientIdBox);
-
-        // 标签选择按钮（复用标签选择/预览界面）
-        Button tagButton = Button.builder(Component.translatable("ingamerecipeeditor.screen.ingredient_edit.open_tags"), b -> {
-            if (minecraft != null) {
-                minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen(this, tagId -> {
-                    try {
-                        // 右键选择会回调这里，设置为#tagId格式
-                        this.ingredientIdBox.setValue("#" + tagId.toString());
-                    } catch (Exception ignored) {}
-                }));
-            }
-        }).bounds(centerX + EDIT_BOX_WIDTH / 2 + 6, centerY - 40, 80, 20).build();
-        this.addRenderableWidget(tagButton);
-
-        // 数量输入框
-        this.amountBox = new EditBox(
-            this.font,
-            centerX - EDIT_BOX_WIDTH / 2,
-            centerY - 10,
-            EDIT_BOX_WIDTH,
-            EDIT_BOX_HEIGHT,
-            Component.translatable("ingamerecipeeditor.screen.ingredient_edit.amount")
-        );
-        long displayAmount = initialValue.amount() * Math.max(1, amountDisplayScale);
-        this.amountBox.setValue(String.valueOf(displayAmount));
-        this.amountBox.setMaxLength(10);
-        this.amountBox.setFilter(s -> s.matches("\\d*"));
-        this.addRenderableWidget(this.amountBox);
-
-        // 提交按钮
-        this.submitButton = Button.builder(
-            Component.translatable("ingamerecipeeditor.screen.ingredient_edit.submit"),
-            button -> submit()
-        ).bounds(centerX - 105, centerY + 30, 100, 20).build();
-        this.addRenderableWidget(this.submitButton);
-
-        // 取消按钮
-        this.cancelButton = Button.builder(
-            Component.translatable("ingamerecipeeditor.screen.ingredient_edit.cancel"),
-            button -> cancel()
-        ).bounds(centerX + 5, centerY + 30, 100, 20).build();
-        this.addRenderableWidget(this.cancelButton);
-    }
-
-    private void submit() {
-        String ingredientId = ingredientIdBox.getValue();
-        long amount = 1;
-        try {
-            long display = Long.parseLong(amountBox.getValue());
-            amount = (long) Math.max(1, Math.round((double) display / Math.max(1, amountDisplayScale)));
-        } catch (NumberFormatException e) {
-            amount = 1;
+            Minecraft.getInstance().setScreen(new NumberAdjustmentScreen(
+                    parent,
+                    1,
+                    (int) Math.min(maxAmount, Integer.MAX_VALUE),
+                    (int) currentAmount,
+                    newAmount -> {
+                        RecipeEditManager.setSlotEditValue(
+                                recipeId,
+                                slots,
+                                slot,
+                                new RecipeEditManager.IngredientEditValue(initialValue.kind(), initialValue.ingredientId(), newAmount)
+                        );
+                    },
+                    false,
+                    0
+            ));
         }
-
-        if (!ingredientId.isEmpty()) {
-            RecipeEditManager.setSlotEditValue(
-                recipeId,
-                slots,
-                slot,
-                new RecipeEditManager.IngredientEditValue(initialValue.kind(), ingredientId, amount)
-            );
-        }
-
-        close();
-    }
-
-    private void cancel() {
-        close();
-    }
-
-    private void close() {
-        if (minecraft != null) {
-            minecraft.setScreen(parent);
-        }
-    }
-
-    private static int computeSlotIndex(java.util.List<mezz.jei.api.gui.ingredient.IRecipeSlotView> slots, mezz.jei.api.gui.ingredient.IRecipeSlotDrawable target) {
-        int index = 0;
-        for (var slotView : slots) {
-            if (!(slotView instanceof mezz.jei.api.gui.ingredient.IRecipeSlotDrawable)) continue;
-            var drawable = (mezz.jei.api.gui.ingredient.IRecipeSlotDrawable) slotView;
-            if (drawable == target) return index;
-            if (drawable.getRole() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT || drawable.getRole() == mezz.jei.api.recipe.RecipeIngredientRole.OUTPUT) {
-                index++;
-            }
-        }
-        return -1;
-    }
-
-    @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        // 渲染背景
-        this.renderBackground(guiGraphics);
-
-        // 渲染面板背景
-        int panelWidth = EDIT_BOX_WIDTH + PADDING * 2;
-        int panelHeight = 100 + PADDING * 2;
-        int panelX = centerX - panelWidth / 2;
-        int panelY = centerY - panelHeight / 2;
-
-        guiGraphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0xF0100010);
-        guiGraphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0xFF707070);
-        guiGraphics.fill(panelX, panelY + panelHeight - 1, panelX + panelWidth, panelY + panelHeight, 0xFF707070);
-        guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelHeight, 0xFF707070);
-        guiGraphics.fill(panelX + panelWidth - 1, panelY, panelX + panelWidth, panelY + panelHeight, 0xFF707070);
-
-        // 渲染标题
-        Component title = Component.translatable("ingamerecipeeditor.screen.ingredient_edit.title");
-        guiGraphics.drawString(this.font, title, centerX - this.font.width(title) / 2, panelY + 5, 0xFFFFFF, false);
-
-        // 渲染原料类型
-        Component typeLabel = Component.translatable(
-            "ingamerecipeeditor.screen.ingredient_edit.type",
-            initialValue.kind().name()
-        );
-        guiGraphics.drawString(this.font, typeLabel, centerX - this.font.width(typeLabel) / 2, centerY - 60, 0xA0A0A0, false);
-
-        // 渲染标签
-        Component idLabel = Component.translatable("ingamerecipeeditor.screen.ingredient_edit.ingredient_id");
-        guiGraphics.drawString(this.font, idLabel, centerX - EDIT_BOX_WIDTH / 2, centerY - 52, 0xA0A0A0, false);
-
-        Component amountLabel = Component.translatable("ingamerecipeeditor.screen.ingredient_edit.amount");
-        guiGraphics.drawString(this.font, amountLabel, centerX - EDIT_BOX_WIDTH / 2, centerY - 22, 0xA0A0A0, false);
-
-        // 渲染子组件
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }

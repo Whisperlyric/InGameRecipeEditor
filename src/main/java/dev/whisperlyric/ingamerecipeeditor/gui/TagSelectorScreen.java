@@ -112,9 +112,20 @@ public class TagSelectorScreen extends Screen {
     }
     
     public TagSelectorScreen(Screen parentScreen, Consumer<ResourceLocation> onTagSelected) {
+        this(parentScreen, onTagSelected, TagType.ALL);
+    }
+
+    /**
+     * 创建标签选择界面，并预设标签类型过滤
+     * @param parentScreen 父界面
+     * @param onTagSelected 选择标签后的回调
+     * @param initialTagType 初始标签类型（用于根据槽位类型预设过滤）
+     */
+    public TagSelectorScreen(Screen parentScreen, Consumer<ResourceLocation> onTagSelected, TagType initialTagType) {
         super(Component.literal("选择标签"));
         this.parentScreen = parentScreen;
         this.onTagSelected = onTagSelected;
+        this.currentTagType = initialTagType; // 预设标签类型
         this.searchHelper = new PinyinSearchHelper<>(
                 tag -> {
                     if (tag.representativeFluid != null) {
