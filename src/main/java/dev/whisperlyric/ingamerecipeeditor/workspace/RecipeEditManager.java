@@ -871,6 +871,28 @@ public class RecipeEditManager {
     }
 
     /**
+     * 从槽位本身获取原始ingredientId
+     */
+    public static String getSlotIngredientId(IRecipeSlotDrawable slot) {
+        try {
+            var ingredients = slot.getAllIngredients().toList();
+            for (var ingredient : ingredients) {
+                if (ingredient != null) {
+                    Object inner = ingredient.getIngredient();
+                    if (inner instanceof ItemStack itemStack && !itemStack.isEmpty()) {
+                        return itemStack.getItem().toString();
+                    } else if (inner instanceof FluidStack fluidStack && !fluidStack.isEmpty()) {
+                        return fluidStack.getFluid().toString();
+                    } else if (isChemicalStack(inner)) {
+                        return getChemicalId(inner);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /**
      * 应用草稿到布局（用于渲染）
      * 使用JEI的displayOverrides机制动态更新槽位显示内容
      */
