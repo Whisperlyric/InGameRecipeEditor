@@ -975,6 +975,12 @@ public class RecipeEditManager {
      */
     private static void applyEditValueToSlot(IRecipeSlotDrawable slot, IngredientEditValue editValue) {
         try {
+            // 清除原有显示
+            slot.clearDisplayOverrides();
+
+            // 创建新显示覆盖
+            var displayOverrides = slot.createDisplayOverrides();
+
             switch (editValue.kind()) {
                 case ITEM -> {
                     // 支持单值 / 多值 / 标签 (#tag) 语法，如 "minecraft:iron_ingot", "{minecraft:iron_ingot,minecraft:gold_ingot}", "#forge:ingots"
@@ -1051,8 +1057,8 @@ public class RecipeEditManager {
                     if (values.size() == 1) {
                         // 单个候选：取消轮换，直接显示
                         IngredientCycleManager.unregisterSlot(slot);
-                        slot.clearDisplayOverrides();
-                        var displayOverrides = slot.createDisplayOverrides();
+                        // slot.clearDisplayOverrides();
+                        // var displayOverrides = slot.createDisplayOverrides();
                         try {
                             displayOverrides.addIngredient((IIngredientType<Object>) types.get(0), values.get(0));
                         } catch (Exception ignored) {}
@@ -1121,8 +1127,8 @@ public class RecipeEditManager {
                     if (values.size() == 1) {
                         // 单个候选：取消轮换，直接显示
                         IngredientCycleManager.unregisterSlot(slot);
-                        slot.clearDisplayOverrides();
-                        var displayOverrides = slot.createDisplayOverrides();
+                        // slot.clearDisplayOverrides();
+                        // var displayOverrides = slot.createDisplayOverrides();
                         try {
                             displayOverrides.addIngredient((IIngredientType<Object>) types.get(0), values.get(0));
                         } catch (Exception ignored) {}
@@ -1155,16 +1161,18 @@ public class RecipeEditManager {
             }
 
             // 根据化学品类型选择正确的registry
-            String registryName = switch (editValue.kind()) {
+            String registryMethodName = switch (editValue.kind()) {
                 case GAS -> "gasRegistry";
                 case INFUSION -> "infuseTypeRegistry";
                 case PIGMENT -> "pigmentRegistry";
                 case SLURRY -> "slurryRegistry";
-                default -> "gasRegistry"; // RESOURCE类型默认尝试gasRegistry
+                default -> null;
             };
 
+            if (registryMethodName == null) return;
+
             Class<?> mekanismApi = Class.forName("mekanism.api.MekanismAPI");
-            Object registry = mekanismApi.getField(registryName).get(null);
+            Object registry = mekanismApi.getMethod(registryMethodName).invoke(null);
             Object chemical = registry.getClass().getMethod("getValue", ResourceLocation.class).invoke(registry, chemicalId);
             
             if (chemical == null) {
@@ -1184,21 +1192,35 @@ public class RecipeEditManager {
                 .getConstructor(chemicalClass.getSuperclass(), long.class)
                 .newInstance(chemical, Math.max(1, editValue.amount()));
 
-            // 获取Mekanism JEI的化学物质类型
+            // 获取Mekanism JEI的化学物质类型（根据具体化学品类型选择对应的TYPE字段）
             Class<?> mekanismJei = Class.forName("mekanism.client.jei.MekanismJEI");
-            Object typeChemical = mekanismJei.getField("TYPE_CHEMICAL").get(null);
-            
+            String typeName = switch (editValue.kind()) {
+                case GAS -> "TYPE_GAS";
+                case INFUSION -> "TYPE_INFUSION";
+                case PIGMENT -> "TYPE_PIGMENT";
+                case SLURRY -> "TYPE_SLURRY";
+                default -> "TYPE_CHEMICAL";
+            };
+            Object typeChemical = mekanismJei.getField(typeName).get(null);
+            InGameRecipeEditor.LOGGER.info("applyChemicalToSlot: chemicalId={}, kind={}, typeName={}, typeChemical={}, chemicalStack class={}",
+                chemicalId, editValue.kind(), typeName, typeChemical, chemicalStack.getClass().getName());
+
             if (typeChemical instanceof mezz.jei.api.ingredients.IIngredientType<?> ingredientType) {
                 slot.clearDisplayOverrides();
                 // 使用反射调用addIngredient方法，避免泛型类型问题
                 var displayOverrides = slot.createDisplayOverrides();
                 try {
-                    var addIngredientMethod = displayOverrides.getClass().getMethod("addIngredient", 
+                    var addIngredientMethod = displayOverrides.getClass().getMethod("addIngredient",
                         mezz.jei.api.ingredients.IIngredientType.class, Object.class);
                     addIngredientMethod.invoke(displayOverrides, ingredientType, chemicalStack);
+                    InGameRecipeEditor.LOGGER.info("applyChemicalToSlot: addIngredient成功, ingredientType={}", ingredientType);
                 } catch (NoSuchMethodException e) {
                     InGameRecipeEditor.LOGGER.warn("找不到addIngredient方法", e);
+                } catch (Exception e) {
+                    InGameRecipeEditor.LOGGER.warn("addIngredient调用失败", e);
                 }
+            } else {
+                InGameRecipeEditor.LOGGER.warn("applyChemicalToSlot: typeChemical不是IIngredientType实例: {}", typeChemical);
             }
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.warn("应用化学物质到槽位失败", e);

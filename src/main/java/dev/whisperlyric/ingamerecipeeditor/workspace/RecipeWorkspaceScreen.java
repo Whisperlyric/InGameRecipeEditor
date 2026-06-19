@@ -169,13 +169,16 @@ public class RecipeWorkspaceScreen extends Screen {
         ).bounds(buttonStartX + BUTTON_WIDTH * 2 + PADDING * 2, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
         this.addRenderableWidget(this.clearButton);
 
-        // 编辑按钮区域（在底部按钮上方，四个按钮居中）
-        int editBtnY = buttonY - BUTTON_HEIGHT - 4; // 底部按钮上方一行
-        int editTotalWidth = BUTTON_WIDTH * 4 + PADDING * 3; // 四个按钮的总宽度
-        int editStartX = (this.width - editTotalWidth) / 2; // 居中
+        int editBtnY = buttonY - BUTTON_HEIGHT - 4;
+        int editTotalWidth = BUTTON_WIDTH * 4 + PADDING * 3;
+        int editStartX = (this.width - editTotalWidth) / 2;
 
         this.editButton = Button.builder(Component.translatable("ingamerecipeeditor.screen.workspace.edit"), b -> {
             if (selectedSlot != null) {
+                // 检查槽位是否被清除，如果被清除则不允许编辑数量
+                if (IngredientCycleManager.isSlotCleared(selectedSlot)) {
+                    return;
+                }
                 RecipeEditManager.IngredientEditValue initialValue = RecipeEditManager.getSlotEditValue(
                     recipeId, recipe, slots, selectedSlot
                 ).orElseGet(() -> new RecipeEditManager.IngredientEditValue(
@@ -183,40 +186,109 @@ public class RecipeWorkspaceScreen extends Screen {
                     "",
                     1
                 ));
-                Minecraft.getInstance().setScreen(new RecipeIngredientTextEditScreen(
+                RecipeIngredientTextEditScreen.open(
                     this,
                     recipeId,
                     slots,
                     selectedSlot,
                     initialValue
-                ));
+                );
             }
         }).bounds(editStartX, editBtnY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
         this.addRenderableWidget(this.editButton);
 
         this.tagSelectButton = Button.builder(Component.translatable("ingamerecipeeditor.screen.workspace.select_tag"), b -> {
             if (selectedSlot != null && minecraft != null) {
-                minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen(this, tagId -> {
-                    try {
-                        RecipeEditManager.setSlotEditValue(
-                            recipeId,
-                            slots,
-                            selectedSlot,
-                            new RecipeEditManager.IngredientEditValue(RecipeEditManager.IngredientKind.ITEM, "#" + tagId.toString(), 1)
-                        );
-                    } catch (Exception ignored) {}
-                }));
+                RecipeEditManager.IngredientKind kind = RecipeEditManager.getSlotIngredientKind(recipeId, recipe, slots, selectedSlot);
+                // 化学品槽位不支持标签选择
+                if (kind.isChemical()) {
+                    return;
+                }
+                // 根据槽位类型预设标签类型过滤
+                dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen.TagType initialTagType = switch (kind) {
+                    case ITEM -> dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen.TagType.ITEMS;
+                    case FLUID -> dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen.TagType.FLUIDS;
+                    default -> dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen.TagType.ALL;
+                };
+                try {
+                    minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen(this, tagId -> {
+                        try {
+                            RecipeEditManager.setSlotEditValue(
+                                recipeId,
+                                slots,
+                                selectedSlot,
+                                new RecipeEditManager.IngredientEditValue(kind, "#" + tagId.toString(), 1)
+                            );
+                        } catch (Exception ignored) {}
+                    }, initialTagType));
+                } catch (Exception ignored) {}
             }
         }).bounds(editStartX + BUTTON_WIDTH + PADDING, editBtnY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
         this.addRenderableWidget(this.tagSelectButton);
 
         this.objectSelectButton = Button.builder(Component.translatable("ingamerecipeeditor.screen.workspace.select_object"), b -> {
             if (selectedSlot != null && minecraft != null) {
-                minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ItemSelectorScreen(this, itemStack -> {
-                    try {
-                        RecipeEditManager.replaceSlot(recipeId, slots, selectedSlot, itemStack);
-                    } catch (Exception ignored) {}
-                }));
+                RecipeEditManager.IngredientKind kind = RecipeEditManager.getSlotIngredientKind(recipeId, recipe, slots, selectedSlot);
+                try {
+                    switch (kind) {
+                        case FLUID -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.FluidSelectorScreen(this, fluidId -> {
+                            try {
+                                var fluid = net.minecraft.core.registries.BuiltInRegistries.FLUID.get(fluidId);
+                                if (fluid != null) {
+                                    RecipeEditManager.replaceSlot(
+                                        recipeId, slots, selectedSlot,
+                                        new net.minecraftforge.fluids.FluidStack(fluid, 1000)
+                                    );
+                                }
+                            } catch (Exception ignored) {}
+                        }));
+                        case GAS -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen(this, chemicalId -> {
+                            try {
+                                RecipeEditManager.setSlotEditValue(
+                                    recipeId, slots, selectedSlot,
+                                    new RecipeEditManager.IngredientEditValue(RecipeEditManager.IngredientKind.GAS, chemicalId, 1000)
+                                );
+                            } catch (Exception ignored) {}
+                        }, dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen.ChemicalType.GAS));
+                        case INFUSION -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen(this, chemicalId -> {
+                            try {
+                                RecipeEditManager.setSlotEditValue(
+                                    recipeId, slots, selectedSlot,
+                                    new RecipeEditManager.IngredientEditValue(RecipeEditManager.IngredientKind.INFUSION, chemicalId, 1000)
+                                );
+                            } catch (Exception ignored) {}
+                        }, dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen.ChemicalType.INFUSE_TYPE));
+                        case PIGMENT -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen(this, chemicalId -> {
+                            try {
+                                RecipeEditManager.setSlotEditValue(
+                                    recipeId, slots, selectedSlot,
+                                    new RecipeEditManager.IngredientEditValue(RecipeEditManager.IngredientKind.PIGMENT, chemicalId, 1000)
+                                );
+                            } catch (Exception ignored) {}
+                        }, dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen.ChemicalType.PIGMENT));
+                        case SLURRY -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen(this, chemicalId -> {
+                            try {
+                                RecipeEditManager.setSlotEditValue(
+                                    recipeId, slots, selectedSlot,
+                                    new RecipeEditManager.IngredientEditValue(RecipeEditManager.IngredientKind.SLURRY, chemicalId, 1000)
+                                );
+                            } catch (Exception ignored) {}
+                        }, dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen.ChemicalType.SLURRY));
+                        case RESOURCE -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen(this, chemicalId -> {
+                            try {
+                                RecipeEditManager.setSlotEditValue(
+                                    recipeId, slots, selectedSlot,
+                                    new RecipeEditManager.IngredientEditValue(RecipeEditManager.IngredientKind.RESOURCE, chemicalId, 1000)
+                                );
+                            } catch (Exception ignored) {}
+                        }, dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen.ChemicalType.ANY));
+                        default -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ItemSelectorScreen(this, itemStack -> {
+                            try {
+                                RecipeEditManager.replaceSlot(recipeId, slots, selectedSlot, itemStack);
+                            } catch (Exception ignored) {}
+                        }));
+                    }
+                } catch (Exception ignored) {}
             }
         }).bounds(editStartX + (BUTTON_WIDTH + PADDING) * 2, editBtnY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
         this.addRenderableWidget(this.objectSelectButton);
@@ -237,8 +309,14 @@ public class RecipeWorkspaceScreen extends Screen {
             this.submitButton.active = RecipeEditManager.hasDraft(recipeId);
         }
         boolean hasSelection = this.selectedSlot != null;
-        if (this.editButton != null) this.editButton.active = hasSelection;
-        if (this.tagSelectButton != null) this.tagSelectButton.active = hasSelection;
+        // 检查槽位是否被清除，如果被清除则禁用编辑按钮
+        boolean isSlotCleared = hasSelection && IngredientCycleManager.isSlotCleared(selectedSlot);
+        if (this.editButton != null) this.editButton.active = hasSelection && !isSlotCleared;
+        // 化学品槽位不支持标签选择，禁用标签选择按钮
+        if (this.tagSelectButton != null) {
+            RecipeEditManager.IngredientKind kind = hasSelection ? RecipeEditManager.getSlotIngredientKind(recipeId, recipe, slots, selectedSlot) : null;
+            this.tagSelectButton.active = hasSelection && kind != null && !kind.isChemical();
+        }
         if (this.objectSelectButton != null) this.objectSelectButton.active = hasSelection;
     }
 
@@ -450,6 +528,9 @@ public class RecipeWorkspaceScreen extends Screen {
                 long amount = editValue.amount();
                 long capacity = getSlotCapacity(slot, editValue.kind());
 
+                // 先用背景色遮盖JEI渲染的原始化学品内容
+                guiGraphics.fill(slotX, slotY, slotX + width, slotY + height, 0xFF0C0C18);
+
                 if (chemicalId != null && !chemicalId.isEmpty() && amount > 0) {
                     ChemicalSlotRenderer.renderChemical(guiGraphics, chemicalId, amount, capacity, slotX, slotY, width, height);
                 }
@@ -581,6 +662,13 @@ public class RecipeWorkspaceScreen extends Screen {
                     !text.contains("Accepts any of")) {
                     tooltipLines.add(line);
                 }
+            }
+            // 如果编辑值是tag，补全tag显示
+            String ingredientId = editValue.ingredientId();
+            if (ingredientId.startsWith("#")) {
+                String tagId = ingredientId.substring(1);
+                tooltipLines.add(Component.literal("#" + tagId)
+                    .withStyle(style -> style.withColor(0xFF5555FF)));
             }
         } else {
             // 无编辑值且未被清除，使用JEI的tooltip
@@ -752,10 +840,28 @@ public class RecipeWorkspaceScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // 先尝试槽位点击（选中/右键清除）
         if (handleSlotClick(mouseX, mouseY, button)) {
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        // 再尝试按钮/控件点击
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true; // 按钮被点击，不取消选中
+        }
+        // 点击在配方布局面板区域内但不在槽位上，取消选中
+        if (button == 0 && this.selectedSlot != null) {
+            Rect2i layoutRect = recipeLayout.getRect();
+            int panelX = layoutRect.getX() - PADDING;
+            int panelY = layoutRect.getY() - PADDING;
+            int panelW = layoutRect.getWidth() + PADDING * 2;
+            int panelH = layoutRect.getHeight() + PADDING * 2;
+            if (mouseX >= panelX && mouseX < panelX + panelW &&
+                mouseY >= panelY && mouseY < panelY + panelH) {
+                this.selectedSlot = null;
+                updateButtonStates();
+            }
+        }
+        return false;
     }
 
     /**
@@ -817,11 +923,7 @@ public class RecipeWorkspaceScreen extends Screen {
                 }
             }
         }
-        // 如果点击不在任何槽位上，左键应取消当前选取
-        if (mouseButton == 0 && this.selectedSlot != null) {
-            this.selectedSlot = null;
-            updateButtonStates();
-        }
+        // 点击不在任何槽位上，返回false让mouseClicked处理后续逻辑
         return false;
     }
 
