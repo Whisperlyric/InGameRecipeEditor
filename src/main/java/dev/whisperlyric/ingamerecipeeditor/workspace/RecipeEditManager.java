@@ -1,6 +1,7 @@
 package dev.whisperlyric.ingamerecipeeditor.workspace;
 
 import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
@@ -600,6 +601,8 @@ public class RecipeEditManager {
 
     /**
      * 使用schema定义的路径映射应用草稿
+     * 修复问题一：写入数量到amountPath
+     * 修复问题二：移除备选路径
      */
     private static void applyDraftWithSchema(JsonObject base, Map<Integer, IngredientEditValue> draft, RecipeSchema schema) {
         int inputCount = schema.getInputSlotCount();
@@ -621,8 +624,31 @@ public class RecipeEditManager {
             String path = target.getPrimaryJsonPath();
             if (path == null || path.isEmpty()) continue;
 
+            // 构建原料JSON
             JsonObject val = buildIngredientJson(v);
             setJsonAtPath(base, path, val);
+
+            // 问题一修复：写入数量到amountPath
+            if (target.hasAmountPath() && v.hasAmount()) {
+                int scaledAmount = (int) (v.amount() / target.getAmountScale());
+                setJsonAtPath(base, target.getAmountPath(), new JsonPrimitive(scaledAmount));
+            }
+
+            // 问题二修复：移除备选路径（如item和tag）
+            removeAlternatePaths(base, target, path);
+        }
+    }
+
+    /**
+     * 移除备选路径（写入新值时移除旧的备选路径，避免JSON冗余）
+     */
+    private static void removeAlternatePaths(JsonObject base, SlotDefinition slot, String usedPath) {
+        String[] allPaths = slot.getJsonPaths();
+        if (allPaths == null || allPaths.length <= 1) return;
+        for (String path : allPaths) {
+            if (!path.equals(usedPath)) {
+                removeJsonAtPath(base, path);
+            }
         }
     }
 
@@ -631,11 +657,6 @@ public class RecipeEditManager {
      * 基于JSON结构推断槽位路径（与JEIRecipeManager参考项目一致）
      */
     private static void applyDraftGeneric(JsonObject base, Map<Integer, IngredientEditValue> draft, String recipeType) {
-        // 分离输入和输出草稿
-        // 需要根据槽位角色（INPUT/OUTPUT）区分，但draft只存了全局索引
-        // 这里通过原始配方布局推断角色
-        // 简化处理：基于JSON结构推断
-
         boolean isShaped = base.has("pattern") && base.has("key");
         boolean isShapeless = base.has("ingredients") && base.get("ingredients").isJsonArray();
         boolean hasIngredient = base.has("ingredient");
@@ -646,6 +667,29 @@ public class RecipeEditManager {
         int inputCount = countInputSlots(base, isShaped, isShapeless, hasIngredient);
         int outputCount = countOutputSlots(base, hasResult, hasResults);
 
+        // 问题三修复：shaped配方需要收集所有输入替换，一次性重建pattern+key
+        if (isShaped) {
+            // 收集所有输入槽位的替换
+            Map<Integer, IngredientEditValue> inputDrafts = new HashMap<>();
+            for (Map.Entry<Integer, IngredientEditValue> e : draft.entrySet()) {
+                if (e.getKey() < inputCount) {
+                    inputDrafts.put(e.getKey(), e.getValue());
+                }
+            }
+            if (!inputDrafts.isEmpty()) {
+                applyShapedInputs(base, inputDrafts);
+            }
+            // 处理输出槽位
+            for (Map.Entry<Integer, IngredientEditValue> e : draft.entrySet()) {
+                if (e.getKey() >= inputCount) {
+                    int outIdx = e.getKey() - inputCount;
+                    applyGenericOutput(base, e.getValue(), outIdx, hasResult, hasResults);
+                }
+            }
+            return;
+        }
+
+        // 非shaped配方：逐个处理
         for (Map.Entry<Integer, IngredientEditValue> e : draft.entrySet()) {
             int idx = e.getKey();
             IngredientEditValue v = e.getValue();
@@ -700,13 +744,13 @@ public class RecipeEditManager {
 
     /**
      * 通用输入槽位修改
+     * 注意：shaped配方已在applyDraftGeneric中单独处理，此方法不处理shaped
      */
     private static void applyGenericInput(JsonObject base, IngredientEditValue v, int slotIndex, boolean isShaped, boolean isShapeless, boolean hasIngredient) {
         JsonObject val = buildIngredientJson(v);
 
+        // shaped配方已在applyDraftGeneric中通过applyShapedInputs处理
         if (isShaped) {
-            // 有序合成：修改pattern+key
-            applyShapedInput(base, v, slotIndex);
             return;
         }
 
@@ -735,35 +779,107 @@ public class RecipeEditManager {
     }
 
     /**
-     * 有序合成输入修改（修改pattern+key）
+     * 有序合成输入修改（重建pattern+key）
+     * 问题三修复：完整重建流程，支持清空槽位和扩展配方
+     * 参考JEIRecipeManager的applyShapedInputs实现
      */
-    private static void applyShapedInput(JsonObject base, IngredientEditValue v, int slotIndex) {
+    private static void applyShapedInputs(JsonObject base, Map<Integer, IngredientEditValue> inputDrafts) {
         if (!base.has("pattern") || !base.has("key")) return;
+        if (inputDrafts.isEmpty()) return;
 
         JsonArray pattern = base.getAsJsonArray("pattern");
-        JsonObject key = base.getAsJsonObject("key");
+        JsonObject originalKey = base.getAsJsonObject("key");
         int height = pattern.size();
-        int width = height > 0 ? pattern.get(0).getAsString().length() : 0;
+        int width = height == 0 ? 0 : pattern.get(0).getAsString().length();
 
-        // 合成台固定3x3网格，计算行列
+        // 合成台固定3x3网格
         int gridWidth = 3;
-        int rowOffset = Math.max(0, (3 - height) / 2);
-        int colOffset = Math.max(0, (3 - width) / 2);
-        int row = slotIndex / gridWidth - rowOffset;
-        int col = slotIndex % gridWidth - colOffset;
+        int gridHeight = 3;
 
-        if (row < 0 || row >= height || col < 0 || col >= width) return;
+        // 解析原有pattern和key到grid数组
+        JsonElement[] grid = new JsonElement[gridWidth * gridHeight];
+        int rowOffset = Math.max(0, (gridHeight - height) / 2);
+        int colOffset = Math.max(0, (gridWidth - width) / 2);
 
-        String rowText = pattern.get(row).getAsString();
-        if (col >= rowText.length()) return;
+        for (int i = 0; i < width * height; i++) {
+            int row = i / width;
+            int col = i % width;
+            String rowText = pattern.get(row).getAsString();
+            if (col >= rowText.length()) continue;
+            char keyChar = rowText.charAt(col);
+            if (keyChar == ' ') continue;
+            JsonElement ingredient = originalKey.get(String.valueOf(keyChar));
+            if (ingredient != null && !ingredient.isJsonNull()) {
+                int gridIndex = (row + rowOffset) * gridWidth + col + colOffset;
+                if (gridIndex >= 0 && gridIndex < grid.length) {
+                    grid[gridIndex] = ingredient.deepCopy();
+                }
+            }
+        }
 
-        char keyChar = rowText.charAt(col);
-        if (keyChar == ' ') return;
+        // 应用替换到grid
+        for (Map.Entry<Integer, IngredientEditValue> e : inputDrafts.entrySet()) {
+            int gridIndex = e.getKey();
+            if (gridIndex < 0 || gridIndex >= grid.length) continue;
+            IngredientEditValue v = e.getValue();
+            // 清空槽位（ingredientId为空或特殊标记）
+            if (v.ingredientId() == null || v.ingredientId().isEmpty() || "empty".equals(v.ingredientId())) {
+                grid[gridIndex] = null;
+            } else {
+                grid[gridIndex] = buildIngredientJson(v);
+            }
+        }
 
-        // 更新key中对应字符的原料
-        JsonObject val = buildIngredientJson(v);
-        key.add(String.valueOf(keyChar), val);
+        // 计算最小包围矩形（裁剪空白行列）
+        int minRow = gridHeight;
+        int minCol = gridWidth;
+        int maxRow = -1;
+        int maxCol = -1;
+        for (int i = 0; i < grid.length; i++) {
+            if (grid[i] == null) continue;
+            int row = i / gridWidth;
+            int col = i % gridWidth;
+            minRow = Math.min(minRow, row);
+            minCol = Math.min(minCol, col);
+            maxRow = Math.max(maxRow, row);
+            maxCol = Math.max(maxCol, col);
+        }
+
+        // 如果所有槽位都清空了，配方无效
+        if (maxRow < 0 || maxCol < 0) {
+            InGameRecipeEditor.LOGGER.warn("有序配方所有输入槽位都被清空，配方无效");
+            return;
+        }
+
+        // 重新生成pattern和key（使用KEY_CHARS字符映射）
+        JsonArray newPattern = new JsonArray();
+        JsonObject newKey = new JsonObject();
+        int nextKeyIndex = 0;
+        for (int row = minRow; row <= maxRow; row++) {
+            StringBuilder rowPattern = new StringBuilder();
+            for (int col = minCol; col <= maxCol; col++) {
+                JsonElement ingredient = grid[row * gridWidth + col];
+                if (ingredient == null) {
+                    rowPattern.append(' ');
+                    continue;
+                }
+                if (nextKeyIndex >= KEY_CHARS.length()) {
+                    InGameRecipeEditor.LOGGER.warn("有序配方输入槽位超过KEY_CHARS容量");
+                    return;
+                }
+                String keyName = String.valueOf(KEY_CHARS.charAt(nextKeyIndex++));
+                rowPattern.append(keyName);
+                newKey.add(keyName, ingredient);
+            }
+            newPattern.add(rowPattern.toString());
+        }
+
+        base.add("pattern", newPattern);
+        base.add("key", newKey);
     }
+
+    // KEY_CHARS：用于有序配方的字符映射（与JEIRecipeManager一致）
+    private static final String KEY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~";
 
     /**
      * 通用输出槽位修改
@@ -894,6 +1010,61 @@ public class RecipeEditManager {
                 current = arr.get(0);
                 i--;
                 continue;
+            } else {
+                return;
+            }
+        }
+    }
+
+    /**
+     * 移除指定路径的JSON元素
+     */
+    private static void removeJsonAtPath(JsonObject base, String rawPath) {
+        if (rawPath == null || rawPath.isEmpty() || base == null) return;
+        String path = rawPath.startsWith("/") ? rawPath.substring(1) : rawPath;
+        String[] parts = path.split("/");
+        if (parts.length == 1 && parts[0].contains(".")) {
+            parts = parts[0].split("\\.");
+        }
+
+        JsonElement current = base;
+        JsonElement parent = null;
+        String lastPart = null;
+
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            boolean isLast = (i == parts.length - 1);
+
+            if (part.matches("^\\d+$")) {
+                int idx = Integer.parseInt(part);
+                if (!current.isJsonArray()) return;
+                JsonArray arr = current.getAsJsonArray();
+                if (idx < 0 || idx >= arr.size()) return;
+
+                if (isLast) {
+                    arr.remove(idx);
+                    return;
+                } else {
+                    parent = arr;
+                    lastPart = part;
+                    current = arr.get(idx);
+                    continue;
+                }
+            }
+
+            if (current.isJsonObject()) {
+                JsonObject obj = current.getAsJsonObject();
+                if (!obj.has(part)) return;
+
+                if (isLast) {
+                    obj.remove(part);
+                    return;
+                } else {
+                    parent = obj;
+                    lastPart = part;
+                    current = obj.get(part);
+                    continue;
+                }
             } else {
                 return;
             }

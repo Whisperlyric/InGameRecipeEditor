@@ -120,9 +120,10 @@ public class CustomRecipesManager {
 
     /**
      * 从文件路径获取配方 path
-     * 文件路径格式: <namespace_dir>/<path_parts>.json
-     * 转换为: path_parts（用下划线连接）
-     * 例如: minecraft/iron_ingot_1.json -> iron_ingot_1
+     * 文件路径格式: <namespace_dir>/<type_subdir>/<file>.json 或 <namespace_dir>/<file>.json
+     * 如果中间目录名与配方JSON的type路径部分一致，则跳过该目录层级
+     * 例如: minecraft/crafting_shaped/oak_planks.json -> oak_planks
+     *       minecraft/iron_ingot.json -> iron_ingot
      */
     private static String getRecipePathFromFile(File namespaceDir, File recipeFile) {
         String namespacePath = namespaceDir.getAbsolutePath();
@@ -134,6 +135,28 @@ public class CustomRecipesManager {
         // 移除 .json 扩展名
         if (relativePath.endsWith(".json")) {
             relativePath = relativePath.substring(0, relativePath.length() - 5);
+        }
+
+        // 检查是否有type子目录：如果路径包含分隔符，且目录名与配方type匹配，则只取文件名部分
+        int sepIndex = relativePath.indexOf(File.separatorChar);
+        if (sepIndex > 0 && sepIndex < relativePath.length() - 1) {
+            // 有子目录，检查是否为type子目录
+            // type子目录的判断：读取JSON的type字段，如果路径部分与目录名一致，则跳过目录名
+            try (FileReader reader = new FileReader(recipeFile)) {
+                JsonElement element = GSON.fromJson(reader, JsonElement.class);
+                if (element != null && element.isJsonObject()) {
+                    JsonObject json = element.getAsJsonObject();
+                    if (json.has("type")) {
+                        String type = json.get("type").getAsString();
+                        String typePath = type.contains(":") ? type.substring(type.indexOf(':') + 1) : type;
+                        String dirName = relativePath.substring(0, sepIndex);
+                        if (dirName.equals(typePath)) {
+                            // 目录名与type路径部分一致，跳过目录名
+                            return relativePath.substring(sepIndex + 1).replace(File.separatorChar, '_');
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
         }
 
         // 将路径分隔符替换为下划线（符合 ResourceLocation path 规范）
