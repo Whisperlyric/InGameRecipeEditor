@@ -69,7 +69,7 @@ public class RecipeWorkspaceScreen extends Screen {
      * @param editMode 是否为编辑模式
      */
     public RecipeWorkspaceScreen(Screen parent, String recipeIdOrType, IRecipeLayoutDrawable<?> recipeLayout, boolean editMode) {
-        super(Component.translatable("ingamerecipeeditor.screen.workspace.title"));
+        super(Component.translatable(editMode ? "ingamerecipeeditor.screen.workspace.title" : "ingamerecipeeditor.screen.workspace.title_copy"));
         this.parent = parent;
         this.recipeLayout = recipeLayout;
         this.recipe = recipeLayout.getRecipe();
@@ -85,17 +85,19 @@ public class RecipeWorkspaceScreen extends Screen {
             String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
             
             // 加载配方JSON（与JEIRecipeManager参考项目一致）
-            // 优先从ResourceManager加载原始JSON文件
+            // 优先从RecipeJsonCache获取原始JSON文件
             JsonObject recipeJson = null;
             if (recipe instanceof Recipe<?> mcRecipe) {
                 recipeJson = JeiRecipeHelper.loadRecipeJson(recipeId, recipeType).orElse(null);
             }
             
             // 存储配方信息到RecipeWorkspaceManager
-            if (recipeJson != null) {
+            // 复制模式（editMode=false）视为新建配方，使用copyExistingRecipe
+            if (recipeJson != null && editMode) {
                 RecipeWorkspaceManager.getInstance().editExistingRecipe(recipeId, recipeJson);
+            } else if (recipeJson != null && !editMode) {
+                RecipeWorkspaceManager.getInstance().copyExistingRecipe(recipeId, recipeJson);
             } else if (recipeType != null) {
-                // 对于非Recipe<?>类型的配方（如Mekanism化学品配方），使用recipeType创建草稿
                 RecipeWorkspaceManager.getInstance().createDraftWithType(recipeId, recipeType);
             }
             
@@ -313,7 +315,9 @@ public class RecipeWorkspaceScreen extends Screen {
             var result = RecipeEditManager.submit(recipeId);
             if (result.isPresent()) {
                 String json = new GsonBuilder().setPrettyPrinting().create().toJson(result.get());
-                NetworkHandler.sendRecipeExport(recipeId, json);
+                boolean isNewRecipe = RecipeWorkspaceManager.getInstance().getDraft(recipeId)
+                    .map(RecipeWorkspaceManager.DraftInfo::isNewRecipe).orElse(true);
+                NetworkHandler.sendRecipeExport(recipeId, json, isNewRecipe);
                 Minecraft.getInstance().player.displayClientMessage(
                     Component.translatable("ingamerecipeeditor.message.recipe_export_sent", recipeId), false);
             } else {

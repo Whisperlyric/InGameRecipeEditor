@@ -49,7 +49,7 @@ public class RecipeWorkspaceManager {
         
         String draftId = generateDraftId(recipeType);
         
-        drafts.put(draftId, new DraftInfo(draftId, recipeType, null));
+        drafts.put(draftId, new DraftInfo(draftId, recipeType, null, false));
         activeRecipeId = draftId;
         
         InGameRecipeEditor.LOGGER.info("创建新配方草稿: {}", draftId);
@@ -65,7 +65,7 @@ public class RecipeWorkspaceManager {
             return;
         }
         
-        drafts.put(recipeId, new DraftInfo(recipeId, recipeType, recipeJson));
+        drafts.put(recipeId, new DraftInfo(recipeId, recipeType, recipeJson, false));
         activeRecipeId = recipeId;
         
         InGameRecipeEditor.LOGGER.info("开始编辑配方: {}", recipeId);
@@ -76,9 +76,25 @@ public class RecipeWorkspaceManager {
      * 用于无法获取配方JSON或recipe不是Recipe<?>类型的情况
      */
     public void createDraftWithType(String recipeId, String recipeType) {
-        drafts.put(recipeId, new DraftInfo(recipeId, recipeType, null));
+        drafts.put(recipeId, new DraftInfo(recipeId, recipeType, null, false));
         activeRecipeId = recipeId;
         InGameRecipeEditor.LOGGER.info("创建草稿: id={}, type={}", recipeId, recipeType);
+    }
+
+    /**
+     * 复制现有配方（基于原始JSON创建新配方）
+     */
+    public void copyExistingRecipe(String recipeId, JsonObject recipeJson) {
+        String recipeType = getRecipeTypeFromJson(recipeJson);
+        if (recipeType == null) {
+            InGameRecipeEditor.LOGGER.warn("无法确定配方类型: {}", recipeId);
+            return;
+        }
+
+        drafts.put(recipeId, new DraftInfo(recipeId, recipeType, recipeJson, true));
+        activeRecipeId = recipeId;
+
+        InGameRecipeEditor.LOGGER.info("复制配方: {}", recipeId);
     }
     
     /**
@@ -236,13 +252,14 @@ public class RecipeWorkspaceManager {
     public record DraftInfo(
         String id,               // 草稿ID
         String recipeType,       // 配方类型
-        JsonObject originalJson  // 原始JSON（编辑现有配方时）
+        JsonObject originalJson, // 原始JSON（编辑现有配方时）
+        boolean isCopy           // 是否为复制配方（复制模式视为新建配方）
     ) {
         /**
-         * 是否是新配方
+         * 是否是新配方（无原始JSON 或 复制模式）
          */
         public boolean isNewRecipe() {
-            return originalJson == null;
+            return originalJson == null || isCopy;
         }
     }
 
@@ -296,7 +313,7 @@ public class RecipeWorkspaceManager {
             try {
                 JsonObject merged = PatchRegistry.applyPatches(null, recipeIdStr, recipeType);
                 // 注册草稿信息，使编辑器可以基于该JSON工作
-                drafts.put(recipeIdStr, new DraftInfo(recipeIdStr, recipeType, merged));
+                drafts.put(recipeIdStr, new DraftInfo(recipeIdStr, recipeType, merged, false));
                 InGameRecipeEditor.LOGGER.info("为无编码配方应用补丁并创建草稿: {}", recipeIdStr);
             } catch (Exception e) {
                 InGameRecipeEditor.LOGGER.warn("应用补丁失败: {}", e.getMessage());

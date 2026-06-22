@@ -119,9 +119,9 @@ public class NetworkHandler {
     /**
      * 发送配方导出请求到服务器
      */
-    public static void sendRecipeExport(String recipeId, String recipeJson) {
+    public static void sendRecipeExport(String recipeId, String recipeJson, boolean isNewRecipe) {
         if (network != null) {
-            network.sendToServer(new RecipeExportPacket(recipeId, recipeJson));
+            network.sendToServer(new RecipeExportPacket(recipeId, recipeJson, isNewRecipe));
         }
     }
 
