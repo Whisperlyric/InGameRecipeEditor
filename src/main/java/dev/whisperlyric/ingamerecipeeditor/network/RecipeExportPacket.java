@@ -66,10 +66,13 @@ public class RecipeExportPacket {
                 JsonObject recipeObj = JsonParser.parseString(packet.recipeJson).getAsJsonObject();
                 ResourceLocation recipeIdLoc = ResourceLocation.parse(packet.recipeId);
 
-                boolean success = saveRecipeFile(recipeIdLoc, recipeObj, packet.isNewRecipe);
-                if (success) {
+                Path savedPath = saveRecipeFile(recipeIdLoc, recipeObj, packet.isNewRecipe);
+                if (savedPath != null) {
+                    // 显示相对配置目录的路径
+                    Path configDir = FMLPaths.CONFIGDIR.get().resolve("ingamerecipeeditor/recipes");
+                    String relativePath = configDir.relativize(savedPath).toString();
                     player.sendSystemMessage(Component.translatable(
-                        "ingamerecipeeditor.message.recipe_export_success", packet.recipeId));
+                        "ingamerecipeeditor.message.recipe_export_success", relativePath));
                 } else {
                     player.sendSystemMessage(Component.translatable(
                         "ingamerecipeeditor.message.recipe_export_fail", packet.recipeId));
@@ -84,77 +87,77 @@ public class RecipeExportPacket {
     }
 
     /**
-     * 保存配方文件
+     * 保存配方文件，返回实际写入路径，失败返回 null。
      * 路径规则：
-     * - 编辑现有配方（type为minecraft:开头）: recipes/<namespace>/<type_path>/<path>.json（覆写）
-     * - 新建自定义配方（type为minecraft:开头）: recipes/<namespace>/<type_path>/custom/<name>_<counter>.json
-     * - 其他配方: recipes/<namespace>/<path>.json
+     * - 有 type 字段：recipes/<namespace>/<type_path>/<recipe_path>.json
+     *   - 新建模式：recipes/<namespace>/<type_path>/custom/custom_{type}(_counter).json
+     * - 无 type 字段：recipes/<namespace>/<recipe_path>.json
      */
-    private static boolean saveRecipeFile(ResourceLocation recipeId, JsonObject recipeJson, boolean isNewRecipe) {
+    private static Path saveRecipeFile(ResourceLocation recipeId, JsonObject recipeJson, boolean isNewRecipe) {
         try {
-            String namespace = recipeId.getNamespace();
-            String path = recipeId.getPath();
+            String recipePath = recipeId.getPath();
+            String recipeNamespace = recipeId.getNamespace();
 
-            Path baseDir = FMLPaths.CONFIGDIR.get()
-                .resolve("ingamerecipeeditor/recipes")
-                .resolve(namespace);
-
-            // 判断type是否为minecraft:开头
             String type = recipeJson.has("type") ? recipeJson.get("type").getAsString() : null;
-            boolean isMinecraftType = type != null && type.startsWith("minecraft:");
 
-            if (isMinecraftType) {
-                // minecraft:type 配方：使用 type_path 作为子目录
-                String typePath = type.substring("minecraft:".length());
-                baseDir = baseDir.resolve(typePath);
+            if (type != null) {
+                // 有 type：按 type 组织目录
+                ResourceLocation typeLoc = ResourceLocation.tryParse(type);
+                String typePath = typeLoc != null ? typeLoc.getPath() : type.replace(':', '_');
 
+                Path baseDir = FMLPaths.CONFIGDIR.get()
+                    .resolve("ingamerecipeeditor/recipes")
+                    .resolve(recipeNamespace)
+                    .resolve(typePath);
+
+                Path filePath;
                 if (isNewRecipe) {
-                    // 新建自定义配方：custom/<name>_<counter>.json
                     baseDir = baseDir.resolve("custom");
                     Files.createDirectories(baseDir);
-                    String fileName = path.replace('/', '_');
-                    Path recipePath = baseDir.resolve(fileName + ".json");
+                    String fileName = "custom_" + typePath;
+                    filePath = baseDir.resolve(fileName + ".json");
                     int counter = 1;
-                    while (Files.exists(recipePath)) {
-                        recipePath = baseDir.resolve(fileName + "_" + counter + ".json");
+                    while (Files.exists(filePath)) {
+                        filePath = baseDir.resolve(fileName + "_" + counter + ".json");
                         counter++;
                     }
-                    try (FileWriter writer = new FileWriter(recipePath.toFile())) {
-                        GSON.toJson(recipeJson, writer);
-                    }
-                    InGameRecipeEditor.LOGGER.info("新建配方已导出: {} -> {}", recipeId, recipePath);
                 } else {
-                    // 编辑现有配方：覆写
                     Files.createDirectories(baseDir);
-                    String fileName = path.replace('/', '_');
-                    Path recipePath = baseDir.resolve(fileName + ".json");
-                    try (FileWriter writer = new FileWriter(recipePath.toFile())) {
-                        GSON.toJson(recipeJson, writer);
-                    }
-                    InGameRecipeEditor.LOGGER.info("配方已导出: {} -> {}", recipeId, recipePath);
+                    String fileName = recipePath.replace('/', '_');
+                    filePath = baseDir.resolve(fileName + ".json");
                 }
-            } else {
-                // 非minecraft:type配方：保持 recipes/<namespace>/<path>.json
-                Files.createDirectories(baseDir);
-                String fileName = path.replace('/', '_');
-                Path recipePath = baseDir.resolve(fileName + ".json");
-                if (isNewRecipe) {
-                    int counter = 1;
-                    while (Files.exists(recipePath)) {
-                        recipePath = baseDir.resolve(fileName + "_" + counter + ".json");
-                        counter++;
-                    }
-                }
-                try (FileWriter writer = new FileWriter(recipePath.toFile())) {
+
+                try (FileWriter writer = new FileWriter(filePath.toFile())) {
                     GSON.toJson(recipeJson, writer);
                 }
-                InGameRecipeEditor.LOGGER.info("配方已导出: {} -> {}", recipeId, recipePath);
-            }
+                InGameRecipeEditor.LOGGER.info("配方已导出: {} -> {}", recipeId, filePath);
+                return filePath;
 
-            return true;
+            } else {
+                // 无 type：扁平目录
+                Path baseDir = FMLPaths.CONFIGDIR.get()
+                    .resolve("ingamerecipeeditor/recipes")
+                    .resolve(recipeNamespace);
+                Files.createDirectories(baseDir);
+
+                String fileName = recipePath.replace('/', '_');
+                Path filePath = baseDir.resolve(fileName + ".json");
+                if (isNewRecipe) {
+                    int counter = 1;
+                    while (Files.exists(filePath)) {
+                        filePath = baseDir.resolve(fileName + "_" + counter + ".json");
+                        counter++;
+                    }
+                }
+                try (FileWriter writer = new FileWriter(filePath.toFile())) {
+                    GSON.toJson(recipeJson, writer);
+                }
+                InGameRecipeEditor.LOGGER.info("配方已导出: {} -> {}", recipeId, filePath);
+                return filePath;
+            }
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.error("保存配方文件失败: {}", recipeId, e);
-            return false;
+            return null;
         }
     }
 }

@@ -1,26 +1,25 @@
 {
-  "recipeType": "modid:example_simple",
-  "displayName": "示例 — 简单物品配方",
-  "size": [150, 60],
-  "inputSlots": [
+  "recipe_type": "modid:example_simple",
+  "slots": [
     {
-      "id": "input_0",
-      "index": 0,
-      "jsonField": "ingredient",
-      "x": 34,
-      "y": 6,
-      "amountScale": 1
+      "role": "input",
+      "path": "ingredient",
+      "value_kind": "item_ingredient"
+    },
+    {
+      "role": "output",
+      "path": "result",
+      "value_kind": "item_ingredient"
     }
   ],
-  "outputSlots": [
-    {
-      "id": "output_0",
-      "index": 0,
-      "jsonField": "result",
-      "x": 97,
-      "y": 15
+  "properties": {
+    "experience": {
+      "path": "experience",
+      "default_value": 0.7
+    },
+    "cookingtime": {
+      "path": "cookingtime",
+      "default_value": 200
     }
-  ],
-  "properties": []
+  }
 }
-

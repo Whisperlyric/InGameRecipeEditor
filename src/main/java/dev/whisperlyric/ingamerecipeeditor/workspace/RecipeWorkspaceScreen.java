@@ -69,6 +69,18 @@ public class RecipeWorkspaceScreen extends Screen {
      * @param editMode 是否为编辑模式
      */
     public RecipeWorkspaceScreen(Screen parent, String recipeIdOrType, IRecipeLayoutDrawable<?> recipeLayout, boolean editMode) {
+        this(parent, recipeIdOrType, recipeLayout, editMode, null);
+    }
+
+    /**
+     * 创建工作区界面（带模板 JSON）
+     * @param parent 父界面
+     * @param recipeIdOrType 配方ID或配方类型
+     * @param recipeLayout JEI配方布局
+     * @param editMode 是否为编辑模式
+     * @param templateJson 新建模式的模板 JSON（基于原配方结构生成的骨架）
+     */
+    public RecipeWorkspaceScreen(Screen parent, String recipeIdOrType, IRecipeLayoutDrawable<?> recipeLayout, boolean editMode, JsonObject templateJson) {
         super(Component.translatable(editMode ? "ingamerecipeeditor.screen.workspace.title" : "ingamerecipeeditor.screen.workspace.title_copy"));
         this.parent = parent;
         this.recipeLayout = recipeLayout;
@@ -92,12 +104,17 @@ public class RecipeWorkspaceScreen extends Screen {
             }
             
             // 存储配方信息到RecipeWorkspaceManager
-            // 复制模式（editMode=false）视为新建配方，使用copyExistingRecipe
-            if (recipeJson != null && editMode) {
+            if (editMode && recipeJson != null) {
+                // 编辑模式：使用原始配方 JSON
                 RecipeWorkspaceManager.getInstance().editExistingRecipe(recipeId, recipeJson);
-            } else if (recipeJson != null && !editMode) {
+            } else if (!editMode && templateJson != null) {
+                // 新建模式（有模板）：使用模板 JSON 作为原始结构
+                RecipeWorkspaceManager.getInstance().copyExistingRecipe(recipeId, templateJson);
+            } else if (!editMode && recipeJson != null) {
+                // 复制模式（无模板但有原始 JSON）：复制原配方
                 RecipeWorkspaceManager.getInstance().copyExistingRecipe(recipeId, recipeJson);
             } else if (recipeType != null) {
+                // 后备：仅记录类型
                 RecipeWorkspaceManager.getInstance().createDraftWithType(recipeId, recipeType);
             }
             
@@ -175,12 +192,15 @@ public class RecipeWorkspaceScreen extends Screen {
                     "",
                     1
                 ));
+                // 从 Schema 获取槽位的缩放参数（multiply, step, unit）
+                RecipeEditManager.ScaleParams scaleParams = RecipeEditManager.getSlotScaleParams(recipeId, recipeLayout, selectedSlot);
                 RecipeIngredientTextEditScreen.open(
                     this,
                     recipeId,
                     slots,
                     selectedSlot,
-                    initialValue
+                    initialValue,
+                    scaleParams
                 );
             }
         }).bounds(editStartX, editBtnY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
@@ -285,7 +305,8 @@ public class RecipeWorkspaceScreen extends Screen {
         // 编辑其他属性按钮（打开属性编辑界面）
         Button propsBtn = Button.builder(Component.translatable("ingamerecipeeditor.screen.workspace.other_properties"), b -> {
             if (minecraft != null) {
-                minecraft.setScreen(new PropertiesEditScreen(this, recipeId));
+                String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+                minecraft.setScreen(new PropertiesEditScreen(this, recipeId, recipeType));
             }
         }).bounds(editStartX + (BUTTON_WIDTH + PADDING) * 3, editBtnY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
         this.addRenderableWidget(propsBtn);
@@ -318,8 +339,7 @@ public class RecipeWorkspaceScreen extends Screen {
                 boolean isNewRecipe = RecipeWorkspaceManager.getInstance().getDraft(recipeId)
                     .map(RecipeWorkspaceManager.DraftInfo::isNewRecipe).orElse(true);
                 NetworkHandler.sendRecipeExport(recipeId, json, isNewRecipe);
-                Minecraft.getInstance().player.displayClientMessage(
-                    Component.translatable("ingamerecipeeditor.message.recipe_export_sent", recipeId), false);
+                InGameRecipeEditor.LOGGER.info("配方导出请求已发送: {}", recipeId);
             } else {
                 Minecraft.getInstance().player.displayClientMessage(
                     Component.translatable("ingamerecipeeditor.message.recipe_export_no_changes"), false);

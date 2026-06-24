@@ -326,13 +326,19 @@ public class RecipeWorkspaceManager {
         Minecraft.getInstance().setScreen(screen);
 
         InGameRecipeEditor.LOGGER.info("打开工作区编辑配方: {}", recipeIdStr);
+        DebugSettings.sendChat("[Workspace] 编辑模式打开: id=" + recipeIdStr + ", type=" + recipeType);
     }
 
     /**
      * 打开空工作区（新建配方，从此配方类型新建）
      */
-    @SuppressWarnings("unchecked")
-    public void openEmptyWorkspace(Screen parent, IRecipeLayoutDrawable<?> recipeLayout) {
+    /**
+     * 打开空工作区（新建配方模式）
+     * @param parent 父界面
+     * @param recipeLayout 配方布局（用于获取配方类型和槽位结构）
+     * @param templateJson 模板 JSON（基于原配方结构生成的骨架，所有原料值已清空）
+     */
+    public void openEmptyWorkspace(Screen parent, IRecipeLayoutDrawable<?> recipeLayout, JsonObject templateJson) {
         if (recipeLayout == null) {
             InGameRecipeEditor.LOGGER.warn("无法打开空工作区：配方布局为空");
             return;
@@ -341,12 +347,14 @@ public class RecipeWorkspaceManager {
         // 使用JeiRecipeHelper获取正确的配方类型
         String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
 
-        // 创建空工作区界面（新建模式）
-        RecipeWorkspaceScreen screen = new RecipeWorkspaceScreen(parent, recipeType, recipeLayout, false);
+        // 创建空工作区界面（新建模式），传入模板 JSON
+        RecipeWorkspaceScreen screen = new RecipeWorkspaceScreen(parent, recipeType, recipeLayout, false, templateJson);
         currentScreen = screen;
         Minecraft.getInstance().setScreen(screen);
-        
+
         InGameRecipeEditor.LOGGER.info("打开空工作区，配方类型: {}", recipeType);
+        String templateStr = templateJson != null ? new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(templateJson) : "(null)";
+        DebugSettings.sendChat("[Workspace] 新建模式打开: type=" + recipeType + ", template:\n" + templateStr);
     }
 
     /**

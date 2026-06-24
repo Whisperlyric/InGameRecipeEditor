@@ -33,7 +33,7 @@ public class RecipeCopyButton extends AbstractWidget {
     private final IRecipeLayoutDrawable<?> recipeLayout;
 
     public RecipeCopyButton(int x, int y, IRecipeLayoutDrawable<?> recipeLayout) {
-        super(x, y, 9, 9, Component.empty());
+        super(x, y, 8, 8, Component.empty());
         this.recipeLayout = recipeLayout;
 
         // 使用JeiRecipeHelper获取正确的配方ID
@@ -83,7 +83,7 @@ public class RecipeCopyButton extends AbstractWidget {
         RenderSystem.setShaderColor(red, green, blue, alpha);
 
         // 绘制图标（居中）
-        int iconSize = 9;
+        int iconSize = 8;
         double xOffset = getX() + (width - iconSize) / 2.0;
         double yOffset = getY() + (height - iconSize) / 2.0;
 
