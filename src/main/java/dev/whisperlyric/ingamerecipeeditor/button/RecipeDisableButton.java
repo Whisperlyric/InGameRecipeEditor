@@ -98,8 +98,8 @@ public class RecipeDisableButton extends AbstractWidget {
         float alpha = (color >> 24 & 255) / 255.0F;
         RenderSystem.setShaderColor(red, green, blue, alpha);
 
-        // 绘制图标（居中）
-        int iconSize = 9;
+        // 绘制图标
+        int iconSize = 8;
         double xOffset = getX() + (width - iconSize) / 2.0;
         double yOffset = getY() + (height - iconSize) / 2.0;
         // 删除按钮按下时偏移图标

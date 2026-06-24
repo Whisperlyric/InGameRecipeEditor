@@ -3,48 +3,58 @@ package dev.whisperlyric.ingamerecipeeditor.schema;
 import com.google.gson.*;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
 import dev.whisperlyric.ingamerecipeeditor.workspace.RecipeEditManager;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.InputStreamReader;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * 简单的补丁注册/应用器
- * 从 refs/mod_patches 和 refs/recipe_patches 读取 JSON 定义并将 path->value 填回目标 JSON
+ * 补丁注册/应用器
+ * 从 data/ingamerecipeeditor/mod_patches 和 data/ingamerecipeeditor/recipe_patches 读取 JSON 定义
+ * 将 path->value 填回目标 JSON
  */
 public class PatchRegistry {
-    // 载入并应用 mod/recipe 补丁到 base（不修改磁盘）
+    private static final String MOD_PATCHES_PATH = "mod_patches";
+    private static final String RECIPE_PATCHES_PATH = "recipe_patches";
+    private static final Gson GSON = new GsonBuilder().create();
+
+    private static ResourceManager resourceManager;
+
+    /**
+     * 由资源重载监听器调用，注入当前 ResourceManager
+     */
+    public static void setResourceManager(ResourceManager rm) {
+        resourceManager = rm;
+    }
+
+    /**
+     * 载入并应用 mod/recipe 补丁到 base（不修改磁盘）
+     */
     public static JsonObject applyPatches(JsonObject base, String recipeId, String recipeType) {
         if (base == null) base = new JsonObject();
+        if (resourceManager == null) return base;
 
         try {
             if (recipeId == null) return base;
             String modid = recipeId.contains(":") ? recipeId.substring(0, recipeId.indexOf(':')) : recipeId;
+
             // mod-level patches
-            Path modFile = Path.of("refs", "mod_patches", modid + ".json");
-            JsonObject modDef = null;
-            if (Files.exists(modFile)) {
-                try (var is = Files.newInputStream(modFile)) {
-                    modDef = JsonParser.parseReader(new java.io.InputStreamReader(is)).getAsJsonObject();
-                }
-            }
+            JsonObject modDef = loadJsonResource(MOD_PATCHES_PATH + "/" + modid + ".json");
 
             // recipe-level control
             String recipeShort = recipeId.contains(":") ? recipeId.substring(recipeId.indexOf(':') + 1) : recipeId;
             recipeShort = recipeShort.replace('/', '_');
-            Path recipeFile = Path.of("refs", "recipe_patches", modid + "_" + recipeShort + ".json");
-            JsonObject recipeCtl = null;
-            if (Files.exists(recipeFile)) {
-                try (var is = Files.newInputStream(recipeFile)) {
-                    recipeCtl = JsonParser.parseReader(new java.io.InputStreamReader(is)).getAsJsonObject();
-                }
-            }
+            JsonObject recipeCtl = loadJsonResource(RECIPE_PATCHES_PATH + "/" + modid + "_" + recipeShort + ".json");
 
             // apply mod-level enabled patches
             if (modDef != null && modDef.has("patchDefinitions")) {
                 JsonObject defs = modDef.getAsJsonObject("patchDefinitions");
-                JsonObject enabled = recipeCtl != null && recipeCtl.has("enabledPatches") ? recipeCtl.getAsJsonObject("enabledPatches") : new JsonObject();
+                JsonObject enabled = recipeCtl != null && recipeCtl.has("enabledPatches")
+                    ? recipeCtl.getAsJsonObject("enabledPatches") : new JsonObject();
                 for (Map.Entry<String, JsonElement> e : defs.entrySet()) {
                     String pid = e.getKey();
                     JsonObject def = e.getValue().getAsJsonObject();
@@ -74,14 +84,26 @@ public class PatchRegistry {
                 }
             }
 
-        } catch (IOException ex) {
-            InGameRecipeEditor.LOGGER.warn("读取补丁文件失败", ex);
         } catch (Exception ex) {
             InGameRecipeEditor.LOGGER.warn("应用补丁失败", ex);
         }
 
         return base;
     }
+
+    /**
+     * 从资源包加载 JSON 文件，返回 null 如果不存在
+     */
+    private static JsonObject loadJsonResource(String path) {
+        ResourceLocation loc = ResourceLocation.parse(InGameRecipeEditor.MOD_ID + ":" + path);
+        Optional<Resource> res = resourceManager.getResource(loc);
+        if (res.isPresent()) {
+            try (var reader = new InputStreamReader(res.get().open())) {
+                return GSON.fromJson(reader, JsonObject.class);
+            } catch (IOException e) {
+                InGameRecipeEditor.LOGGER.warn("读取补丁文件失败: {}", path, e);
+            }
+        }
+        return null;
+    }
 }
-
-

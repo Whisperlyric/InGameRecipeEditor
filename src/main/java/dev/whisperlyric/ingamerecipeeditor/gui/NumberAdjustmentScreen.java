@@ -9,14 +9,41 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
+/**
+ * 通用数值调整界面。
+ * <p>
+ * 构造参数中 {@code max}/{@code current}/{@code min} 均为<strong>原始值（raw）</strong>，
+ * 即最终写入 JSON 的值。回调 {@code callback} 传出的也是 raw 值。
+ * </p>
+ * <p>滑条和输入框显示<strong>display 值</strong>：<br>
+ * &nbsp;&nbsp;display = raw * multiply / step（整数除法）<br>
+ * 示例：raw=1000J, multiply=2, step=5 → display=400FE。</p>
+ * <p>构造参数从 {@code min} 开始（含）逐步可选：<br>
+ * {@code (parent, callback, max, current)}<br>
+ * {@code (parent, callback, max, current, min)}<br>
+ * {@code (parent, callback, max, current, min, unit)}<br>
+ * {@code (parent, callback, max, current, min, unit, multiply, step)}</p>
+ */
 public class NumberAdjustmentScreen extends Screen {
     private final Screen parent;
-    private final long minValue;
-    private final long maxValue;
-    private long currentValue;
     private final Consumer<Long> callback;
-    private final boolean isEnergyMode;
-    private final int displayDivisor;
+
+    /** 原始值（raw）范围 */
+    private final long minRaw;
+    private final long maxRaw;
+    private long currentRaw;
+
+    /** 整数乘数和步进，display = raw * multiply / step */
+    private final int multiply;
+    private final int step;
+
+    /** 显示单位（如"FE"、"mB"），null 则不显示 */
+    private final String unit;
+
+    /** display 值范围 */
+    private final long minDisplay;
+    private final long maxDisplay;
+    private long currentDisplay;
 
     private EditBox valueInput;
     private Button btnConfirm;
@@ -30,33 +57,91 @@ public class NumberAdjustmentScreen extends Screen {
     private int sliderHeight = 20;
     private boolean isDraggingSlider = false;
 
-    public NumberAdjustmentScreen(Screen parent, int minValue, int maxValue, int currentValue, Consumer<Integer> callback) {
-        this(parent, (long)minValue, (long)maxValue, (long)currentValue, value -> callback.accept(value.intValue()), false, 0);
+    // ===================== 构造函数：从 min 开始逐步可选 =====================
+
+    /**
+     * 最简构造：(parent, callback, max, current)
+     * min=0, unit=null, multiply=1, step=1
+     */
+    public NumberAdjustmentScreen(Screen parent, Consumer<Integer> callback, int max, int current) {
+        this(parent, v -> callback.accept(v.intValue()), (long) max, (long) current, 0L, null, 1, 1);
     }
 
-    public NumberAdjustmentScreen(Screen parent, long minValue, long maxValue, long currentValue, Consumer<Long> callback, boolean isEnergyMode) {
-        this(parent, minValue, maxValue, currentValue, callback, isEnergyMode, 0);
+    /**
+     * (parent, callback, max, current, min)
+     * unit=null, multiply=1, step=1
+     */
+    public NumberAdjustmentScreen(Screen parent, Consumer<Integer> callback, int max, int current, int min) {
+        this(parent, v -> callback.accept(v.intValue()), (long) max, (long) current, (long) min, null, 1, 1);
     }
 
-    public NumberAdjustmentScreen(Screen parent, int minValue, int maxValue, int currentValue, Consumer<Integer> callback, int displayDivisor) {
-        this(parent, (long)minValue, (long)maxValue, (long)currentValue, value -> callback.accept(value.intValue()), false, displayDivisor);
+    /**
+     * (parent, callback, max, current, min, unit)
+     * multiply=1, step=1
+     */
+    public NumberAdjustmentScreen(Screen parent, Consumer<Integer> callback, int max, int current, int min, String unit) {
+        this(parent, v -> callback.accept(v.intValue()), (long) max, (long) current, (long) min, unit, 1, 1);
     }
 
-    public NumberAdjustmentScreen(Screen parent, long minValue, long maxValue, long currentValue, Consumer<Long> callback, boolean isEnergyMode, int displayDivisor) {
-        super(Component.literal(getTitleText(isEnergyMode, displayDivisor)));
+    /**
+     * (parent, callback, max, current, min, unit, multiply, step)
+     * 完整构造（int 版）
+     */
+    public NumberAdjustmentScreen(Screen parent, Consumer<Integer> callback, int max, int current, int min, String unit, int multiply, int step) {
+        this(parent, v -> callback.accept(v.intValue()), (long) max, (long) current, (long) min, unit, multiply, step);
+    }
+
+    /**
+     * (parent, callback, max, current, min, unit, multiply, step)
+     * 完整构造（long 版）
+     *
+     * <p>显示换算公式：display = raw * multiply / step（整数除法）。</p>
+     * <p>示例：若 FE=J*2/5，则调用 (..., min=0, unit="FE", multiply=2, step=5)。<br>
+     * 滑条和输入框范围：0 ~ max*2/5 FE，回调传出 raw 值（J）。</p>
+     */
+    public NumberAdjustmentScreen(Screen parent, Consumer<Long> callback, long max, long current, long min, String unit, int multiply, int step) {
+        super(Component.literal("数量调整"));
         this.parent = parent;
-        this.minValue = minValue;
-        this.maxValue = maxValue;
-        this.currentValue = Math.max(minValue, Math.min(maxValue, currentValue));
         this.callback = callback;
-        this.isEnergyMode = isEnergyMode;
-        this.displayDivisor = displayDivisor;
+        this.minRaw = min;
+        this.maxRaw = max;
+        this.currentRaw = Math.max(min, Math.min(max, current));
+        this.multiply = Math.max(1, multiply);
+        this.step = Math.max(1, step);
+        this.unit = unit;
+
+        // 计算 display 值范围
+        this.minDisplay = rawToDisplay(this.minRaw);
+        this.maxDisplay = rawToDisplay(this.maxRaw);
+        this.currentDisplay = rawToDisplay(this.currentRaw);
+        // 对齐 display 值到 step
+        this.currentDisplay = alignDisplayToStep(this.currentDisplay);
+        // 反算 raw 值
+        this.currentRaw = displayToRaw(this.currentDisplay);
     }
 
-    private static String getTitleText(boolean isEnergyMode, int displayDivisor) {
-        if (isEnergyMode) return "能量调整";
-        if (displayDivisor > 1) return "气体数量调整";
-        return "数量调整";
+    /**
+     * 将 display 值对齐到 step 的倍数
+     */
+    private long alignDisplayToStep(long displayValue) {
+        if (step <= 1) return displayValue;
+        long aligned = (displayValue / step) * step;
+        return Math.max(minDisplay, Math.min(maxDisplay, aligned));
+    }
+
+    /**
+     * raw → display：display = raw * multiply / step（整数除法）
+     */
+    private long rawToDisplay(long raw) {
+        return raw * (long) multiply / step;
+    }
+
+    /**
+     * display → raw：raw = display * step / multiply（整数除法）
+     */
+    private long displayToRaw(long display) {
+        if (multiply <= 0) return display;
+        return display * step / multiply;
     }
 
     @Override
@@ -75,13 +160,13 @@ public class NumberAdjustmentScreen extends Screen {
             centerY - 20,
             100,
             20,
-            Component.literal(isEnergyMode ? "能量" : "数量")
+            Component.literal("数量")
         );
-        valueInput.setValue(String.valueOf(currentValue));
+        valueInput.setValue(String.valueOf(currentDisplay));
         valueInput.setFilter(s -> {
             try {
                 long value = Long.parseLong(s);
-                return value >= minValue && value <= maxValue;
+                return value >= minDisplay && value <= maxDisplay;
             } catch (NumberFormatException e) {
                 return false;
             }
@@ -89,18 +174,20 @@ public class NumberAdjustmentScreen extends Screen {
         addRenderableWidget(valueInput);
 
         btnMin = Button.builder(
-            Component.literal(String.valueOf(minValue)),
+            Component.literal(String.valueOf(minDisplay)),
             button -> {
-                currentValue = minValue;
-                valueInput.setValue(String.valueOf(currentValue));
+                currentDisplay = minDisplay;
+                currentRaw = displayToRaw(currentDisplay);
+                valueInput.setValue(String.valueOf(currentDisplay));
             }
         ).bounds(centerX - 100, centerY + 10, 60, 20).build();
 
         btnMax = Button.builder(
-            Component.literal(String.valueOf(maxValue)),
+            Component.literal(String.valueOf(maxDisplay)),
             button -> {
-                currentValue = maxValue;
-                valueInput.setValue(String.valueOf(currentValue));
+                currentDisplay = maxDisplay;
+                currentRaw = displayToRaw(currentDisplay);
+                valueInput.setValue(String.valueOf(currentDisplay));
             }
         ).bounds(centerX + 40, centerY + 10, 60, 20).build();
 
@@ -124,16 +211,20 @@ public class NumberAdjustmentScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics);
 
-        String title = getTitleText(isEnergyMode, displayDivisor);
+        // 标题
         guiGraphics.drawCenteredString(
             Minecraft.getInstance().font,
-            Component.literal(title),
+            Component.literal("数量调整"),
             this.width / 2,
             this.height / 2 - 70,
             0xFFFFFF
         );
 
-        String range = String.format("范围: %,d - %,d", minValue, maxValue);
+        // display 值范围
+        String range = String.format("范围: %,d - %,d", minDisplay, maxDisplay);
+        if (unit != null) {
+            range += " " + unit;
+        }
         guiGraphics.drawCenteredString(
             Minecraft.getInstance().font,
             Component.literal(range),
@@ -144,28 +235,26 @@ public class NumberAdjustmentScreen extends Screen {
 
         renderSlider(guiGraphics, mouseX, mouseY);
 
-        if (isEnergyMode) {
-            long value = Long.parseLong(valueInput.getValue());
-            long fe = (long)(value * 0.4);
-            String conversion = String.format("x 0.4 = %,d FE", fe);
-            guiGraphics.drawCenteredString(
-                Minecraft.getInstance().font,
-                Component.literal(conversion),
-                this.width / 2,
-                this.height / 2 + 5,
-                0xFFFF00
-            );
-        } else if (displayDivisor > 1) {
-            long value = Long.parseLong(valueInput.getValue());
-            long actualMB = value * displayDivisor;
-            String conversion = String.format("×%d = %,d mB", displayDivisor, actualMB);
-            guiGraphics.drawCenteredString(
-                Minecraft.getInstance().font,
-                Component.literal(conversion),
-                this.width / 2,
-                this.height / 2 + 5,
-                0xFFFF00
-            );
+        // 换算公式显示：display x step / multiply = raw
+        if (multiply != 1 || step != 1 || unit != null) {
+            try {
+                long displayVal = Long.parseLong(valueInput.getValue());
+                long rawVal = displayToRaw(displayVal);
+                String conversion;
+                if (unit != null) {
+                    conversion = String.format("%,d %s x %d / %d = %,d", displayVal, unit, step, multiply, rawVal);
+                } else {
+                    conversion = String.format("%,d x %d / %d = %,d", displayVal, step, multiply, rawVal);
+                }
+                guiGraphics.drawCenteredString(
+                    Minecraft.getInstance().font,
+                    Component.literal(conversion),
+                    this.width / 2,
+                    this.height / 2 + 5,
+                    0xFFFF00
+                );
+            } catch (NumberFormatException ignored) {
+            }
         }
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
@@ -175,12 +264,13 @@ public class NumberAdjustmentScreen extends Screen {
         guiGraphics.fill(sliderX, sliderY, sliderX + sliderWidth, sliderY + sliderHeight, 0xFF555555);
         guiGraphics.fill(sliderX + 1, sliderY + 1, sliderX + sliderWidth - 1, sliderY + sliderHeight - 1, 0xFF000000);
 
-        double ratio = (double)(currentValue - minValue) / (double)(maxValue - minValue);
-        int handleX = sliderX + (int)(ratio * (sliderWidth - 8));
+        double ratio = (maxDisplay == minDisplay) ? 0.0
+                : (double) (currentDisplay - minDisplay) / (double) (maxDisplay - minDisplay);
+        int handleX = sliderX + (int) (ratio * (sliderWidth - 8));
         int handleY = sliderY + 2;
 
         boolean isHovering = mouseX >= handleX && mouseX < handleX + 8 &&
-                            mouseY >= handleY && mouseY < handleY + sliderHeight - 4;
+                mouseY >= handleY && mouseY < handleY + sliderHeight - 4;
 
         int handleColor = isHovering || isDraggingSlider ? 0xFFAAAAAA : 0xFF888888;
         guiGraphics.fill(handleX, handleY, handleX + 8, handleY + sliderHeight - 4, handleColor);
@@ -190,7 +280,7 @@ public class NumberAdjustmentScreen extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
             if (mouseX >= sliderX && mouseX < sliderX + sliderWidth &&
-                mouseY >= sliderY && mouseY < sliderY + sliderHeight) {
+                    mouseY >= sliderY && mouseY < sliderY + sliderHeight) {
                 isDraggingSlider = true;
                 updateValueFromSlider(mouseX);
                 return true;
@@ -219,19 +309,23 @@ public class NumberAdjustmentScreen extends Screen {
 
     private void updateValueFromSlider(double mouseX) {
         double ratio = Math.max(0.0, Math.min(1.0, (mouseX - sliderX) / sliderWidth));
-        currentValue = minValue + (long)(ratio * (maxValue - minValue));
-        currentValue = Math.max(minValue, Math.min(maxValue, currentValue));
-        valueInput.setValue(String.valueOf(currentValue));
+        currentDisplay = minDisplay + (long) (ratio * (maxDisplay - minDisplay));
+        currentDisplay = alignDisplayToStep(currentDisplay);
+        currentRaw = displayToRaw(currentDisplay);
+        valueInput.setValue(String.valueOf(currentDisplay));
     }
 
     private void confirmValue() {
         try {
-            long value = Long.parseLong(valueInput.getValue());
-            value = Math.max(minValue, Math.min(maxValue, value));
-            callback.accept(value);
+            long displayVal = Long.parseLong(valueInput.getValue());
+            displayVal = Math.max(minDisplay, Math.min(maxDisplay, displayVal));
+            displayVal = alignDisplayToStep(displayVal);
+
+            currentRaw = displayToRaw(displayVal);
+            callback.accept(currentRaw);
             Minecraft.getInstance().setScreen(parent);
         } catch (NumberFormatException e) {
-            valueInput.setValue(String.valueOf(currentValue));
+            valueInput.setValue(String.valueOf(currentDisplay));
         }
     }
 

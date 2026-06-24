@@ -1,34 +1,42 @@
 {
-  "recipeType": "modid:example_fluid_chemical",
-  "displayName": "示例 — 流体/化学品配方",
-  "size": [200, 80],
-  "inputSlots": [
+  "recipe_type": "modid:example_fluid_chemical",
+  "slots": [
     {
-      "id": "fluid_input_0",
-      "index": 0,
-      "jsonField": "fluid",
-      "x": 20,
-      "y": 10,
-      "amountScale": 1000
+      "role": "input",
+      "path": "/input/fluid",
+      "value_kind": "fluid_stack",
+      "amount_path": "/input/amount",
+      "amount_scale": 1000
     },
     {
-      "id": "chem_input_0",
-      "index": 1,
-      "jsonField": "resource",
-      "x": 60,
-      "y": 10,
-      "amountScale": 1
-    }
-  ],
-  "outputSlots": [
+      "role": "input",
+      "path": "/input/resource",
+      "value_kind": "chemical_stack",
+      "amount_path": "/input/resource_amount",
+      "chemical_type_path": "/input/resource_type"
+    },
     {
-      "id": "output_0",
-      "index": 0,
-      "jsonField": "result",
-      "x": 140,
-      "y": 25
+      "role": "render_only",
+      "path": "/input/energy",
+      "value_kind": "energy",
+      "multiply": 2,
+      "step": 5,
+      "unit": "FE"
+    },
+    {
+      "role": "output",
+      "path": "/output/result",
+      "value_kind": "item_ingredient"
     }
   ],
-  "properties": []
+  "properties": {
+    "energy": {
+      "path": "energy",
+      "default_value": 1000
+    },
+    "duration": {
+      "path": "duration",
+      "default_value": 100
+    }
+  }
 }
-

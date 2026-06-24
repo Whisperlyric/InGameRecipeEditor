@@ -14,8 +14,19 @@ import java.util.List;
  */
 public class RecipeIngredientTextEditScreen {
 
+    /**
+     * 打开数量编辑界面
+     *
+     * @param parent         父界面
+     * @param recipeId       配方ID
+     * @param slots          槽位列表
+     * @param slot           当前编辑的槽位
+     * @param initialValue   当前编辑值（raw值）
+     * @param scaleParams    缩放参数（multiply, step, unit）
+     */
     public static void open(Screen parent, String recipeId, List<IRecipeSlotView> slots,
-                           IRecipeSlotDrawable slot, RecipeEditManager.IngredientEditValue initialValue) {
+                           IRecipeSlotDrawable slot, RecipeEditManager.IngredientEditValue initialValue,
+                           RecipeEditManager.ScaleParams scaleParams) {
         if (Minecraft.getInstance() != null) {
             long currentAmount = Math.max(1, initialValue.amount());
             long maxAmount = 1000;
@@ -34,7 +45,6 @@ public class RecipeIngredientTextEditScreen {
             // 根据槽位类型设置上限
             RecipeEditManager.IngredientKind kind = initialValue.kind();
             if (kind == RecipeEditManager.IngredientKind.ITEM) {
-                // 物品槽：根据物品堆叠上限设置
                 try {
                     var ingredients = slot.getAllIngredients().toList();
                     for (var ingredient : ingredients) {
@@ -52,17 +62,18 @@ public class RecipeIngredientTextEditScreen {
             String finalIngredientId = ingredientId;
             Minecraft.getInstance().setScreen(new NumberAdjustmentScreen(
                     parent,
-                    1,
-                    (int) maxAmount,
-                    (int) currentAmount,
                     newAmount -> RecipeEditManager.setSlotEditValue(
                             recipeId,
                             slots,
                             slot,
                             new RecipeEditManager.IngredientEditValue(kind, finalIngredientId, newAmount)
                     ),
-                    false,
-                    0
+                    maxAmount,
+                    currentAmount,
+                    1L,
+                    scaleParams.unit(),
+                    scaleParams.multiply(),
+                    scaleParams.step()
             ));
         }
     }

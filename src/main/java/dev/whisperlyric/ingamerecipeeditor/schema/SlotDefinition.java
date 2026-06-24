@@ -45,14 +45,18 @@ public class SlotDefinition {
     private final int width;               // 槽位宽度
     private final int height;              // 槽位高度
     private final int amountScale;         // 显示数量与JSON数量之间的比例（默认1）
+    private final int multiply;            // 数量编辑乘数（默认1，如能量FE=J*2/5则multiply=2）
+    private final int step;                // 数量编辑步进（默认1，如能量FE=J*2/5则step=5）
+    private final String unit;             // 数量单位显示文本（如"FE"、"mB"，null则不显示）
     
     /**
-     * 构造方法
+     * 完整构造方法
      */
     public SlotDefinition(String id, int index, SlotRole role, IngredientType type, 
                           boolean required, String jsonField, String[] jsonPaths,
                           String amountPath, String chemicalTypePath,
-                          int x, int y, int width, int height, int amountScale) {
+                          int x, int y, int width, int height,
+                          int amountScale, int multiply, int step, String unit) {
         this.id = id;
         this.index = index;
         this.role = role;
@@ -67,14 +71,17 @@ public class SlotDefinition {
         this.width = width;
         this.height = height;
         this.amountScale = Math.max(1, amountScale);
+        this.multiply = Math.max(1, multiply);
+        this.step = Math.max(1, step);
+        this.unit = unit;
     }
     
     /**
-     * 简化构造方法（默认槽位大小18x18）
+     * 简化构造方法（默认槽位大小18x18，multiply=1, step=1, unit=null）
      */
     public SlotDefinition(String id, int index, SlotRole role, IngredientType type,
                           boolean required, String jsonField, int x, int y) {
-        this(id, index, role, type, required, jsonField, null, null, null, x, y, 18, 18, 1);
+        this(id, index, role, type, required, jsonField, null, null, null, x, y, 18, 18, 1, 1, 1, null);
     }
     
     // ========== Getter方法 ==========
@@ -93,6 +100,9 @@ public class SlotDefinition {
     public int getWidth() { return width; }
     public int getHeight() { return height; }
     public int getAmountScale() { return amountScale; }
+    public int getMultiply() { return multiply; }
+    public int getStep() { return step; }
+    public String getUnit() { return unit; }
     
     /**
      * 获取主要JSON路径（优先返回jsonField，否则返回jsonPaths的第一个）
@@ -168,6 +178,9 @@ public class SlotDefinition {
         private int width = 18;
         private int height = 18;
         private int amountScale = 1;
+        private int multiply = 1;
+        private int step = 1;
+        private String unit;
         
         public Builder id(String id) { this.id = id; return this; }
         public Builder index(int index) { this.index = index; return this; }
@@ -184,6 +197,20 @@ public class SlotDefinition {
          * 设置数量显示比例（显示值 -> JSON值的转换比例），默认为1
          */
         public Builder amountScale(int scale) { this.amountScale = Math.max(1, scale); return this; }
+        /**
+         * 设置数量编辑乘数（默认1）。display = raw * multiply / step。
+         * 示例：FE=J*2/5 → multiply=2, step=5
+         */
+        public Builder multiply(int multiply) { this.multiply = Math.max(1, multiply); return this; }
+        /**
+         * 设置数量编辑步进（默认1）。display = raw * multiply / step。
+         * 示例：FE=J*2/5 → multiply=2, step=5
+         */
+        public Builder step(int step) { this.step = Math.max(1, step); return this; }
+        /**
+         * 设置数量单位显示文本（如"FE"、"mB"），null则不显示
+         */
+        public Builder unit(String unit) { this.unit = unit; return this; }
         
         /**
          * 创建输入槽位
@@ -231,7 +258,8 @@ public class SlotDefinition {
         
         public SlotDefinition build() {
             return new SlotDefinition(id, index, role, type, required, jsonField, jsonPaths,
-                                      amountPath, chemicalTypePath, x, y, width, height, amountScale);
+                                      amountPath, chemicalTypePath, x, y, width, height,
+                                      amountScale, multiply, step, unit);
         }
     }
 }

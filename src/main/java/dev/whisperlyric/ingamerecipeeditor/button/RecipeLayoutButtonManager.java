@@ -23,9 +23,9 @@ public class RecipeLayoutButtonManager {
     // 使用 WeakHashMap 存储，当 RecipeLayoutWithButtons 被 GC 回收时自动清理
     private static final Map<RecipeLayoutWithButtons<?>, List<AbstractWidget>> buttonsMap = new WeakHashMap<>();
     
-    // 按钮尺寸和间距（和src-old一致）
-    private static final int BUTTON_WIDTH = 9;
-    private static final int BUTTON_HEIGHT = 9;
+    // 按钮尺寸和间距
+    private static final int BUTTON_WIDTH = 8;
+    private static final int BUTTON_HEIGHT = 8;
     private static final int BUTTON_SPACING = 1;
 
     /**

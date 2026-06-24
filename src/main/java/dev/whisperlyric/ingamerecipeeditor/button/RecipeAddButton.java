@@ -1,5 +1,6 @@
 package dev.whisperlyric.ingamerecipeeditor.button;
 
+import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
@@ -31,14 +32,42 @@ public class RecipeAddButton extends AbstractWidget {
     private final String recipeId;
     private final boolean supportedRecipe;
     private final IRecipeLayoutDrawable<?> recipeLayout;
+    private final boolean canCreateNew;
 
     public RecipeAddButton(int x, int y, IRecipeLayoutDrawable<?> recipeLayout) {
-        super(x, y, 9, 9, Component.empty());
+        super(x, y, 8, 8, Component.empty());
         this.recipeLayout = recipeLayout;
 
         // 使用JeiRecipeHelper获取正确的配方ID
         this.recipeId = JeiRecipeHelper.getRecipeId(recipeLayout);
         this.supportedRecipe = recipeLayout.getRecipe() instanceof Recipe<?>;
+
+        // 检测：非 minecraft 命名空间、recipeId == 结果物品 ID、有 pattern+key → 禁止新建
+        // 此类配方的 ID 由模组按结果物品自动分配，新建会导致 ID 冲突或结构不兼容
+        boolean isThirdPartyShaped = false;
+        if (this.recipeId != null) {
+            ResourceLocation recipeIdLoc = ResourceLocation.tryParse(this.recipeId);
+            if (recipeIdLoc != null && !recipeIdLoc.getNamespace().equals("minecraft")) {
+                String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+                var json = JeiRecipeHelper.loadRecipeJson(this.recipeId, recipeType).orElse(null);
+                if (json != null && json.has("pattern") && json.has("key")) {
+                    // 检查 recipeId.path == result.item 的路径部分
+                    String resultId = extractResultItemId(json);
+                    if (resultId != null) {
+                        ResourceLocation resultLoc = ResourceLocation.tryParse(resultId);
+                        if (resultLoc != null && recipeIdLoc.getPath().equals(resultLoc.getPath())
+                                && recipeIdLoc.getNamespace().equals(resultLoc.getNamespace())) {
+                            isThirdPartyShaped = true;
+                        }
+                    }
+                }
+            }
+        }
+        this.canCreateNew = !isThirdPartyShaped;
+
+        if (!this.canCreateNew) {
+            this.active = false;
+        }
     }
 
     public boolean hasValidRecipeId() {
@@ -82,8 +111,8 @@ public class RecipeAddButton extends AbstractWidget {
         float alpha = (color >> 24 & 255) / 255.0F;
         RenderSystem.setShaderColor(red, green, blue, alpha);
 
-        // 绘制图标（居中）
-        int iconSize = 9;
+        // 绘制图标
+        int iconSize = 8;
         double xOffset = getX() + (width - iconSize) / 2.0;
         double yOffset = getY() + (height - iconSize) / 2.0;
 
@@ -102,8 +131,27 @@ public class RecipeAddButton extends AbstractWidget {
     }
 
     private List<Component> getTooltipLines() {
-        // 显示新建空工作区的提示
+        if (!this.canCreateNew) {
+            return List.of(Component.translatable("ingamerecipeeditor.tooltip.recipe_add.unsupported"));
+        }
         return List.of(Component.translatable("ingamerecipeeditor.tooltip.recipe_add.new_workspace"));
+    }
+
+    /**
+     * 从配方 JSON 中提取结果物品 ID
+     */
+    private static String extractResultItemId(JsonObject json) {
+        // result.item / result.id
+        if (json.has("result") && json.get("result").isJsonObject()) {
+            JsonObject result = json.getAsJsonObject("result");
+            if (result.has("item")) return result.get("item").getAsString();
+            if (result.has("id")) return result.get("id").getAsString();
+        }
+        // result 字段直接是字符串
+        if (json.has("result") && json.get("result").isJsonPrimitive()) {
+            return json.get("result").getAsString();
+        }
+        return null;
     }
 
     @Override
@@ -111,11 +159,12 @@ public class RecipeAddButton extends AbstractWidget {
         if (this.recipeId != null && !this.recipeId.isEmpty()) {
             // 播放点击声音
             playDownSound(Minecraft.getInstance().getSoundManager());
-            
-            // 打开空工作区界面（新建配方）
+
+            // 生成模板 JSON 并打开工作区
+            com.google.gson.JsonObject templateJson = dev.whisperlyric.ingamerecipeeditor.workspace.RecipeEditManager.createTemplateFromRecipe(recipeLayout);
             Screen currentScreen = Minecraft.getInstance().screen;
-            RecipeWorkspaceManager.getInstance().openEmptyWorkspace(currentScreen, recipeLayout);
-            
+            RecipeWorkspaceManager.getInstance().openEmptyWorkspace(currentScreen, recipeLayout, templateJson);
+
             InGameRecipeEditor.LOGGER.info("新建空工作区，配方类型: {}", recipeId);
         }
     }

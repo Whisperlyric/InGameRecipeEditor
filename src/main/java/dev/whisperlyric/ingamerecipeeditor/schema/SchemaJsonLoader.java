@@ -105,6 +105,9 @@ public class SchemaJsonLoader extends SimplePreparableReloadListener<Map<String,
     protected void apply(Map<String, JsonObject> preparedSchemas, ResourceManager resourceManager, ProfilerFiller profiler) {
         this.loadedSchemas = preparedSchemas;
         
+        // 注入ResourceManager到PatchRegistry，使其从资源包读取补丁文件
+        PatchRegistry.setResourceManager(resourceManager);
+
         // 注册所有Schema到SchemaRegistry
         profiler.push("register_schemas");
         SchemaRegistry registry = SchemaRegistry.getInstance();
@@ -185,6 +188,18 @@ public class SchemaJsonLoader extends SimplePreparableReloadListener<Map<String,
         // 解析amount_path
         String amountPath = slotDef.has("amount_path") ? slotDef.get("amount_path").getAsString() : null;
         
+        // 解析amount_scale（显示数量与JSON数量的缩放比例）
+        int amountScale = slotDef.has("amount_scale") ? slotDef.get("amount_scale").getAsInt() : 1;
+        
+        // 解析multiply（数量编辑乘数，默认1，如能量FE=J*2/5则multiply=2）
+        int multiply = slotDef.has("multiply") ? slotDef.get("multiply").getAsInt() : 1;
+        
+        // 解析step（数量编辑步进，默认1，如能量FE=J*2/5则step=5）
+        int step = slotDef.has("step") ? slotDef.get("step").getAsInt() : 1;
+        
+        // 解析unit（数量单位显示文本，如"FE"、"mB"）
+        String unit = slotDef.has("unit") ? slotDef.get("unit").getAsString() : null;
+        
         // 解析chemical_type_path（用于merged_chemical类型）
         String chemicalTypePath = slotDef.has("chemical_type_path") ? slotDef.get("chemical_type_path").getAsString() : null;
         
@@ -219,6 +234,26 @@ public class SchemaJsonLoader extends SimplePreparableReloadListener<Map<String,
         // 设置chemical type路径
         if (chemicalTypePath != null) {
             slotBuilder.chemicalTypePath(chemicalTypePath);
+        }
+        
+        // 设置数量缩放比例
+        if (amountScale > 1) {
+            slotBuilder.amountScale(amountScale);
+        }
+        
+        // 设置乘数
+        if (multiply > 1) {
+            slotBuilder.multiply(multiply);
+        }
+        
+        // 设置步进值
+        if (step > 1) {
+            slotBuilder.step(step);
+        }
+        
+        // 设置单位
+        if (unit != null && !unit.isEmpty()) {
+            slotBuilder.unit(unit);
         }
         
         SlotDefinition slot = slotBuilder.build();

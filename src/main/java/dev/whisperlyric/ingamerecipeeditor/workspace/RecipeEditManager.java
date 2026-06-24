@@ -3,6 +3,7 @@ package dev.whisperlyric.ingamerecipeeditor.workspace;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonPrimitive;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
+import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
@@ -55,8 +56,16 @@ public class RecipeEditManager {
         String ingredientId,
         long amount
     ) {
+        /** 已清空槽位的哨兵值 */
+        public static final IngredientEditValue CLEARED = new IngredientEditValue(IngredientKind.ITEM, "", -1);
+
         public boolean hasAmount() {
             return amount > 0;
+        }
+
+        /** 是否为已清空的哨兵值 */
+        public boolean isCleared() {
+            return this == CLEARED || (amount == -1 && (ingredientId == null || ingredientId.isEmpty()));
         }
     }
 
@@ -65,6 +74,44 @@ public class RecipeEditManager {
     
     // 原始配方存储：配方ID -> 原始槽位值
     private static final Map<String, Map<Integer, IngredientEditValue>> originals = new ConcurrentHashMap<>();
+
+    // 属性草稿存储：配方ID -> 属性JSON字段名 -> 属性值
+    private static final Map<String, Map<String, Object>> propertyDrafts = new ConcurrentHashMap<>();
+
+    private static final com.google.gson.Gson DEBUG_GSON = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
+
+    /**
+     * DEBUG：向聊天栏发送当前草稿状态
+     */
+    private static void debugDumpDraft(String recipeId, String context) {
+        if (!DebugSettings.isEnabled()) return;
+        Map<Integer, IngredientEditValue> slotDraft = drafts.get(recipeId);
+        Map<String, Object> propDraft = propertyDrafts.get(recipeId);
+        StringBuilder sb = new StringBuilder();
+        sb.append(context).append(" | id=").append(recipeId);
+        if (slotDraft != null && !slotDraft.isEmpty()) {
+            sb.append("\n  slots:");
+            for (var e : slotDraft.entrySet()) {
+                IngredientEditValue v = e.getValue();
+                if (v.isCleared()) {
+                    sb.append("\n    [").append(e.getKey()).append("] -> CLEARED");
+                } else {
+                    sb.append("\n    [").append(e.getKey()).append("] -> ")
+                      .append(v.kind()).append(" ").append(v.ingredientId())
+                      .append(" x").append(v.amount());
+                }
+            }
+        } else {
+            sb.append("\n  slots: (empty)");
+        }
+        if (propDraft != null && !propDraft.isEmpty()) {
+            sb.append("\n  properties:");
+            for (var e : propDraft.entrySet()) {
+                sb.append("\n    ").append(e.getKey()).append(" = ").append(e.getValue());
+            }
+        }
+        DebugSettings.sendChat(sb.toString());
+    }
 
     /**
      * 开始编辑配方
@@ -167,19 +214,34 @@ public class RecipeEditManager {
             }
 
             // 从JSON路径读取值
+            IngredientEditValue result = null;
             String[] jsonPaths = slotDef.getJsonPaths();
             if (jsonPaths != null && jsonPaths.length > 0) {
                 for (String path : jsonPaths) {
                     JsonElement value = getJsonAtPath(recipeJson, path);
                     if (value != null) {
-                        return parseIngredientFromJson(value, slotDef);
+                        result = parseIngredientFromJson(value, slotDef);
+                        break;
                     }
                 }
             } else if (slotDef.getJsonField() != null) {
                 JsonElement value = getJsonAtPath(recipeJson, slotDef.getJsonField());
                 if (value != null) {
-                    return parseIngredientFromJson(value, slotDef);
+                    result = parseIngredientFromJson(value, slotDef);
                 }
+            }
+
+            if (result != null) {
+                // 如果槽位有独立的 amountPath，从该路径读取数量并乘以 amountScale 得到显示值
+                if (slotDef.hasAmountPath()) {
+                    JsonElement amountElem = getJsonAtPath(recipeJson, slotDef.getAmountPath());
+                    if (amountElem != null && amountElem.isJsonPrimitive()) {
+                        long rawAmount = amountElem.getAsLong();
+                        long displayAmount = rawAmount * slotDef.getAmountScale();
+                        return new IngredientEditValue(result.kind(), result.ingredientId(), displayAmount);
+                    }
+                }
+                return result;
             }
         } catch (Exception e) {
             // ignore
@@ -425,6 +487,55 @@ public class RecipeEditManager {
     public static void clear(String recipeId) {
         drafts.remove(recipeId);
         originals.remove(recipeId);
+        propertyDrafts.remove(recipeId);
+    }
+
+    // ========== 属性草稿管理 ==========
+
+    /**
+     * 设置属性草稿值
+     */
+    public static void setPropertyDraft(String recipeId, String jsonField, Object value) {
+        propertyDrafts.computeIfAbsent(recipeId, k -> new ConcurrentHashMap<>()).put(jsonField, value);
+        debugDumpDraft(recipeId, "setPropertyDraft " + jsonField + "=" + value);
+    }
+
+    /**
+     * 获取属性草稿值
+     */
+    public static Object getPropertyDraft(String recipeId, String jsonField) {
+        Map<String, Object> props = propertyDrafts.get(recipeId);
+        return props != null ? props.get(jsonField) : null;
+    }
+
+    /**
+     * 获取所有属性草稿
+     */
+    public static Map<String, Object> getPropertyDrafts(String recipeId) {
+        Map<String, Object> props = propertyDrafts.get(recipeId);
+        return props != null ? Map.copyOf(props) : Map.of();
+    }
+
+    /**
+     * 从配方JSON中读取属性当前值
+     */
+    public static Object readPropertyFromJson(String recipeId, String jsonField, Object defaultValue) {
+        JsonObject recipeJson = RecipeWorkspaceManager.getInstance().getDraft(recipeId)
+            .map(RecipeWorkspaceManager.DraftInfo::originalJson)
+            .orElse(null);
+        if (recipeJson == null) return defaultValue;
+        JsonElement elem = getJsonAtPath(recipeJson, jsonField);
+        if (elem == null || elem.isJsonNull()) return defaultValue;
+        if (elem.isJsonPrimitive()) {
+            JsonPrimitive prim = elem.getAsJsonPrimitive();
+            if (defaultValue instanceof Integer) return prim.getAsInt();
+            if (defaultValue instanceof Float) return prim.getAsFloat();
+            if (defaultValue instanceof Boolean) return prim.getAsBoolean();
+            if (defaultValue instanceof String) return prim.getAsString();
+            if (defaultValue instanceof Number) return prim.getAsDouble();
+            return prim.getAsString();
+        }
+        return defaultValue;
     }
 
     /**
@@ -551,12 +662,128 @@ public class RecipeEditManager {
     }
 
     /**
-     * 提交草稿（生成配方JSON）
+     * 创建模板配方 JSON（用于新建配方模式）
+     * 基于当前配方的 JSON 结构生成骨架，清空所有原料值
+     */
+    public static JsonObject createTemplateFromRecipe(IRecipeLayoutDrawable<?> recipeLayout) {
+        try {
+            String recipeId = JeiRecipeHelper.getRecipeId(recipeLayout);
+            String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+            if (recipeType == null || recipeType.isEmpty()) return null;
+
+            // 优先从缓存获取原始 JSON 作为模板骨架
+            JsonObject sourceJson = null;
+            if (recipeId != null && !recipeId.isEmpty()) {
+                sourceJson = JeiRecipeHelper.loadRecipeJson(recipeId, recipeType).orElse(null);
+            }
+
+            if (sourceJson != null) {
+                // 基于原 JSON，保留结构但清空原料值
+                JsonObject template = sourceJson.deepCopy();
+                clearTemplateValues(template);
+                DebugSettings.sendChat("[Template] 创建模板 from " + recipeId + ":\n" + DEBUG_GSON.toJson(template));
+                return template;
+            }
+
+            // 无法获取原 JSON，根据配方类型生成最小骨架
+            JsonObject fallback = createMinimalTemplate(recipeType);
+            DebugSettings.sendChat("[Template] 最小模板 fallback (type=" + recipeType + "):\n" + DEBUG_GSON.toJson(fallback));
+            return fallback;
+        } catch (Exception e) {
+            InGameRecipeEditor.LOGGER.warn("创建模板 JSON 失败", e);
+            return null;
+        }
+    }
+
+    /**
+     * 递归清空模板中的原料值
+     * 将 item/tag/fluid 等字段替换为空对象，保留结构骨架
+     * 同时删除从原配方继承的无关字段（category、group 等）
+     */
+    private static void clearTemplateValues(JsonObject json) {
+        // 删除从原配方继承的无关字段（新建配方不应继承这些）
+        json.remove("category");
+        json.remove("group");
+
+        for (String field : new String[]{"item", "tag", "fluid", "gas", "infuse_type", "pigment", "slurry"}) {
+            json.remove(field);
+        }
+        json.remove("count");
+        json.remove("amount");
+
+        // 清空 ingredient/ingredients 中的值
+        if (json.has("ingredient")) {
+            JsonElement ing = json.get("ingredient");
+            if (ing.isJsonObject()) {
+                clearTemplateValues(ing.getAsJsonObject());
+            } else if (ing.isJsonArray()) {
+                json.remove("ingredient");
+                json.add("ingredient", new com.google.gson.JsonArray());
+            }
+        }
+        if (json.has("ingredients")) {
+            JsonElement ings = json.get("ingredients");
+            if (ings.isJsonArray()) {
+                json.remove("ingredients");
+                json.add("ingredients", new com.google.gson.JsonArray());
+            }
+        }
+
+        // 清空 result
+        if (json.has("result") && json.get("result").isJsonObject()) {
+            JsonObject result = json.getAsJsonObject("result");
+            result.remove("item");
+            result.remove("id");
+            result.remove("count");
+        }
+
+        // 清空 results 数组
+        if (json.has("results") && json.get("results").isJsonArray()) {
+            json.remove("results");
+            json.add("results", new com.google.gson.JsonArray());
+        }
+
+        // 递归处理嵌套对象
+        for (String key : new java.util.ArrayList<>(json.keySet())) {
+            JsonElement elem = json.get(key);
+            if (elem.isJsonObject()) {
+                clearTemplateValues(elem.getAsJsonObject());
+            }
+        }
+    }
+
+    /**
+     * 创建最小模板（无法获取原 JSON 时的后备方案）
+     */
+    private static JsonObject createMinimalTemplate(String recipeType) {
+        JsonObject template = new JsonObject();
+        template.addProperty("type", recipeType);
+
+        if (recipeType.contains("shaped") || recipeType.contains("crafting_shaped")) {
+            template.add("pattern", new com.google.gson.JsonArray());
+            template.add("key", new JsonObject());
+            template.add("result", new JsonObject());
+        } else if (recipeType.contains("shapeless")) {
+            template.add("ingredients", new com.google.gson.JsonArray());
+            template.add("result", new JsonObject());
+        } else {
+            template.add("ingredient", new JsonObject());
+            template.add("result", new JsonObject());
+        }
+        return template;
+    }
+
+    /**
      * 返回生成的JsonObject（如果生成失败返回Optional.empty）
      */
     public static Optional<JsonObject> submit(String recipeId) {
         Map<Integer, IngredientEditValue> draft = drafts.get(recipeId);
-        if (draft == null || draft.isEmpty()) {
+        Map<String, Object> propDraft = propertyDrafts.get(recipeId);
+
+        boolean hasSlotDraft = draft != null && !draft.isEmpty();
+        boolean hasPropertyDraft = propDraft != null && !propDraft.isEmpty();
+
+        if (!hasSlotDraft && !hasPropertyDraft) {
             return Optional.empty();
         }
 
@@ -582,16 +809,42 @@ public class RecipeEditManager {
                 base.addProperty("type", recipeType);
             }
 
-            if (schema != null) {
-                // 有schema：使用schema定义的路径映射
-                applyDraftWithSchema(base, draft, schema);
-            } else {
-                // 无schema：使用通用逻辑基于JSON结构推断路径
-                applyDraftGeneric(base, draft, recipeType);
+            // 应用槽位草稿
+            if (hasSlotDraft) {
+                if (schema != null) {
+                    applyDraftWithSchema(base, draft, schema);
+                } else {
+                    applyDraftGeneric(base, draft, recipeType);
+                }
+            }
+
+            // 应用属性草稿
+            if (hasPropertyDraft) {
+                for (Map.Entry<String, Object> entry : propDraft.entrySet()) {
+                    String jsonField = entry.getKey();
+                    Object value = entry.getValue();
+                    if (value == null) {
+                        removeJsonAtPath(base, jsonField);
+                    } else if (value instanceof Integer i) {
+                        setJsonAtPath(base, jsonField, new JsonPrimitive(i));
+                    } else if (value instanceof Float f) {
+                        setJsonAtPath(base, jsonField, new JsonPrimitive(f));
+                    } else if (value instanceof Double d) {
+                        setJsonAtPath(base, jsonField, new JsonPrimitive(d));
+                    } else if (value instanceof Boolean b) {
+                        setJsonAtPath(base, jsonField, new JsonPrimitive(b));
+                    } else if (value instanceof String s) {
+                        setJsonAtPath(base, jsonField, new JsonPrimitive(s));
+                    } else {
+                        setJsonAtPath(base, jsonField, new JsonPrimitive(value.toString()));
+                    }
+                }
             }
 
             // 移除草稿
             drafts.remove(recipeId);
+            propertyDrafts.remove(recipeId);
+            DebugSettings.sendChat("[Submit] 生成的 JSON (id=" + recipeId + "):\n" + DEBUG_GSON.toJson(base));
             return Optional.of(base);
         } catch (Exception ex) {
             InGameRecipeEditor.LOGGER.error("生成配方JSON失败: {}", ex.getMessage());
@@ -603,10 +856,19 @@ public class RecipeEditManager {
      * 使用schema定义的路径映射应用草稿
      * 修复问题一：写入数量到amountPath
      * 修复问题二：移除备选路径
+     * 修复问题三：shaped配方没有schema输入槽位定义时使用通用逻辑
      */
     private static void applyDraftWithSchema(JsonObject base, Map<Integer, IngredientEditValue> draft, RecipeSchema schema) {
         int inputCount = schema.getInputSlotCount();
         int outputCount = schema.getOutputSlotCount();
+        
+        // 检测shaped配方：如果schema没有输入槽位定义，但配方是shaped类型，使用通用逻辑
+        boolean isShaped = base.has("pattern") && base.has("key");
+        if (isShaped && inputCount == 0) {
+            // 使用通用逻辑处理shaped配方
+            applyDraftGeneric(base, draft, schema.getRecipeType());
+            return;
+        }
 
         for (Map.Entry<Integer, IngredientEditValue> e : draft.entrySet()) {
             int idx = e.getKey();
@@ -624,6 +886,16 @@ public class RecipeEditManager {
             String path = target.getPrimaryJsonPath();
             if (path == null || path.isEmpty()) continue;
 
+            // 清空槽位：删除 JSON 字段
+            if (v.isCleared()) {
+                removeJsonAtPath(base, path);
+                if (target.hasAmountPath()) {
+                    removeJsonAtPath(base, target.getAmountPath());
+                }
+                removeAlternatePaths(base, target, path);
+                continue;
+            }
+
             // 构建原料JSON
             JsonObject val = buildIngredientJson(v);
             setJsonAtPath(base, path, val);
@@ -632,6 +904,9 @@ public class RecipeEditManager {
             if (target.hasAmountPath() && v.hasAmount()) {
                 int scaledAmount = (int) (v.amount() / target.getAmountScale());
                 setJsonAtPath(base, target.getAmountPath(), new JsonPrimitive(scaledAmount));
+                // 有独立 amountPath 时，移除 ingredient 对象中的 count/amount 避免冗余
+                val.remove("count");
+                val.remove("amount");
             }
 
             // 问题二修复：移除备选路径（如item和tag）
@@ -713,8 +988,7 @@ public class RecipeEditManager {
             JsonArray pattern = base.getAsJsonArray("pattern");
             int height = pattern.size();
             int width = height > 0 ? pattern.get(0).getAsString().length() : 0;
-            // 合成台固定3x3=9个输入槽位
-            return 9;
+            return width * height;
         }
         if (isShapeless) {
             return base.getAsJsonArray("ingredients").size();
@@ -747,6 +1021,24 @@ public class RecipeEditManager {
      * 注意：shaped配方已在applyDraftGeneric中单独处理，此方法不处理shaped
      */
     private static void applyGenericInput(JsonObject base, IngredientEditValue v, int slotIndex, boolean isShaped, boolean isShapeless, boolean hasIngredient) {
+        // 清空槽位：删除对应 JSON 字段
+        if (v.isCleared()) {
+            if (isShapeless) {
+                JsonArray ingredients = base.getAsJsonArray("ingredients");
+                if (slotIndex >= 0 && slotIndex < ingredients.size()) {
+                    ingredients.set(slotIndex, com.google.gson.JsonNull.INSTANCE);
+                }
+            } else if (hasIngredient && slotIndex == 0) {
+                base.remove("ingredient");
+            } else if (base.has("ingredients") && base.get("ingredients").isJsonArray()) {
+                JsonArray ingredients = base.getAsJsonArray("ingredients");
+                if (slotIndex >= 0 && slotIndex < ingredients.size()) {
+                    ingredients.set(slotIndex, com.google.gson.JsonNull.INSTANCE);
+                }
+            }
+            return;
+        }
+
         JsonObject val = buildIngredientJson(v);
 
         // shaped配方已在applyDraftGeneric中通过applyShapedInputs处理
@@ -818,12 +1110,16 @@ public class RecipeEditManager {
         }
 
         // 应用替换到grid
+        // draft key 是 JEI 槽位索引（按配方实际宽度递增），需要转换为 grid 索引
         for (Map.Entry<Integer, IngredientEditValue> e : inputDrafts.entrySet()) {
-            int gridIndex = e.getKey();
+            int recipeSlotIndex = e.getKey();
+            int recipeRow = width > 0 ? recipeSlotIndex / width : 0;
+            int recipeCol = width > 0 ? recipeSlotIndex % width : 0;
+            int gridIndex = (recipeRow + rowOffset) * gridWidth + (recipeCol + colOffset);
             if (gridIndex < 0 || gridIndex >= grid.length) continue;
             IngredientEditValue v = e.getValue();
-            // 清空槽位（ingredientId为空或特殊标记）
-            if (v.ingredientId() == null || v.ingredientId().isEmpty() || "empty".equals(v.ingredientId())) {
+            // 清空槽位（哨兵值或空ID）
+            if (v.isCleared() || v.ingredientId() == null || v.ingredientId().isEmpty() || "empty".equals(v.ingredientId())) {
                 grid[gridIndex] = null;
             } else {
                 grid[gridIndex] = buildIngredientJson(v);
@@ -852,8 +1148,11 @@ public class RecipeEditManager {
         }
 
         // 重新生成pattern和key（使用KEY_CHARS字符映射）
+        // 相同内容的原料复用同一个字母
         JsonArray newPattern = new JsonArray();
         JsonObject newKey = new JsonObject();
+        // 反向映射：原料 JSON 字符串 → 已分配的字母
+        Map<String, String> ingredientToKey = new HashMap<>();
         int nextKeyIndex = 0;
         for (int row = minRow; row <= maxRow; row++) {
             StringBuilder rowPattern = new StringBuilder();
@@ -863,13 +1162,18 @@ public class RecipeEditManager {
                     rowPattern.append(' ');
                     continue;
                 }
-                if (nextKeyIndex >= KEY_CHARS.length()) {
-                    InGameRecipeEditor.LOGGER.warn("有序配方输入槽位超过KEY_CHARS容量");
-                    return;
+                String ingredientStr = ingredient.toString();
+                String keyName = ingredientToKey.get(ingredientStr);
+                if (keyName == null) {
+                    if (nextKeyIndex >= KEY_CHARS.length()) {
+                        InGameRecipeEditor.LOGGER.warn("有序配方输入槽位超过KEY_CHARS容量");
+                        return;
+                    }
+                    keyName = String.valueOf(KEY_CHARS.charAt(nextKeyIndex++));
+                    ingredientToKey.put(ingredientStr, keyName);
+                    newKey.add(keyName, ingredient);
                 }
-                String keyName = String.valueOf(KEY_CHARS.charAt(nextKeyIndex++));
                 rowPattern.append(keyName);
-                newKey.add(keyName, ingredient);
             }
             newPattern.add(rowPattern.toString());
         }
@@ -885,6 +1189,19 @@ public class RecipeEditManager {
      * 通用输出槽位修改
      */
     private static void applyGenericOutput(JsonObject base, IngredientEditValue v, int outIdx, boolean hasResult, boolean hasResults) {
+        // 清空输出槽位：删除对应 JSON 字段
+        if (v.isCleared()) {
+            if (hasResult && outIdx == 0) {
+                base.remove("result");
+            } else if (hasResults) {
+                JsonArray results = base.getAsJsonArray("results");
+                if (outIdx >= 0 && outIdx < results.size()) {
+                    results.set(outIdx, com.google.gson.JsonNull.INSTANCE);
+                }
+            }
+            return;
+        }
+
         if (v.kind() != IngredientKind.ITEM) return; // 输出槽位只支持物品
 
         JsonObject val = new JsonObject();
@@ -1084,6 +1401,7 @@ public class RecipeEditManager {
             stack.getItem().builtInRegistryHolder().key().location().toString(),
             stack.getCount()
         ));
+        debugDumpDraft(recipeId, "replaceSlot(ITEM) slot=" + index);
     }
 
     /**
@@ -1099,6 +1417,7 @@ public class RecipeEditManager {
             stack.getFluid().builtInRegistryHolder().key().location().toString(),
             stack.getAmount()
         ));
+        debugDumpDraft(recipeId, "replaceSlot(FLUID) slot=" + index);
     }
 
     /**
@@ -1114,6 +1433,7 @@ public class RecipeEditManager {
 
         Map<Integer, IngredientEditValue> draft = drafts.computeIfAbsent(recipeId, k -> new HashMap<>());
         draft.put(index, new IngredientEditValue(kind, chemicalId, amount));
+        debugDumpDraft(recipeId, "replaceResourceSlot(" + kind + ") slot=" + index);
     }
 
     /**
@@ -1131,11 +1451,10 @@ public class RecipeEditManager {
         int index = getSlotIndex(slots, slot);
         if (index < 0) return;
 
-        // 从draft中移除编辑值
-        Map<Integer, IngredientEditValue> draft = drafts.get(recipeId);
-        if (draft != null) {
-            draft.remove(index);
-        }
+        // 存入哨兵值（而非移除），使 submit() 知道该槽位被清空，需要删除 JSON 字段
+        Map<Integer, IngredientEditValue> draft = drafts.computeIfAbsent(recipeId, k -> new ConcurrentHashMap<>());
+        draft.put(index, IngredientEditValue.CLEARED);
+        debugDumpDraft(recipeId, "clearSlot slot=" + index);
         
         // 标记槽位为已清除，阻止重新注册轮换
         // markSlotCleared会同时从slotCandidates中移除，不需要再调用unregisterSlot
@@ -1170,6 +1489,7 @@ public class RecipeEditManager {
 
         Map<Integer, IngredientEditValue> draft = drafts.computeIfAbsent(recipeId, k -> new HashMap<>());
         draft.put(index, value);
+        debugDumpDraft(recipeId, "setSlotEditValue slot=" + index);
     }
 
     /**
@@ -1245,6 +1565,59 @@ public class RecipeEditManager {
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    /**
+     * 槽位数量缩放参数（从 Schema 获取）
+     */
+    public record ScaleParams(int multiply, int step, String unit) {
+        public static final ScaleParams DEFAULT = new ScaleParams(1, 1, null);
+    }
+
+    /**
+     * 从Schema获取槽位的数量缩放参数（multiply, step, unit）
+     */
+    public static ScaleParams getSlotScaleParams(String recipeId, IRecipeLayoutDrawable<?> recipeLayout, IRecipeSlotDrawable slot) {
+        try {
+            String recipeType = null;
+            var draft = RecipeWorkspaceManager.getInstance().getDraft(recipeId);
+            if (draft.isPresent()) {
+                recipeType = draft.get().recipeType();
+            } else {
+                recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+            }
+            if (recipeType == null) return ScaleParams.DEFAULT;
+
+            RecipeSchema schema = SchemaRegistry.getSchema(recipeType).orElse(null);
+            if (schema == null) return ScaleParams.DEFAULT;
+
+            // 计算 roleIndex
+            List<IRecipeSlotView> allSlots = recipeLayout.getRecipeSlotsView().getSlotViews();
+            int roleIndex = 0;
+            for (IRecipeSlotView s : allSlots) {
+                if (s instanceof IRecipeSlotDrawable sd) {
+                    if (sd.getRole() == slot.getRole()) {
+                        if (sd == slot) break;
+                        roleIndex++;
+                    }
+                }
+            }
+
+            SlotDefinition slotDef = null;
+            if (slot.getRole() == RecipeIngredientRole.INPUT) {
+                if (roleIndex < schema.getInputSlots().size()) {
+                    slotDef = schema.getInputSlots().get(roleIndex);
+                }
+            } else {
+                if (roleIndex < schema.getOutputSlots().size()) {
+                    slotDef = schema.getOutputSlots().get(roleIndex);
+                }
+            }
+            if (slotDef != null) {
+                return new ScaleParams(slotDef.getMultiply(), slotDef.getStep(), slotDef.getUnit());
+            }
+        } catch (Exception ignored) {}
+        return ScaleParams.DEFAULT;
     }
 
     /**
@@ -1357,6 +1730,26 @@ public class RecipeEditManager {
      * 应用编辑值到槽位
      */
     private static void applyEditValueToSlot(IRecipeSlotDrawable slot, IngredientEditValue editValue) {
+        // 清空槽位：保持空白显示
+        if (editValue.isCleared()) {
+            IngredientCycleManager.markSlotCleared(slot);
+            slot.clearDisplayOverrides();
+            try {
+                slot.createDisplayOverrides().addIngredient(
+                    mezz.jei.api.constants.VanillaTypes.ITEM_STACK,
+                    net.minecraft.world.item.ItemStack.EMPTY
+                );
+            } catch (Exception e) {
+                try {
+                    slot.createDisplayOverrides().addIngredient(
+                        mezz.jei.api.forge.ForgeTypes.FLUID_STACK,
+                        net.minecraftforge.fluids.FluidStack.EMPTY
+                    );
+                } catch (Exception ignored) {}
+            }
+            return;
+        }
+
         try {
             // 取消清除标记，允许重新注册轮换
             IngredientCycleManager.unmarkSlotCleared(slot);
