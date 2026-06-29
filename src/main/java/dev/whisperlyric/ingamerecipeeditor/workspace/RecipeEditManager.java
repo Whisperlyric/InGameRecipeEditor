@@ -22,6 +22,8 @@ import com.google.gson.JsonObject;
 import dev.whisperlyric.ingamerecipeeditor.schema.RecipeSchema;
 import dev.whisperlyric.ingamerecipeeditor.schema.SchemaRegistry;
 import dev.whisperlyric.ingamerecipeeditor.schema.SlotDefinition;
+import org.jetbrains.annotations.Nullable;
+
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -180,34 +182,7 @@ public class RecipeEditManager {
             }
 
             // 获取槽位定义
-            SlotDefinition slotDef = null;
-            int roleIndex = 0;
-
-            // 计算roleIndex（在相同角色中的索引）
-            List<IRecipeSlotView> slots = recipeLayout.getRecipeSlotsView().getSlotViews();
-            int count = 0;
-            for (IRecipeSlotView s : slots) {
-                if (s instanceof IRecipeSlotDrawable sd) {
-                    if (sd.getRole() == slot.getRole()) {
-                        if (sd == slot) {
-                            roleIndex = count;
-                            break;
-                        }
-                        count++;
-                    }
-                }
-            }
-
-            // 从schema获取槽位定义
-            if (slot.getRole() == RecipeIngredientRole.INPUT) {
-                if (roleIndex < schema.getInputSlots().size()) {
-                    slotDef = schema.getInputSlots().get(roleIndex);
-                }
-            } else {
-                if (roleIndex < schema.getOutputSlots().size()) {
-                    slotDef = schema.getOutputSlots().get(roleIndex);
-                }
-            }
+            SlotDefinition slotDef = getSlotDef(recipeLayout, slot, schema);
 
             if (slotDef == null) {
                 return null;
@@ -248,6 +223,38 @@ public class RecipeEditManager {
         }
 
         return null;
+    }
+
+    private static @Nullable SlotDefinition getSlotDef(IRecipeLayoutDrawable<?> recipeLayout, IRecipeSlotDrawable slot, RecipeSchema schema) {
+        SlotDefinition slotDef = null;
+        int roleIndex = 0;
+
+        // 计算roleIndex（在相同角色中的索引）
+        List<IRecipeSlotView> slots = recipeLayout.getRecipeSlotsView().getSlotViews();
+        int count = 0;
+        for (IRecipeSlotView s : slots) {
+            if (s instanceof IRecipeSlotDrawable sd) {
+                if (sd.getRole() == slot.getRole()) {
+                    if (sd == slot) {
+                        roleIndex = count;
+                        break;
+                    }
+                    count++;
+                }
+            }
+        }
+
+        // 从schema获取槽位定义
+        if (slot.getRole() == RecipeIngredientRole.INPUT) {
+            if (roleIndex < schema.getInputSlots().size()) {
+                slotDef = schema.getInputSlots().get(roleIndex);
+            }
+        } else {
+            if (roleIndex < schema.getOutputSlots().size()) {
+                slotDef = schema.getOutputSlots().get(roleIndex);
+            }
+        }
+        return slotDef;
     }
 
     /**
@@ -328,7 +335,7 @@ public class RecipeEditManager {
                     JsonObject obj = item.getAsJsonObject();
                     String singleId = parseSingleIngredientId(obj, kind);
                     if (singleId != null) {
-                        if (ingredientIds.length() > 0) {
+                        if (!ingredientIds.isEmpty()) {
                             ingredientIds.append(",");
                         }
                         ingredientIds.append(singleId);
@@ -344,7 +351,7 @@ public class RecipeEditManager {
                 }
             }
 
-            if (ingredientIds.length() > 0) {
+            if (!ingredientIds.isEmpty()) {
                 return new IngredientEditValue(kind, ingredientIds.toString(), amount);
             }
             return null;
@@ -874,7 +881,7 @@ public class RecipeEditManager {
             int idx = e.getKey();
             IngredientEditValue v = e.getValue();
 
-            SlotDefinition target = null;
+            SlotDefinition target;
             if (idx < inputCount) {
                 target = schema.getInputSlotByIndex(idx);
             } else {
@@ -1142,7 +1149,7 @@ public class RecipeEditManager {
         }
 
         // 如果所有槽位都清空了，配方无效
-        if (maxRow < 0 || maxCol < 0) {
+        if (maxRow < 0) {
             InGameRecipeEditor.LOGGER.warn("有序配方所有输入槽位都被清空，配方无效");
             return;
         }
@@ -1275,8 +1282,7 @@ public class RecipeEditManager {
                 int idx = Integer.parseInt(part);
                 if (!current.isJsonArray()) {
                     // create array in place if possible
-                    JsonArray newArr = new JsonArray();
-                    current = newArr;
+                    current = new JsonArray();
                 }
 
                 JsonArray arr = current.getAsJsonArray();
@@ -1317,16 +1323,14 @@ public class RecipeEditManager {
                 }
 
                 current = obj.get(part);
-                continue;
             } else if (current.isJsonArray()) {
                 JsonArray arr = current.getAsJsonArray();
-                if (arr.size() == 0 || arr.get(0).isJsonNull()) {
+                if (arr.isEmpty() || arr.get(0).isJsonNull()) {
                     JsonObject o = new JsonObject();
-                    if (arr.size() == 0) arr.add(o); else arr.set(0, o);
+                    if (arr.isEmpty()) arr.add(o); else arr.set(0, o);
                 }
                 current = arr.get(0);
                 i--;
-                continue;
             } else {
                 return;
             }
@@ -1380,7 +1384,6 @@ public class RecipeEditManager {
                     parent = obj;
                     lastPart = part;
                     current = obj.get(part);
-                    continue;
                 }
             } else {
                 return;
@@ -1391,6 +1394,7 @@ public class RecipeEditManager {
     /**
      * 替换槽位内容（物品）
      */
+    @SuppressWarnings("deprecation")
     public static void replaceSlot(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable slot, ItemStack stack) {
         int index = getSlotIndex(slots, slot);
         if (index < 0) return;
@@ -1407,6 +1411,7 @@ public class RecipeEditManager {
     /**
      * 替换槽位内容（流体）
      */
+    @SuppressWarnings("deprecation")
     public static void replaceSlot(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable slot, FluidStack stack) {
         int index = getSlotIndex(slots, slot);
         if (index < 0) return;
@@ -1579,7 +1584,7 @@ public class RecipeEditManager {
      */
     public static ScaleParams getSlotScaleParams(String recipeId, IRecipeLayoutDrawable<?> recipeLayout, IRecipeSlotDrawable slot) {
         try {
-            String recipeType = null;
+            String recipeType;
             var draft = RecipeWorkspaceManager.getInstance().getDraft(recipeId);
             if (draft.isPresent()) {
                 recipeType = draft.get().recipeType();
@@ -1592,32 +1597,37 @@ public class RecipeEditManager {
             if (schema == null) return ScaleParams.DEFAULT;
 
             // 计算 roleIndex
-            List<IRecipeSlotView> allSlots = recipeLayout.getRecipeSlotsView().getSlotViews();
-            int roleIndex = 0;
-            for (IRecipeSlotView s : allSlots) {
-                if (s instanceof IRecipeSlotDrawable sd) {
-                    if (sd.getRole() == slot.getRole()) {
-                        if (sd == slot) break;
-                        roleIndex++;
-                    }
-                }
-            }
-
-            SlotDefinition slotDef = null;
-            if (slot.getRole() == RecipeIngredientRole.INPUT) {
-                if (roleIndex < schema.getInputSlots().size()) {
-                    slotDef = schema.getInputSlots().get(roleIndex);
-                }
-            } else {
-                if (roleIndex < schema.getOutputSlots().size()) {
-                    slotDef = schema.getOutputSlots().get(roleIndex);
-                }
-            }
+            SlotDefinition slotDef = getSlotDefinition(recipeLayout, slot, schema);
             if (slotDef != null) {
                 return new ScaleParams(slotDef.getMultiply(), slotDef.getStep(), slotDef.getUnit());
             }
         } catch (Exception ignored) {}
         return ScaleParams.DEFAULT;
+    }
+
+    private static @Nullable SlotDefinition getSlotDefinition(IRecipeLayoutDrawable<?> recipeLayout, IRecipeSlotDrawable slot, RecipeSchema schema) {
+        List<IRecipeSlotView> allSlots = recipeLayout.getRecipeSlotsView().getSlotViews();
+        int roleIndex = 0;
+        for (IRecipeSlotView s : allSlots) {
+            if (s instanceof IRecipeSlotDrawable sd) {
+                if (sd.getRole() == slot.getRole()) {
+                    if (sd == slot) break;
+                    roleIndex++;
+                }
+            }
+        }
+
+        SlotDefinition slotDef = null;
+        if (slot.getRole() == RecipeIngredientRole.INPUT) {
+            if (roleIndex < schema.getInputSlots().size()) {
+                slotDef = schema.getInputSlots().get(roleIndex);
+            }
+        } else {
+            if (roleIndex < schema.getOutputSlots().size()) {
+                slotDef = schema.getOutputSlots().get(roleIndex);
+            }
+        }
+        return slotDef;
     }
 
     /**
@@ -1729,6 +1739,7 @@ public class RecipeEditManager {
     /**
      * 应用编辑值到槽位
      */
+    @SuppressWarnings("deprecation")
     private static void applyEditValueToSlot(IRecipeSlotDrawable slot, IngredientEditValue editValue) {
         // 清空槽位：保持空白显示
         if (editValue.isCleared()) {
@@ -1968,7 +1979,7 @@ public class RecipeEditManager {
             Class<?> chemicalClass = chemical.getClass();
             Class<?> chemicalStackClass = Class.forName("mekanism.api.chemical.ChemicalStack");
             Object chemicalStack = chemicalStackClass
-                .getConstructor(chemicalClass.getSuperclass(), long.class)
+                .getDeclaredConstructor(chemicalClass.getSuperclass(), long.class)
                 .newInstance(chemical, Math.max(1, editValue.amount()));
 
             // 获取Mekanism JEI的化学物质类型（根据具体化学品类型选择对应的TYPE字段）
@@ -2015,9 +2026,8 @@ public class RecipeEditManager {
             if (slotView == slot) {
                 return index;
             }
-            if (slotView instanceof IRecipeSlotDrawable) {
-                IRecipeSlotDrawable drawable = (IRecipeSlotDrawable) slotView;
-                if (drawable.getRole() == RecipeIngredientRole.INPUT || 
+            if (slotView instanceof IRecipeSlotDrawable drawable) {
+                if (drawable.getRole() == RecipeIngredientRole.INPUT ||
                     drawable.getRole() == RecipeIngredientRole.OUTPUT) {
                     index++;
                 }

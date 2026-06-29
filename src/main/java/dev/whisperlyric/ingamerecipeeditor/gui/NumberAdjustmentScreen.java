@@ -6,6 +6,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.function.Consumer;
 
@@ -208,7 +209,7 @@ public class NumberAdjustmentScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics);
 
         // 标题
@@ -331,7 +332,9 @@ public class NumberAdjustmentScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        if (minecraft != null) {
+            minecraft.setScreen(parent);
+        }
     }
 
     @Override

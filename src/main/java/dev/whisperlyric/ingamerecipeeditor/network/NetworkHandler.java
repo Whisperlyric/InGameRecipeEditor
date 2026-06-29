@@ -8,6 +8,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +21,7 @@ import java.util.Map;
 public class NetworkHandler {
     private static final ResourceLocation CHANNEL_ID = ResourceLocation.parse("ingamerecipeeditor:main");
     private static SimpleChannel network;
-    private static int packetId = 0;
+    private static int packetId;
 
     /**
      * 初始化网络通道
@@ -141,16 +142,8 @@ public class NetworkHandler {
         }
 
         // 构建禁用配方列表
-        List<String> recipeIds = new ArrayList<>(DisabledRecipesManager.getDisabledRecipes());
-        // 使用服务器端缓存的配方JSON（在Mixin移除配方时捕获）
-        Map<String, String> recipeJsonMap = DisabledRecipesManager.getServerRecipeJsonCache();
-        
-        List<DisabledRecipesManager.DisabledRecipeEntry> entries = new ArrayList<>();
-        for (String id : recipeIds) {
-            String json = recipeJsonMap.getOrDefault(id, "");
-            entries.add(new DisabledRecipesManager.DisabledRecipeEntry(id, json));
-        }
-        
+        List<DisabledRecipesManager.DisabledRecipeEntry> entries = getDisabledRecipeEntries();
+
         network.sendTo(new SyncDisabledRecipesPacket(entries), player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
         
         // 同步待删除生成配方
@@ -158,6 +151,19 @@ public class NetworkHandler {
         network.sendTo(new SyncPendingDeletesPacket(pendingDeletes), player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
         
         InGameRecipeEditor.LOGGER.debug("同步配方状态到客户端: {}", player.getName().getString());
+    }
+
+    private static @NotNull List<DisabledRecipesManager.DisabledRecipeEntry> getDisabledRecipeEntries() {
+        List<String> recipeIds = new ArrayList<>(DisabledRecipesManager.getDisabledRecipes());
+        // 使用服务器端缓存的配方JSON（在Mixin移除配方时捕获）
+        Map<String, String> recipeJsonMap = DisabledRecipesManager.getServerRecipeJsonCache();
+
+        List<DisabledRecipesManager.DisabledRecipeEntry> entries = new ArrayList<>();
+        for (String id : recipeIds) {
+            String json = recipeJsonMap.getOrDefault(id, "");
+            entries.add(new DisabledRecipesManager.DisabledRecipeEntry(id, json));
+        }
+        return entries;
     }
 
     /**

@@ -16,7 +16,7 @@ import java.nio.file.Path;
 public class IngredientCycleConfig {
 
     private static final Path CONFIG_PATH = Path.of("config", "ingamerecipeeditor", "client_config.json");
-    private static volatile boolean loaded = false;
+    private static volatile boolean loaded;
     private static long cycleMs = 400L; // 默认400ms（8tick）
     private static int tickInterval = 8; // 默认8tick
 

@@ -16,10 +16,10 @@ import mekanism.api.chemical.slurry.Slurry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.inventory.InventoryMenu;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,10 +59,6 @@ public class ChemicalSlotRenderer {
             int color = chem.getTint();
             ResourceLocation icon = chem.getIcon();
 
-            if (icon == null) {
-                return;
-            }
-
             // 计算填充高度
             int desiredHeight = (int) (height * (double) amount / capacity);
             if (desiredHeight < MIN_CHEMICAL_HEIGHT) {
@@ -80,7 +76,7 @@ public class ChemicalSlotRenderer {
             RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
             // 获取精灵图
-            TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(icon);
+            TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(icon);
             if (sprite == null) {
                 RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
                 return;
@@ -251,11 +247,9 @@ public class ChemicalSlotRenderer {
             Optional<? extends Chemical<?>> chemical = getChemical(location);
             if (chemical.isPresent()) {
                 Component textComponent = chemical.get().getTextComponent();
-                if (textComponent != null) {
-                    return textComponent.getString();
-                }
+                return textComponent.getString();
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
 
         // 格式化ID作为备用名称

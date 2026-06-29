@@ -11,6 +11,7 @@ import mezz.jei.common.Internal;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeManager;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -27,20 +28,20 @@ import java.util.Set;
 public class JeiRecipeVisibility {
 
     // 是否在JEI中显示被禁用的配方（默认false，即禁用的配方在JEI中隐藏）
-    private static boolean showDisabledInJei = false;
+    private static boolean showDisabledInJei;
 
     // 已注入到JEI中的禁用配方（按JEI RecipeType分组），用于在切换回false时移除
     private static final Map<RecipeType<?>, List<Object>> injectedRecipes = new HashMap<>();
 
     // 待执行的延迟更新任务
-    private static int pendingUpdateTicks = 0;
-    private static boolean hasPendingUpdate = false;
+    private static int pendingUpdateTicks;
+    private static boolean hasPendingUpdate;
 
     /**
      * 延迟更新JEI可见性（用于/reload后等待JEI完成重载）
      */
     public static void scheduleUpdateVisibility() {
-        pendingUpdateTicks = 20; // 延迟20 tick（约1秒）
+        pendingUpdateTicks = 20;
         hasPendingUpdate = true;
     }
 
@@ -75,12 +76,10 @@ public class JeiRecipeVisibility {
     /**
      * 获取JEI的IRecipeManager
      */
-    private static IRecipeManager getRecipeManager() {
+    private static @Nullable IRecipeManager getRecipeManager() {
         try {
             var runtime = Internal.getJeiRuntime();
-            if (runtime != null) {
-                return runtime.getRecipeManager();
-            }
+            return runtime.getRecipeManager();
         } catch (Exception ignored) {}
         return null;
     }
@@ -121,7 +120,7 @@ public class JeiRecipeVisibility {
      * 因为Mixin在配方加载时移除了禁用配方，JEI初始化时看不到它们，
      * 所以需要通过addRecipes()将它们重新注入到JEI中
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"rawtypes", "deprecation"})
     private static void injectDisabledRecipesIntoJei(IRecipeManager recipeManager, Set<String> disabledRecipes) {
         if (disabledRecipes.isEmpty()) return;
 
@@ -143,10 +142,7 @@ public class JeiRecipeVisibility {
 
             try {
                 JsonElement jsonElement = JsonParser.parseString(recipeJson);
-                // Forge 1.20.1: 使用RecipeManager.fromJson解析配方，返回Recipe<?>
                 Recipe<?> recipe = RecipeManager.fromJson(id, jsonElement.getAsJsonObject());
-
-                if (recipe == null) continue;
 
                 // 查找该配方对应的JEI RecipeType
                 List<RecipeType<?>> jeiTypes = findJeiRecipeTypes(recipeManager, recipe);
@@ -181,7 +177,7 @@ public class JeiRecipeVisibility {
     /**
      * 从JEI中移除之前注入的禁用配方
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"rawtypes"})
     private static void removeInjectedRecipesFromJei(IRecipeManager recipeManager) {
         if (injectedRecipes.isEmpty()) return;
 
@@ -225,12 +221,11 @@ public class JeiRecipeVisibility {
             }
 
             // 检查该分类是否包含相同MC类型的配方
-            boolean hasMatchingType = false;
+            boolean hasMatchingType;
             try {
                 hasMatchingType = recipeManager.createRecipeLookup((RecipeType) recipeType)
                     .includeHidden()
                     .get()
-                    .filter(Recipe.class::isInstance)
                     .anyMatch(existing -> ((Recipe<?>) existing).getType() == mcType);
             } catch (Exception e) {
                 // 如果查询失败，仍然尝试添加
@@ -355,11 +350,13 @@ public class JeiRecipeVisibility {
 
     /**
      * 通过反射调用addRecipes，将配方注入到JEI中
+     * 注：addRecipes是JEI内部API，可能不存在于公开接口中
      */
-    @SuppressWarnings("unchecked")
-    private static <T> void callAddRecipes(IRecipeManager recipeManager, RecipeType<?> recipeType, Collection<?> recipes) {
+    @SuppressWarnings("all")
+    private static void callAddRecipes(IRecipeManager recipeManager, RecipeType<?> recipeType, Collection<?> recipes) {
         try {
-            Method method = IRecipeManager.class.getMethod("addRecipes", RecipeType.class, Collection.class);
+            Method method = IRecipeManager.class.getDeclaredMethod("addRecipes", RecipeType.class, Collection.class);
+            method.setAccessible(true);
             method.invoke(recipeManager, recipeType, recipes);
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.warn("添加配方到JEI失败: {}", e.getMessage());
@@ -368,11 +365,13 @@ public class JeiRecipeVisibility {
 
     /**
      * 通过反射调用hideRecipes，绕过泛型类型检查
+     * 注意：hideRecipes是JEI内部API
      */
-    @SuppressWarnings("unchecked")
-    private static <T> void callHideRecipes(IRecipeManager recipeManager, RecipeType<?> recipeType, Collection<?> recipes) {
+    @SuppressWarnings("all")
+    private static void callHideRecipes(IRecipeManager recipeManager, RecipeType<?> recipeType, Collection<?> recipes) {
         try {
-            Method method = IRecipeManager.class.getMethod("hideRecipes", RecipeType.class, Collection.class);
+            Method method = IRecipeManager.class.getDeclaredMethod("hideRecipes", RecipeType.class, Collection.class);
+            method.setAccessible(true);
             method.invoke(recipeManager, recipeType, recipes);
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.warn("隐藏配方失败: {}", e.getMessage());
@@ -381,11 +380,13 @@ public class JeiRecipeVisibility {
 
     /**
      * 通过反射调用unhideRecipes，绕过泛型类型检查
+     * 注意：unhideRecipes是JEI内部API
      */
-    @SuppressWarnings("unchecked")
-    private static <T> void callUnhideRecipes(IRecipeManager recipeManager, RecipeType<?> recipeType, Collection<?> recipes) {
+    @SuppressWarnings("all")
+    private static void callUnhideRecipes(IRecipeManager recipeManager, RecipeType<?> recipeType, Collection<?> recipes) {
         try {
-            Method method = IRecipeManager.class.getMethod("unhideRecipes", RecipeType.class, Collection.class);
+            Method method = IRecipeManager.class.getDeclaredMethod("unhideRecipes", RecipeType.class, Collection.class);
+            method.setAccessible(true);
             method.invoke(recipeManager, recipeType, recipes);
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.warn("取消隐藏配方失败: {}", e.getMessage());
@@ -395,7 +396,7 @@ public class JeiRecipeVisibility {
     /**
      * 获取配方的注册名
      */
-    private static ResourceLocation getRegistryName(IRecipeCategory<?> category, Object recipe) {
+    private static @Nullable ResourceLocation getRegistryName(IRecipeCategory<?> category, Object recipe) {
         try {
             var method = category.getClass().getMethod("getRegistryName", Object.class);
             Object id = method.invoke(category, recipe);

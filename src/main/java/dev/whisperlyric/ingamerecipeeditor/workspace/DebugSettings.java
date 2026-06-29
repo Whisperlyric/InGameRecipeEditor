@@ -8,7 +8,7 @@ import net.minecraft.network.chat.Component;
  * 聊天栏打印配方编辑器的草稿状态和生成的 JSON
  */
 public class DebugSettings {
-    private static boolean debugDumpEnabled = false;
+    private static boolean debugDumpEnabled;
 
     public static boolean isEnabled() {
         return debugDumpEnabled;

@@ -6,11 +6,10 @@ import mezz.jei.library.gui.recipes.RecipeLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import java.util.List;
 
 /**
  * Mixin拦截RecipeLayout的drawOverlays方法
@@ -34,7 +33,7 @@ public class RecipeLayoutDrawOverlaysMixin {
             
             // 只渲染非槽位的叠加层（箭头、进度条等）
             // 这些是配方类型的特定动画效果，不是槽位相关的
-            drawNonSlotOverlays(guiGraphics, mouseX, mouseY);
+            registerhelper$drawNonSlotOverlays(guiGraphics, mouseX, mouseY);
         }
     }
     
@@ -42,9 +41,10 @@ public class RecipeLayoutDrawOverlaysMixin {
      * 只渲染非槽位的叠加层
      * 包括：箭头动画、进度条、火焰动画等配方类型特定的效果
      */
-    private void drawNonSlotOverlays(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+    @Unique
+    private void registerhelper$drawNonSlotOverlays(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         // 获取RecipeLayout实例
-        IRecipeLayoutDrawable<?> layout = (IRecipeLayoutDrawable<?>) (Object) this;
+        IRecipeLayoutDrawable<?> layout = (IRecipeLayoutDrawable<?>) this;
         
         // JEI的drawOverlays实际上分为两部分：
         // 1. 槽位相关的渲染（高亮、tooltip）- 我们不需要

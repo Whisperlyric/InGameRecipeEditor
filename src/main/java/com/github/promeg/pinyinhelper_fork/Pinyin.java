@@ -43,13 +43,12 @@ public final class Pinyin {
 
     /**
      * 向Pinyin中追加词典。
-     *
      * 注意: 若有多个词典，推荐使用性能更优的 {@link Pinyin#init(Config)} 初始化Pinyin。
      *
      * @param dict 输入的词典
      */
     public static void add(PinyinDict dict) {
-        if (dict == null || dict.words() == null || dict.words().size() == 0) {
+        if (dict == null || dict.words() == null || dict.words().isEmpty()) {
             // 无效字典
             return;
         }
@@ -67,7 +66,6 @@ public final class Pinyin {
 
     /**
      * 将输入字符串转为拼音，转换过程中会使用之前设置的用户词典，以字符为单位插入分隔符
-     *
      * 例: "hello:中国"  在separator为","时，输出： "h,e,l,l,o,:,ZHONG,GUO,!"
      *
      * @param str  输入字符串
@@ -143,7 +141,7 @@ public final class Pinyin {
 
         private Config(List<PinyinDict> dicts) {
             if (dicts != null) {
-                mPinyinDicts = new ArrayList<PinyinDict>(dicts);
+                mPinyinDicts = new ArrayList<>(dicts);
             }
 
             mSelector = new ForwardLongestSelector();
@@ -158,7 +156,7 @@ public final class Pinyin {
         public Config with(PinyinDict dict) {
             if (dict != null) {
                 if (mPinyinDicts == null) {
-                    mPinyinDicts = new ArrayList<PinyinDict>();
+                    mPinyinDicts = new ArrayList<>();
                     mPinyinDicts.add(dict);
                 } else if (!mPinyinDicts.contains(dict)) {
                     mPinyinDicts.add(dict);

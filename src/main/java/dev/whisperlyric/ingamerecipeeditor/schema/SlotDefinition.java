@@ -1,5 +1,7 @@
 package dev.whisperlyric.ingamerecipeeditor.schema;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
  * 槽位定义对象
  * 定义单个槽位的完整信息，包括槽位ID、类型、位置、JSON映射等
@@ -107,7 +109,7 @@ public class SlotDefinition {
     /**
      * 获取主要JSON路径（优先返回jsonField，否则返回jsonPaths的第一个）
      */
-    public String getPrimaryJsonPath() {
+    public @Nullable String getPrimaryJsonPath() {
         if (jsonField != null && !jsonField.isEmpty()) {
             return jsonField;
         }

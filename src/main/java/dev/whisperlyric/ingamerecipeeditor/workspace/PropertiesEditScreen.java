@@ -10,6 +10,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,8 +39,8 @@ public class PropertiesEditScreen extends Screen {
     // 当前 Schema（可能为 null）
     private RecipeSchema schema;
     private List<PropertyDefinition> properties;
-    private int scrollOffset = 0;
-    private EditBox activeStringEdit = null;
+    private int scrollOffset;
+    private EditBox activeStringEdit;
 
     public PropertiesEditScreen(Screen parent, String recipeId, String recipeType) {
         super(Component.literal("编辑属性"));
@@ -78,16 +79,15 @@ public class PropertiesEditScreen extends Screen {
 
         // 创建字符串属性的 EditBox
         int y = propAreaTop;
-        for (int i = 0; i < properties.size(); i++) {
-            PropertyDefinition prop = properties.get(i);
+        for (PropertyDefinition prop : properties) {
             if (prop.getType() == PropertyDefinition.PropertyType.STRING) {
                 EditBox editBox = new EditBox(
-                    this.font,
-                    panelLeft + LABEL_WIDTH + 4,
-                    y - scrollOffset + 2,
-                    PANEL_WIDTH - LABEL_WIDTH - 8,
-                    16,
-                    Component.literal(prop.getDisplayName())
+                        this.font,
+                        panelLeft + LABEL_WIDTH + 4,
+                        y - scrollOffset + 2,
+                        PANEL_WIDTH - LABEL_WIDTH - 8,
+                        16,
+                        Component.literal(prop.getDisplayName())
                 );
                 editBox.setValue(String.valueOf(editedValues.getOrDefault(prop.getJsonField(), "")));
                 editBox.setResponder(val -> editedValues.put(prop.getJsonField(), val));
@@ -110,7 +110,7 @@ public class PropertiesEditScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(guiGraphics);
 
         int cx = this.width / 2;
@@ -164,12 +164,12 @@ public class PropertiesEditScreen extends Screen {
                 int valueX = panelLeft + LABEL_WIDTH + 4;
                 int valueY = rowY + 7;
 
+                final boolean valHover = mouseX >= valueX && mouseX < panelLeft + PANEL_WIDTH - 4
+                        && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT;
                 switch (prop.getType()) {
                     case INTEGER, FLOAT -> {
                         // 数值类型：显示值，点击打开 NumberAdjustmentScreen
                         String displayVal = formatValue(value, prop.getType());
-                        boolean valHover = mouseX >= valueX && mouseX < panelLeft + PANEL_WIDTH - 4
-                            && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT;
                         int valColor = valHover ? 0x55FF55 : 0xFFFF55;
                         guiGraphics.drawString(this.font, displayVal, valueX, valueY, valColor, false);
                         if (valHover) {
@@ -180,8 +180,6 @@ public class PropertiesEditScreen extends Screen {
                         // 布尔类型：显示 是/否，点击切换
                         boolean boolVal = value instanceof Boolean b ? b : false;
                         String boolText = boolVal ? "是" : "否";
-                        boolean valHover = mouseX >= valueX && mouseX < panelLeft + PANEL_WIDTH - 4
-                            && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT;
                         int valColor = boolVal ? 0x55FF55 : 0xFF5555;
                         guiGraphics.drawString(this.font, boolText, valueX, valueY, valColor, false);
                         if (valHover) {
@@ -231,8 +229,7 @@ public class PropertiesEditScreen extends Screen {
                 && mouseY >= propAreaTop && mouseY < propAreaBottom) {
 
                 int y = propAreaTop;
-                for (int i = 0; i < properties.size(); i++) {
-                    PropertyDefinition prop = properties.get(i);
+                for (PropertyDefinition prop : properties) {
                     int rowY = y - scrollOffset;
                     if (mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
                         onPropertyClick(prop);
@@ -255,19 +252,19 @@ public class PropertiesEditScreen extends Screen {
                 int val = currentValue instanceof Number n ? n.intValue() : 0;
                 Minecraft.getInstance().setScreen(new NumberAdjustmentScreen(
                     this,
-                    newValue -> editedValues.put(prop.getJsonField(), newValue.intValue()),
+                    newValue -> editedValues.put(prop.getJsonField(), newValue),
                     max, val, min
                 ));
             }
             case FLOAT -> {
                 // 用整数编辑（乘100），保存时除100
                 float fVal = currentValue instanceof Number n ? n.floatValue() : 0f;
-                int min = (int)(prop.getMin() * 100);
-                int max = prop.getMax() == Integer.MAX_VALUE ? 100000 : (int)(prop.getMax() * 100);
+                int min = prop.getMin() * 100;
+                int max = prop.getMax() == Integer.MAX_VALUE ? 100000 : (prop.getMax() * 100);
                 int intVal = (int)(fVal * 100);
                 Minecraft.getInstance().setScreen(new NumberAdjustmentScreen(
                     this,
-                    newValue -> editedValues.put(prop.getJsonField(), newValue.intValue() / 100f),
+                    newValue -> editedValues.put(prop.getJsonField(), newValue / 100f),
                     max, intVal, min
                 ));
             }

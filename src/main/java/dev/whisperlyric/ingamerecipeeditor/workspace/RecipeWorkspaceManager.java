@@ -11,6 +11,7 @@ import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.gui.recipes.RecipesGui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -190,8 +191,7 @@ public class RecipeWorkspaceManager {
      * 清除草稿
      */
     public void clearDraft(String draftId) {
-        DraftInfo draft = drafts.remove(draftId);
-        if (draft != null) {
+        if (drafts.remove(draftId) != null) {
             RecipeEditManager.clear(draftId);
             InGameRecipeEditor.LOGGER.info("清除配方草稿: {}", draftId);
         }
@@ -239,7 +239,7 @@ public class RecipeWorkspaceManager {
     /**
      * 从配方JSON获取配方类型
      */
-    private String getRecipeTypeFromJson(JsonObject recipeJson) {
+    private @Nullable String getRecipeTypeFromJson(JsonObject recipeJson) {
         if (recipeJson != null && recipeJson.has("type")) {
             return recipeJson.get("type").getAsString();
         }
@@ -283,7 +283,6 @@ public class RecipeWorkspaceManager {
     /**
      * 从JEI配方布局创建工作区配方（编辑当前配方）
      */
-    @SuppressWarnings("unchecked")
     public void openWorkspace(Screen parent, IRecipeLayoutDrawable<?> recipeLayout) {
         if (recipeLayout == null) {
             InGameRecipeEditor.LOGGER.warn("无法打开工作区：配方布局为空");
@@ -330,9 +329,9 @@ public class RecipeWorkspaceManager {
     }
 
     /**
-     * 打开空工作区（新建配方，从此配方类型新建）
+      打开空工作区（新建配方，从此配方类型新建）
      */
-    /**
+    /*
      * 打开空工作区（新建配方模式）
      * @param parent 父界面
      * @param recipeLayout 配方布局（用于获取配方类型和槽位结构）
@@ -360,7 +359,6 @@ public class RecipeWorkspaceManager {
     /**
      * 打开工作区并复制配方内容（基于此配方创建新配方）
      */
-    @SuppressWarnings("unchecked")
     public void openWorkspaceWithCopy(Screen parent, IRecipeLayoutDrawable<?> recipeLayout) {
         if (recipeLayout == null) {
             InGameRecipeEditor.LOGGER.warn("无法打开复制工作区：配方布局为空");

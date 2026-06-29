@@ -10,6 +10,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -59,14 +60,14 @@ public class CustomTagManager {
                     .distinct()
                     .collect(Collectors.toList());
             
-            saveTagFile(tagId, uniqueItems, "items");
+            saveTagFile(tagId, uniqueItems);
             // invalidate cache for this tag
             itemsCache.remove(tagId);
             LOGGER.info("已创建自定义物品标签: {} (包含 {} 个物品)", tagId, uniqueItems.size());
             return true;
             
         } catch (Exception e) {
-            LOGGER.error("注册自定义物品标签失败: " + tagId, e);
+            LOGGER.error("注册自定义物品标签失败: {}", tagId, e);
             return false;
         }
     }
@@ -93,7 +94,7 @@ public class CustomTagManager {
             return true;
             
         } catch (Exception e) {
-            LOGGER.error("注册自定义流体标签失败: " + tagId, e);
+            LOGGER.error("注册自定义流体标签失败: {}", tagId, e);
             return false;
         }
     }
@@ -106,15 +107,13 @@ public class CustomTagManager {
             boolean removed = false;
             
             File itemTagFile = getTagFile(tagId, "items");
-            if (itemTagFile.exists()) {
-                itemTagFile.delete();
+            if (itemTagFile.exists() && itemTagFile.delete()) {
                 LOGGER.info("已删除自定义物品标签: {}", tagId);
                 removed = true;
             }
             
             File fluidTagFile = getTagFile(tagId, "fluids");
-            if (fluidTagFile.exists()) {
-                fluidTagFile.delete();
+            if (fluidTagFile.exists() && fluidTagFile.delete()) {
                 LOGGER.info("已删除自定义流体标签: {}", tagId);
                 removed = true;
             }
@@ -126,7 +125,7 @@ public class CustomTagManager {
             return removed;
             
         } catch (Exception e) {
-            LOGGER.error("删除自定义标签失败: " + tagId, e);
+            LOGGER.error("删除自定义标签失败: {}", tagId, e);
             return false;
         }
     }
@@ -204,7 +203,7 @@ public class CustomTagManager {
     /**
      * 保存标签文件（标准 Minecraft 标签格式）
      */
-    private static void saveTagFile(ResourceLocation tagId, List<Item> items, String tagType) throws Exception {
+    private static void saveTagFile(ResourceLocation tagId, List<Item> items) throws Exception {
         JsonObject tagJson = new JsonObject();
         tagJson.addProperty("replace", false);
         
@@ -215,7 +214,7 @@ public class CustomTagManager {
         }
         tagJson.add("values", valuesArray);
         
-        File tagFile = getTagFile(tagId, tagType);
+        File tagFile = getTagFile(tagId, "items");
         Files.createDirectories(tagFile.getParentFile().toPath());
         
         try (FileWriter writer = new FileWriter(tagFile)) {
@@ -316,7 +315,7 @@ public class CustomTagManager {
             }
 
         } catch (Exception e) {
-            LOGGER.error("读取标签文件失败: " + tagId, e);
+            LOGGER.error("读取标签文件失败: {}", tagId, e);
         }
 
         return values;
@@ -325,7 +324,7 @@ public class CustomTagManager {
     /**
      * 读取标签文件的完整信息
      */
-    public static TagFileInfo readTagFileInfo(ResourceLocation tagId, String tagType) {
+    public static @Nullable TagFileInfo readTagFileInfo(ResourceLocation tagId, String tagType) {
         try {
             File tagFile = getTagFile(tagId, tagType);
             if (!tagFile.exists()) {
@@ -358,7 +357,7 @@ public class CustomTagManager {
             }
             
         } catch (Exception e) {
-            LOGGER.error("读取标签文件信息失败: " + tagId, e);
+            LOGGER.error("读取标签文件信息失败: {}", tagId, e);
             return null;
         }
     }
@@ -392,7 +391,7 @@ public class CustomTagManager {
             return true;
             
         } catch (Exception e) {
-            LOGGER.error("保存标签文件失败: " + tagId, e);
+            LOGGER.error("保存标签文件失败: {}", tagId, e);
             return false;
         }
     }

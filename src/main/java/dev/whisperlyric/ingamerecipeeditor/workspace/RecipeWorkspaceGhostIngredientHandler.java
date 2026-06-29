@@ -9,6 +9,7 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,10 +21,10 @@ import java.util.Optional;
 public class RecipeWorkspaceGhostIngredientHandler implements IGhostIngredientHandler<RecipeWorkspaceScreen> {
     
     @Override
-    public <I> List<Target<I>> getTargetsTyped(
-        RecipeWorkspaceScreen screen,
-        mezz.jei.api.ingredients.ITypedIngredient<I> ingredient,
-        boolean doStart
+    public <I> @NotNull List<Target<I>> getTargetsTyped(
+            @NotNull RecipeWorkspaceScreen screen,
+            mezz.jei.api.ingredients.ITypedIngredient<I> ingredient,
+            boolean doStart
     ) {
         Optional<ItemStack> itemStack = ingredient.getIngredient(VanillaTypes.ITEM_STACK);
         Optional<FluidStack> fluidStack = ingredient.getIngredient(ForgeTypes.FLUID_STACK);
@@ -88,16 +89,12 @@ public class RecipeWorkspaceGhostIngredientHandler implements IGhostIngredientHa
             return true;
         }
         // 如果拖拽的是 RESOURCE（未知化学物质），可以放入任何化学物质槽位
-        if (draggedKind == RecipeEditManager.IngredientKind.RESOURCE && slotKind.isChemical()) {
-            return true;
-        }
-        return false;
+        return draggedKind == RecipeEditManager.IngredientKind.RESOURCE && slotKind.isChemical();
     }
 
     /**
      * 通过 Mekanism JEI 的特定原料类型检测拖拽原料的类型
      */
-    @SuppressWarnings("unchecked")
     private static <I> Optional<RecipeEditManager.IngredientKind> getMekanismDraggedKind(mezz.jei.api.ingredients.ITypedIngredient<I> ingredient) {
         try {
             Class<?> mekanismJeiClass = Class.forName("mekanism.client.jei.MekanismJEI");
@@ -152,12 +149,12 @@ public class RecipeWorkspaceGhostIngredientHandler implements IGhostIngredientHa
         }
 
         @Override
-        public Rect2i getArea() {
+        public @NotNull Rect2i getArea() {
             return area;
         }
 
         @Override
-        public void accept(I ingredient) {
+        public void accept(@NotNull I ingredient) {
             if (ingredient instanceof ItemStack stack) {
                 RecipeEditManager.replaceSlot(recipeId, slots, slot, stack);
             } else if (ingredient instanceof FluidStack stack) {
@@ -165,6 +162,10 @@ public class RecipeWorkspaceGhostIngredientHandler implements IGhostIngredientHa
             } else if (RecipeEditManager.isChemicalStack(ingredient)) {
                 RecipeEditManager.replaceResourceSlot(recipeId, slots, slot, ingredient);
             }
+        }
+
+        public RecipeWorkspaceScreen getScreen() {
+            return screen;
         }
     }
 }

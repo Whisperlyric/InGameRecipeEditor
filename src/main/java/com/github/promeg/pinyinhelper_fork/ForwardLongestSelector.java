@@ -27,7 +27,7 @@ final class ForwardLongestSelector implements SegmentationSelector {
 
         List<Emit> results = new ArrayList<Emit>(emits);
 
-        Collections.sort(results, HIT_COMPARATOR);
+        results.sort(HIT_COMPARATOR);
 
         int endValueToRemove = -1;
 

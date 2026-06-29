@@ -84,10 +84,7 @@ public class RecipeSerializer {
                     return GSON.toJsonTree(data);
                 }
             }
-            case FLUID -> {
-                return GSON.toJsonTree(data);
-            }
-            case GAS, INFUSE_TYPE, PIGMENT, SLURRY, ANY -> {
+            case FLUID, GAS, INFUSE_TYPE, PIGMENT, SLURRY, ANY -> {
                 return GSON.toJsonTree(data);
             }
         }
@@ -100,12 +97,16 @@ public class RecipeSerializer {
     private JsonObject serializeItemStack(ItemStack stack) {
         JsonObject json = new JsonObject();
         ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(stack.getItem());
-        json.addProperty("item", itemId.toString());
+        if (itemId != null) {
+            json.addProperty("item", itemId.toString());
+        }
         if (stack.getCount() > 1) {
             json.addProperty("count", stack.getCount());
         }
         if (stack.hasTag()) {
-            json.addProperty("nbt", stack.getTag().toString());
+            if (stack.getTag() != null) {
+                json.addProperty("nbt", stack.getTag().toString());
+            }
         }
         return json;
     }

@@ -3,8 +3,8 @@ package dev.whisperlyric.ingamerecipeeditor.gui;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.whisperlyric.ingamerecipeeditor.tags.CustomTagManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -195,7 +195,7 @@ public class CustomTagCreatorScreen extends Screen {
     /**
      * 加载原有模组标签数据（从游戏注册表）
      */
-    @SuppressWarnings("null")
+    @SuppressWarnings({"null", "deprecation"})
     private void loadOriginalTagData(ResourceLocation tagId, Mode mode) {
         if (mode == Mode.ITEM) {
             // 从物品注册表加载标签包含的所有物品，保存到 originalItems
@@ -756,7 +756,7 @@ public class CustomTagCreatorScreen extends Screen {
         ResourceLocation stillTexture = fluidExtensions.getStillTexture(fluidStack);
         if (stillTexture == null) return;
         
-        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(stillTexture);
         
         int tintColor = fluidExtensions.getTintColor(fluidStack);
         float r = ((tintColor >> 16) & 0xFF) / 255.0f;

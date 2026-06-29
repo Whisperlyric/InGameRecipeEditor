@@ -30,7 +30,7 @@ public class IngredientCycleManager {
     private static long getCycleMs() { return IngredientCycleConfig.getCycleMs(); }
     private static int getTickInterval() { return IngredientCycleConfig.getTickInterval(); }
 
-    private static int tickCounter = 0;
+    private static int tickCounter;
 
     private record Candidate(IIngredientType<Object> type, Object value) {}
 
@@ -223,7 +223,6 @@ public class IngredientCycleManager {
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null) return;
 
         // 处理JEI可见性延迟更新
         dev.whisperlyric.ingamerecipeeditor.jei.JeiRecipeVisibility.clientTick();
@@ -279,15 +278,6 @@ public class IngredientCycleManager {
     private static boolean isShiftKeyDown() {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null) return false;
-            
-            // 如果当前有屏幕打开，使用Screen.hasShiftDown()
-            if (mc.screen != null) {
-                return Screen.hasShiftDown();
-            }
-            
-            // 否则使用GLFW直接检测
-            if (mc.getWindow() == null) return false;
             long window = mc.getWindow().getWindow();
             // GLFW_KEY_LEFT_SHIFT = 340, GLFW_KEY_RIGHT_SHIFT = 344
             return org.lwjgl.glfw.GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS

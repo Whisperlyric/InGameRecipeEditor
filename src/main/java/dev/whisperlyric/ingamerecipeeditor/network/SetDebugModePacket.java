@@ -27,9 +27,7 @@ public class SetDebugModePacket {
 
     public static void handle(SetDebugModePacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        context.enqueueWork(() -> {
-            DebugSettings.setEnabled(packet.enabled);
-        });
+        context.enqueueWork(() -> DebugSettings.setEnabled(packet.enabled));
         context.setPacketHandled(true);
     }
 }

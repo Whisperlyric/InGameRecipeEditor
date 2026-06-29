@@ -32,10 +32,10 @@ public class ImmersiveEngineeringAdapter implements ModRecipeAdapter {
     public void registerSchemas(SchemaRegistry registry) {
         if (!isModLoaded()) return;
         
-        // 碎石机配方（物品→物品+副输出）
+        // 粉碎机配方（物品→物品+副输出）
         registry.register(RecipeSchema.builder()
             .recipeType("immersiveengineering:crusher")
-            .displayName("碎石机配方")
+            .displayName("粉碎机配方")
             .size(144, 54)
             .addInputSlot("input_0", 0, "input", 50, 20)
             .addOutputSlot("result", 0, "result", 110, 20)
