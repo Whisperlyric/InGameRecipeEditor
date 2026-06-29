@@ -15,7 +15,6 @@ public class SchemaRegistry {
     private static SchemaRegistry instance;
     
     private final Map<String, RecipeSchema> schemas = new HashMap<>();
-    private final Map<String, ModRecipeAdapter> adapters = new HashMap<>();
     
     /**
      * 获取单例实例
@@ -58,14 +57,6 @@ public class SchemaRegistry {
         }
     }
     
-    /**
-     * 注册模组适配器
-     */
-    public void registerAdapter(ModRecipeAdapter adapter) {
-        adapters.put(adapter.getModId(), adapter);
-        adapter.registerSchemas(this);
-    }
-    
     // ========== Schema查询方法 ==========
     
     /**
@@ -94,20 +85,6 @@ public class SchemaRegistry {
      */
     public Collection<String> getAllRecipeTypes() {
         return schemas.keySet();
-    }
-    
-    /**
-     * 获取模组适配器
-     */
-    public ModRecipeAdapter getAdapter(String modId) {
-        return adapters.get(modId);
-    }
-    
-    /**
-     * 获取所有模组适配器
-     */
-    public Collection<ModRecipeAdapter> getAllAdapters() {
-        return adapters.values();
     }
     
     // ========== 默认Schema注册 ==========
@@ -182,7 +159,7 @@ public class SchemaRegistry {
         // 石切机配方
         register(RecipeSchema.builder()
             .recipeType("minecraft:stonecutting")
-            .displayName("石切机配方")
+            .displayName("切石机配方")
             .size(150, 60)
             .addInputSlot("input_0", 0, "ingredient", 34, 6)
             .addOutputSlot("output_0", 0, "result", 97, 15)
@@ -196,7 +173,6 @@ public class SchemaRegistry {
      */
     public void reset() {
         schemas.clear();
-        adapters.clear();
         registerDefaultSchemas();
     }
 }
