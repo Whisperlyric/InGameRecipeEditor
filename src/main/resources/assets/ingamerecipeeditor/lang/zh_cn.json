@@ -8,6 +8,7 @@
   "key.ingamerecipeeditor.open_recipe_helper": "打开配方助手",
   "key.ingamerecipeeditor.open_tags_overview": "打开标签概览",
   "key.ingamerecipeeditor.open_disabled_recipes_list": "打开禁用配方列表",
+  "key.ingamerecipeeditor.open_config": "打开配置界面",
   "ingamerecipeeditor.tooltip.recipe.enabled": "启用此配方",
   "ingamerecipeeditor.tooltip.recipe.disabled": "禁用此配方",
   "ingamerecipeeditor.tooltip.recipe_add.open_workspace": "Click to edit this recipe in the workspace",
@@ -77,5 +78,19 @@
   "ingamerecipeeditor.screen.disabled_recipes_list.cancel": "取消",
   "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_title": "§c§l确认启用所有配方",
   "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_count": "将启用 %d 个配方",
-  "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_warning": "§e此操作无法撤销！"
+  "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_warning": "§e此操作无法撤销！",
+  "ingamerecipeeditor.config.title": "游戏内配方编辑器 - 客户端配置",
+  "ingamerecipeeditor.config.category.jei": "JEI 可见性",
+  "ingamerecipeeditor.config.category.debug": "调试",
+  "ingamerecipeeditor.config.category.cycle": "原料轮换",
+  "ingamerecipeeditor.config.show_disabled_in_jei": "在JEI中显示禁用配方",
+  "ingamerecipeeditor.config.show_disabled_in_jei.tooltip": "开启后，被禁用的配方将在JEI中保持可见",
+  "ingamerecipeeditor.config.debug_dump": "调试转储",
+  "ingamerecipeeditor.config.debug_dump.tooltip": "在聊天栏打印配方编辑器的草稿状态和生成的JSON",
+  "ingamerecipeeditor.config.schema_export": "Schema导出",
+  "ingamerecipeeditor.config.schema_export.tooltip": "打开配方工作区时导出schema文件",
+  "ingamerecipeeditor.config.cycle_ms": "轮换周期（毫秒）",
+  "ingamerecipeeditor.config.cycle_ms.tooltip": "JEI原料轮换显示的周期，最小100ms",
+  "ingamerecipeeditor.config.tick_interval": "轮换Tick间隔",
+  "ingamerecipeeditor.config.tick_interval.tooltip": "以客户端tick为单位的更新频率，最小1"
 }

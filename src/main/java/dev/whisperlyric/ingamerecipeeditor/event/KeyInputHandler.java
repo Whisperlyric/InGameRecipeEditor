@@ -1,5 +1,6 @@
 package dev.whisperlyric.ingamerecipeeditor.event;
 
+import dev.whisperlyric.ingamerecipeeditor.config.ConfigManager;
 import dev.whisperlyric.ingamerecipeeditor.gui.DisabledRecipesListScreen;
 import dev.whisperlyric.ingamerecipeeditor.gui.TagSelectorScreen;
 import dev.whisperlyric.ingamerecipeeditor.init.ModKeyMappings;
@@ -35,6 +36,10 @@ public class KeyInputHandler {
                     net.minecraft.network.chat.Component.literal("§a已选择标签: §f#" + tagId)
                 )
             ));
+        }
+
+        if (ModKeyMappings.OPEN_CONFIG.consumeClick()) {
+            mc.setScreen(ConfigManager.buildConfigScreen(mc.screen));
         }
     }
 }

@@ -3,6 +3,7 @@ package dev.whisperlyric.ingamerecipeeditor.jei;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
+import dev.whisperlyric.ingamerecipeeditor.config.ConfigManager;
 import dev.whisperlyric.ingamerecipeeditor.disabled.DisabledRecipesManager;
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeType;
@@ -26,9 +27,6 @@ import java.util.Set;
  * 控制禁用配方在JEI中的隐藏/显示
  */
 public class JeiRecipeVisibility {
-
-    // 是否在JEI中显示被禁用的配方（默认false，即禁用的配方在JEI中隐藏）
-    private static boolean showDisabledInJei;
 
     // 已注入到JEI中的禁用配方（按JEI RecipeType分组），用于在切换回false时移除
     private static final Map<RecipeType<?>, List<Object>> injectedRecipes = new HashMap<>();
@@ -59,18 +57,10 @@ public class JeiRecipeVisibility {
     }
 
     /**
-     * 设置禁用配方是否在JEI中可见
-     */
-    public static void setShowDisabledInJei(boolean show) {
-        showDisabledInJei = show;
-        updateVisibility();
-    }
-
-    /**
-     * 获取禁用配方是否在JEI中可见
+     * 获取禁用配方是否在JEI中可见（从客户端配置读取）
      */
     public static boolean isShowDisabledInJei() {
-        return showDisabledInJei;
+        return ConfigManager.get().showDisabledInJei;
     }
 
     /**
@@ -93,7 +83,7 @@ public class JeiRecipeVisibility {
 
         Set<String> disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
 
-        if (showDisabledInJei) {
+        if (isShowDisabledInJei()) {
             // 禁用配方在JEI中保持可见：
             // 1. 先移除之前注入的配方（避免重复注入）
             removeInjectedRecipesFromJei(recipeManager);
@@ -244,7 +234,7 @@ public class JeiRecipeVisibility {
      * 隐藏指定的配方
      */
     public static void hideRecipe(String recipeId) {
-        if (showDisabledInJei) return; // 禁用配方在JEI中保持可见时，不执行隐藏
+        if (isShowDisabledInJei()) return; // 禁用配方在JEI中保持可见时，不执行隐藏
         IRecipeManager recipeManager = getRecipeManager();
         if (recipeManager == null) return;
         hideSingleRecipe(recipeManager, recipeId);

@@ -8,6 +8,7 @@
   "key.ingamerecipeeditor.open_recipe_helper": "Open Recipe Helper",
   "key.ingamerecipeeditor.open_tags_overview": "Open Tags Overview",
   "key.ingamerecipeeditor.open_disabled_recipes_list": "Open Disabled Recipes List",
+  "key.ingamerecipeeditor.open_config": "Open Config Screen",
   "ingamerecipeeditor.tooltip.recipe.enabled": "Enable this recipe",
   "ingamerecipeeditor.tooltip.recipe.disabled": "Disable this recipe",
   "ingamerecipeeditor.tooltip.recipe_add.open_workspace": "Click to edit this recipe in the workspace",
@@ -77,5 +78,19 @@
   "ingamerecipeeditor.screen.disabled_recipes_list.cancel": "Cancel",
   "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_title": "§c§lConfirm Enable All Recipes",
   "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_count": "Will enable %d recipes",
-  "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_warning": "§eThis action cannot be undone!"
+  "ingamerecipeeditor.screen.disabled_recipes_list.confirm_clear_warning": "§eThis action cannot be undone!",
+  "ingamerecipeeditor.config.title": "InGameRecipeEditor - Client Config",
+  "ingamerecipeeditor.config.category.jei": "JEI Visibility",
+  "ingamerecipeeditor.config.category.debug": "Debug",
+  "ingamerecipeeditor.config.category.cycle": "Ingredient Cycling",
+  "ingamerecipeeditor.config.show_disabled_in_jei": "Show Disabled Recipes in JEI",
+  "ingamerecipeeditor.config.show_disabled_in_jei.tooltip": "When enabled, disabled recipes remain visible in JEI",
+  "ingamerecipeeditor.config.debug_dump": "Debug Dump",
+  "ingamerecipeeditor.config.debug_dump.tooltip": "Print recipe editor draft state and generated JSON to chat",
+  "ingamerecipeeditor.config.schema_export": "Schema Export",
+  "ingamerecipeeditor.config.schema_export.tooltip": "Export schema files when opening recipe workspace",
+  "ingamerecipeeditor.config.cycle_ms": "Cycle Period (ms)",
+  "ingamerecipeeditor.config.cycle_ms.tooltip": "JEI ingredient cycling period in milliseconds, minimum 100",
+  "ingamerecipeeditor.config.tick_interval": "Cycle Tick Interval",
+  "ingamerecipeeditor.config.tick_interval.tooltip": "Update frequency in client ticks, minimum 1"
 }

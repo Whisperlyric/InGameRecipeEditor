@@ -1,5 +1,6 @@
 package dev.whisperlyric.ingamerecipeeditor.workspace;
 
+import dev.whisperlyric.ingamerecipeeditor.config.ConfigManager;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import net.minecraft.client.Minecraft;
@@ -27,8 +28,8 @@ public class IngredientCycleManager {
 
     // 默认轮换周期和tick间隔由配置提供
     // tickInterval: 以客户端tick为单位，控制更新频率以降低开销（例如每5 tick更新一次）
-    private static long getCycleMs() { return IngredientCycleConfig.getCycleMs(); }
-    private static int getTickInterval() { return IngredientCycleConfig.getTickInterval(); }
+    private static long getCycleMs() { return Math.max(100L, ConfigManager.get().cycleMs); }
+    private static int getTickInterval() { return Math.max(1, ConfigManager.get().tickInterval); }
 
     private static int tickCounter;
 
