@@ -23,7 +23,7 @@ public class RecipesGuiMouseMixin {
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void ingamerecipeeditor_handleButtonClick(double mouseX, double mouseY, int mouseButton, CallbackInfoReturnable<Boolean> cir) {
         // 使用访问器获取配方布局管理器
-        RecipesGuiAccessor guiAccessor = (RecipesGuiAccessor) (Object) this;
+        RecipesGuiAccessor guiAccessor = (RecipesGuiAccessor) this;
         RecipeGuiLayouts layouts = guiAccessor.getLayouts();
         
         // 使用访问器获取配方布局列表

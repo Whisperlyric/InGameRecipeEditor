@@ -9,8 +9,8 @@ import java.util.function.Function;
  */
 public class PinyinSearchHelper<T> {
     
-    private static boolean pinyinAvailable = false;
-    private static boolean pinyinChecked = false;
+    private static boolean pinyinAvailable;
+    private static boolean pinyinChecked;
     
     static {
         checkPinyinAvailability();
@@ -109,7 +109,7 @@ public class PinyinSearchHelper<T> {
                 if (com.github.promeg.pinyinhelper_fork.Pinyin.isChinese(c)) {
                     String pinyin = com.github.promeg.pinyinhelper_fork.Pinyin.toPinyin(c).toLowerCase();
                     if (!pinyin.isEmpty()) {
-                        if (fullPinyinBuilder.length() > 0) {
+                        if (!fullPinyinBuilder.isEmpty()) {
                             fullPinyinBuilder.append(' ');
                         }
                         fullPinyinBuilder.append(pinyin);
@@ -117,13 +117,13 @@ public class PinyinSearchHelper<T> {
                         nospace.append(pinyin);
                     }
                 } else if (c == ' ' || c == '_' || c == '-' || c == '.') {
-                    if (fullPinyinBuilder.length() > 0) {
+                    if (!fullPinyinBuilder.isEmpty()) {
                         fullPinyinBuilder.append(' ');
                     }
                 } else if (Character.isLetterOrDigit(c)) {
                     // 普通字母数字：添加到所有结果
                     char lowerC = Character.toLowerCase(c);
-                    if (fullPinyinBuilder.length() > 0) {
+                    if (!fullPinyinBuilder.isEmpty()) {
                         fullPinyinBuilder.append(' ');
                     }
                     fullPinyinBuilder.append(lowerC);
@@ -265,11 +265,7 @@ public class PinyinSearchHelper<T> {
             }
             
             String id = idGetter.apply(item);
-            if (id != null && id.toLowerCase().endsWith(searchPrefix)) {
-                return true;
-            }
-            
-            return false;
+            return id != null && id.toLowerCase().endsWith(searchPrefix);
         }
         
         // 检查ID匹配
@@ -319,9 +315,7 @@ public class PinyinSearchHelper<T> {
                         break;
                     }
                 }
-                if (allMatch) {
-                    return true;
-                }
+                return allMatch;
             }
         }
         
@@ -351,7 +345,6 @@ public class PinyinSearchHelper<T> {
     /**
      * 直接匹配文本（不依赖缓存的对象）
      * 用于搜索标签内包含的所有对象名称
-     * 
      * 支持截断搜索：
      * - xiajie% 表示后截断：匹配以"xiajie"结尾的拼音，后面不能有其他字
      */
@@ -409,11 +402,7 @@ public class PinyinSearchHelper<T> {
             }
             
             // 直接文本后截断匹配
-            if (lowerText.endsWith(searchPrefix)) {
-                return true;
-            }
-            
-            return false;
+            return lowerText.endsWith(searchPrefix);
         }
         
         // 直接文本匹配
@@ -433,10 +422,6 @@ public class PinyinSearchHelper<T> {
             return true;
         }
         // 无空格拼音匹配
-        if (pinyinInfo.nospace.contains(lowerSearch)) {
-            return true;
-        }
-        
-        return false;
+        return pinyinInfo.nospace.contains(lowerSearch);
     }
 }

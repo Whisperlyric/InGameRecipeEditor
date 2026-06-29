@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.network.NetworkEvent;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.FileWriter;
 import java.nio.file.Files;
@@ -93,7 +94,7 @@ public class RecipeExportPacket {
      *   - 新建模式：recipes/<namespace>/<type_path>/custom/custom_{type}(_counter).json
      * - 无 type 字段：recipes/<namespace>/<recipe_path>.json
      */
-    private static Path saveRecipeFile(ResourceLocation recipeId, JsonObject recipeJson, boolean isNewRecipe) {
+    private static @Nullable Path saveRecipeFile(ResourceLocation recipeId, JsonObject recipeJson, boolean isNewRecipe) {
         try {
             String recipePath = recipeId.getPath();
             String recipeNamespace = recipeId.getNamespace();

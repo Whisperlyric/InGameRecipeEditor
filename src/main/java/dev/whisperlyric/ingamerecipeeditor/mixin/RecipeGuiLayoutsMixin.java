@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.Rect2i;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -28,8 +29,11 @@ public class RecipeGuiLayoutsMixin {
     private List<RecipeLayoutWithButtons<?>> recipeLayoutsWithButtons;
 
     // 按钮尺寸和间距（和src-old一致）
+    @Unique
     private static final int BUTTON_WIDTH = 9;
+    @Unique
     private static final int BUTTON_HEIGHT = 9;
+    @Unique
     private static final int BUTTON_SPACING = 1;
 
     /**

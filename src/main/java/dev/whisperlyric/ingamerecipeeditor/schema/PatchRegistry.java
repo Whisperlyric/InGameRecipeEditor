@@ -6,6 +6,7 @@ import dev.whisperlyric.ingamerecipeeditor.workspace.RecipeEditManager;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -94,7 +95,7 @@ public class PatchRegistry {
     /**
      * 从资源包加载 JSON 文件，返回 null 如果不存在
      */
-    private static JsonObject loadJsonResource(String path) {
+    private static @Nullable JsonObject loadJsonResource(String path) {
         ResourceLocation loc = ResourceLocation.parse(InGameRecipeEditor.MOD_ID + ":" + path);
         Optional<Resource> res = resourceManager.getResource(loc);
         if (res.isPresent()) {

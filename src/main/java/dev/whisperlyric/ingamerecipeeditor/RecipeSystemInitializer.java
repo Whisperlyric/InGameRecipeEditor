@@ -11,7 +11,7 @@ import dev.whisperlyric.ingamerecipeeditor.schema.adapter.MekanismAdapter;
  */
 public class RecipeSystemInitializer {
     
-    private static boolean initialized = false;
+    private static boolean initialized;
     
     /**
      * 初始化配方系统

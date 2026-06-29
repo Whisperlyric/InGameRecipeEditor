@@ -25,6 +25,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -113,7 +114,7 @@ public class RecipeWorkspaceScreen extends Screen {
             } else if (!editMode && recipeJson != null) {
                 // 复制模式（无模板但有原始 JSON）：复制原配方
                 RecipeWorkspaceManager.getInstance().copyExistingRecipe(recipeId, recipeJson);
-            } else if (recipeType != null) {
+            } else {
                 // 后备：仅记录类型
                 RecipeWorkspaceManager.getInstance().createDraftWithType(recipeId, recipeType);
             }
@@ -123,9 +124,9 @@ public class RecipeWorkspaceScreen extends Screen {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     protected void init() {
         // 计算配方布局位置
-        @SuppressWarnings("removal")
         Rect2i layoutRect = recipeLayout.getRect();
         int layoutWidth = layoutRect.getWidth();
         int layoutHeight = layoutRect.getHeight();
@@ -243,12 +244,10 @@ public class RecipeWorkspaceScreen extends Screen {
                         case FLUID -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.FluidSelectorScreen(this, fluidId -> {
                             try {
                                 var fluid = net.minecraft.core.registries.BuiltInRegistries.FLUID.get(fluidId);
-                                if (fluid != null) {
-                                    RecipeEditManager.replaceSlot(
-                                        recipeId, slots, selectedSlot,
-                                        new net.minecraftforge.fluids.FluidStack(fluid, 1000)
-                                    );
-                                }
+                                RecipeEditManager.replaceSlot(
+                                    recipeId, slots, selectedSlot,
+                                    new net.minecraftforge.fluids.FluidStack(fluid, 1000)
+                                );
                             } catch (Exception ignored) {}
                         }));
                         case GAS -> minecraft.setScreen(new dev.whisperlyric.ingamerecipeeditor.gui.ChemicalSelectorScreen(this, chemicalId -> {
@@ -341,8 +340,10 @@ public class RecipeWorkspaceScreen extends Screen {
                 NetworkHandler.sendRecipeExport(recipeId, json, isNewRecipe);
                 InGameRecipeEditor.LOGGER.info("配方导出请求已发送: {}", recipeId);
             } else {
-                Minecraft.getInstance().player.displayClientMessage(
-                    Component.translatable("ingamerecipeeditor.message.recipe_export_no_changes"), false);
+                if (Minecraft.getInstance().player != null) {
+                    Minecraft.getInstance().player.displayClientMessage(
+                        Component.translatable("ingamerecipeeditor.message.recipe_export_no_changes"), false);
+                }
             }
         }
     }
@@ -398,12 +399,11 @@ public class RecipeWorkspaceScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // 渲染背景
         this.renderBackground(guiGraphics);
         
         // 计算面板位置
-        @SuppressWarnings("removal")
         Rect2i layoutRect = recipeLayout.getRect();
         int layoutWidth = layoutRect.getWidth();
         int layoutHeight = layoutRect.getHeight();
@@ -510,7 +510,6 @@ public class RecipeWorkspaceScreen extends Screen {
      */
     private void renderEditedSlots(GuiGraphics guiGraphics) {
         // 获取配方布局的当前位置（setPosition后可能已更新）
-        @SuppressWarnings("removal")
         Rect2i layoutRect = recipeLayout.getRect();
         int currentLayoutX = layoutRect.getX();
         int currentLayoutY = layoutRect.getY();
@@ -582,7 +581,6 @@ public class RecipeWorkspaceScreen extends Screen {
      */
     private void renderSlotHighlight(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         // 获取配方布局的当前位置
-        @SuppressWarnings("removal")
         Rect2i layoutRect = recipeLayout.getRect();
         int currentLayoutX = layoutRect.getX();
         int currentLayoutY = layoutRect.getY();
@@ -701,6 +699,7 @@ public class RecipeWorkspaceScreen extends Screen {
     /**
      * 获取原料的显示名称
      */
+    @SuppressWarnings("deprecation")
     private Component getIngredientDisplayName(RecipeEditManager.IngredientEditValue editValue) {
         String ingredientId = editValue.ingredientId();
         
@@ -730,17 +729,13 @@ public class RecipeWorkspaceScreen extends Screen {
             switch (editValue.kind()) {
                 case ITEM -> {
                     var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(id);
-                    if (item != null) {
-                        ItemStack stack = new ItemStack(item);
-                        return Component.literal(stack.getDisplayName().getString());
-                    }
+                    ItemStack stack = new ItemStack(item);
+                    return Component.literal(stack.getDisplayName().getString());
                 }
                 case FLUID -> {
                     var fluid = net.minecraft.core.registries.BuiltInRegistries.FLUID.get(id);
-                    if (fluid != null) {
-                        net.minecraftforge.fluids.FluidStack stack = new net.minecraftforge.fluids.FluidStack(fluid, 1000);
-                        return Component.literal(stack.getDisplayName().getString());
-                    }
+                    net.minecraftforge.fluids.FluidStack stack = new net.minecraftforge.fluids.FluidStack(fluid, 1000);
+                    return Component.literal(stack.getDisplayName().getString());
                 }
                 default -> {
                     // 化学物质：尝试获取显示名称
@@ -789,6 +784,7 @@ public class RecipeWorkspaceScreen extends Screen {
     /**
      * 获取流体显示名称
      */
+    @SuppressWarnings("deprecation")
     private String getFluidDisplayName(String fluidId) {
         if (fluidId == null || fluidId.isEmpty()) {
             return "空";
@@ -817,10 +813,8 @@ public class RecipeWorkspaceScreen extends Screen {
             }
             
             var fluid = net.minecraft.core.registries.BuiltInRegistries.FLUID.get(id);
-            if (fluid != null) {
-                net.minecraftforge.fluids.FluidStack stack = new net.minecraftforge.fluids.FluidStack(fluid, 1000);
-                return stack.getDisplayName().getString();
-            }
+            net.minecraftforge.fluids.FluidStack stack = new net.minecraftforge.fluids.FluidStack(fluid, 1000);
+            return stack.getDisplayName().getString();
         } catch (Exception ignored) {}
         
         // 格式化ID作为备用名称
@@ -891,7 +885,6 @@ public class RecipeWorkspaceScreen extends Screen {
         if (recipeId == null) return false;
         
         // 获取配方布局的当前位置
-        @SuppressWarnings("removal")
         Rect2i layoutRect = recipeLayout.getRect();
         int currentLayoutX = layoutRect.getX();
         int currentLayoutY = layoutRect.getY();
@@ -962,7 +955,6 @@ public class RecipeWorkspaceScreen extends Screen {
         if (recipeId == null) return false;
         
         // 获取配方布局的当前位置
-        @SuppressWarnings("removal")
         Rect2i layoutRect = recipeLayout.getRect();
         int currentLayoutX = layoutRect.getX();
         int currentLayoutY = layoutRect.getY();

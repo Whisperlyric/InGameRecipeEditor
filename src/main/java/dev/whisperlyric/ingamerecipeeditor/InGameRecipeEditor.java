@@ -2,6 +2,7 @@ package dev.whisperlyric.ingamerecipeeditor;
 
 import dev.whisperlyric.ingamerecipeeditor.init.ModKeyMappings;
 import dev.whisperlyric.ingamerecipeeditor.network.NetworkHandler;
+import dev.whisperlyric.ingamerecipeeditor.workspace.IngredientCycleManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,9 +36,7 @@ public class InGameRecipeEditor {
     }
 
     private void onClientSetup(final net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
-        event.enqueueWork(() -> {
-            // Ensure IngredientCycleManager class is loaded and initialized on client
-            dev.whisperlyric.ingamerecipeeditor.workspace.IngredientCycleManager.init();
-        });
+        // Ensure IngredientCycleManager class is loaded and initialized on client
+        event.enqueueWork(IngredientCycleManager::init);
     }
 }

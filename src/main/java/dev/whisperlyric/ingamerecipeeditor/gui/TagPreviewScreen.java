@@ -12,6 +12,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -45,13 +46,13 @@ public class TagPreviewScreen extends Screen {
     private final List<ItemStack> items = new ArrayList<>();
     private final List<Fluid> fluids = new ArrayList<>();
     
-    private int currentPage = 0;
-    private int maxPage = 0;
+    private int currentPage;
+    private int maxPage;
     private int leftPos, topPos;
     
     private boolean isCustomTag;
     private boolean isOriginalTag;
-    private boolean isDeleteConfirmMode = false;
+    private boolean isDeleteConfirmMode;
     
     public TagPreviewScreen(Screen parentScreen, ResourceLocation tagId, TagSelectorScreen.TagType tagType) {
         super(Component.literal("标签预览: #" + tagId));
@@ -63,6 +64,7 @@ public class TagPreviewScreen extends Screen {
         collectTagContents();
     }
     
+    @SuppressWarnings("deprecation")
     private boolean hasObjectsInRegistry(ResourceLocation tagId, TagSelectorScreen.TagType tagType) {
         if (tagType == TagSelectorScreen.TagType.ITEMS) {
             TagKey<Item> tag = TagKey.create(ForgeRegistries.ITEMS.getRegistryKey(), tagId);
@@ -75,7 +77,7 @@ public class TagPreviewScreen extends Screen {
         }
     }
     
-    @SuppressWarnings("null")
+    @SuppressWarnings({"null", "deprecation"})
     private void collectTagContents() {
         items.clear();
         fluids.clear();
@@ -279,7 +281,7 @@ public class TagPreviewScreen extends Screen {
                 
                 guiGraphics.fill(x, y, x + 16, y + 16, 0xFF555555);
                 
-                renderFluid(guiGraphics, fluid, x, y, 16, 16);
+                renderFluid(guiGraphics, fluid, x, y);
             }
         } else {
             int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, items.size());
@@ -301,7 +303,7 @@ public class TagPreviewScreen extends Screen {
     }
     
     @SuppressWarnings("null")
-    private void renderFluid(GuiGraphics guiGraphics, Fluid fluid, int x, int y, int width, int height) {
+    private void renderFluid(GuiGraphics guiGraphics, Fluid fluid, int x, int y) {
         if (fluid == null) return;
         
         FluidStack fluidStack = new FluidStack(fluid, 1000);
@@ -312,7 +314,7 @@ public class TagPreviewScreen extends Screen {
         
         @SuppressWarnings("null")
         net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = 
-            Minecraft.getInstance().getTextureAtlas(net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
+            Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(stillTexture);
         
         int tintColor = fluidExtensions.getTintColor(fluidStack);
         float r = ((tintColor >> 16) & 0xFF) / 255.0f;
@@ -322,7 +324,7 @@ public class TagPreviewScreen extends Screen {
         RenderSystem.setShaderColor(r, g, b, 1.0f);
         RenderSystem.setShaderTexture(0, sprite.atlasLocation());
         
-        guiGraphics.blit(x, y, 0, width, height, sprite);
+        guiGraphics.blit(x, y, 0, 16, 16, sprite);
         
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
     }

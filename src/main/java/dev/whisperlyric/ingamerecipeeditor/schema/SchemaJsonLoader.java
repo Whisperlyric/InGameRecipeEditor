@@ -12,6 +12,7 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -35,7 +36,7 @@ public class SchemaJsonLoader extends SimplePreparableReloadListener<Map<String,
     private JsonObject globalDefaults = new JsonObject();
     
     @Override
-    protected Map<String, JsonObject> prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
+    protected @NotNull Map<String, JsonObject> prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
         Map<String, JsonObject> schemas = new HashMap<>();
         
         // 1. 加载全局默认值
@@ -102,7 +103,7 @@ public class SchemaJsonLoader extends SimplePreparableReloadListener<Map<String,
     }
     
     @Override
-    protected void apply(Map<String, JsonObject> preparedSchemas, ResourceManager resourceManager, ProfilerFiller profiler) {
+    protected void apply(Map<String, JsonObject> preparedSchemas, @NotNull ResourceManager resourceManager, ProfilerFiller profiler) {
         this.loadedSchemas = preparedSchemas;
         
         // 注入ResourceManager到PatchRegistry，使其从资源包读取补丁文件
@@ -262,8 +263,7 @@ public class SchemaJsonLoader extends SimplePreparableReloadListener<Map<String,
         switch (role) {
             case INPUT, EXTRA -> builder.addInputSlot(slot);
             case OUTPUT -> builder.addOutputSlot(slot);
-            case RENDER_ONLY -> builder.addRenderOnlySlot(slot);
-            case CATALYST -> builder.addRenderOnlySlot(slot);
+            case RENDER_ONLY, CATALYST -> builder.addRenderOnlySlot(slot);
         }
     }
     

@@ -89,8 +89,7 @@ public class GeneratedRecipesManager {
     public static boolean isGeneratedRecipeId(String recipeId) {
         if (recipeId == null || recipeId.isEmpty()) return false;
         ResourceLocation id = ResourceLocation.tryParse(recipeId);
-        return id != null && GENERATED_NAMESPACE.equals(id.getNamespace())
-            && id.getPath() != null && id.getPath().startsWith(GENERATED_PATH_PREFIX);
+        return id != null && GENERATED_NAMESPACE.equals(id.getNamespace()) && id.getPath().startsWith(GENERATED_PATH_PREFIX);
     }
 
     /**

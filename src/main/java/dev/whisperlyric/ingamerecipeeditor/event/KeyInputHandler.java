@@ -31,11 +31,9 @@ public class KeyInputHandler {
         if (ModKeyMappings.OPEN_TAGS_OVERVIEW.consumeClick()) {
             mc.setScreen(new TagSelectorScreen(
                 null,
-                tagId -> {
-                    player.sendSystemMessage(
-                        net.minecraft.network.chat.Component.literal("§a已选择标签: §f#" + tagId)
-                    );
-                }
+                tagId -> player.sendSystemMessage(
+                    net.minecraft.network.chat.Component.literal("§a已选择标签: §f#" + tagId)
+                )
             ));
         }
     }

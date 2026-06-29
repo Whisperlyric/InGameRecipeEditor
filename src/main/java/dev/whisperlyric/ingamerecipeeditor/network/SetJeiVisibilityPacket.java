@@ -27,9 +27,7 @@ public class SetJeiVisibilityPacket {
 
     public static void handle(SetJeiVisibilityPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        context.enqueueWork(() -> {
-            JeiRecipeVisibility.setShowDisabledInJei(packet.showDisabled);
-        });
+        context.enqueueWork(() -> JeiRecipeVisibility.setShowDisabledInJei(packet.showDisabled));
         context.setPacketHandled(true);
     }
 }

@@ -17,7 +17,7 @@ final class Utils {
     }
 
     static Trie dictsToTrie(List<PinyinDict> pinyinDicts) {
-        Set<String> all = new TreeSet<String>();
+        Set<String> all = new TreeSet<>();
 
         Trie.TrieBuilder builder = Trie.builder();
 
@@ -27,7 +27,7 @@ final class Utils {
                     all.addAll(dict.words());
                 }
             }
-            if (all.size() > 0) {
+            if (!all.isEmpty()) {
                 for (String key : all) {
                     builder.addKeyword(key);
                 }

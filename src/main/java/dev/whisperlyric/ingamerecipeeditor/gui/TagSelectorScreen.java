@@ -73,9 +73,9 @@ public class TagSelectorScreen extends Screen {
     private final List<TagEntry> filteredTags = new ArrayList<>();
     private PinyinSearchHelper<TagEntry> searchHelper;
     
-    private TagType currentTagType = TagType.ALL;
-    private int currentPage = 0;
-    private int maxPage = 0;
+    private TagType currentTagType;
+    private int currentPage;
+    private int maxPage;
     private int leftPos, topPos;
     
 
@@ -161,7 +161,7 @@ public class TagSelectorScreen extends Screen {
         searchHelper.buildCache(allTags);
     }
     
-    @SuppressWarnings("null")
+    @SuppressWarnings({"null", "deprecation"})
     private void collectItemTags(Set<ResourceLocation> processedTags) {
         for (Item item : ForgeRegistries.ITEMS.getValues()) {
             if (item == net.minecraft.world.item.Items.AIR) continue;
@@ -195,7 +195,7 @@ public class TagSelectorScreen extends Screen {
         }
     }
     
-    @SuppressWarnings("null")
+    @SuppressWarnings({"null", "deprecation"})
     private void collectBlockTags(Set<ResourceLocation> processedTags) {
         for (Block block : ForgeRegistries.BLOCKS.getValues()) {
             if (block == net.minecraft.world.level.block.Blocks.AIR) continue;
@@ -229,7 +229,7 @@ public class TagSelectorScreen extends Screen {
         }
     }
     
-    @SuppressWarnings("null")
+    @SuppressWarnings({"null", "deprecation"})
     private void collectFluidTags(Set<ResourceLocation> processedTags) {
         for (Fluid fluid : ForgeRegistries.FLUIDS.getValues()) {
             if (fluid == net.minecraft.world.level.material.Fluids.EMPTY) continue;
@@ -537,7 +537,7 @@ public class TagSelectorScreen extends Screen {
             
             RenderSystem.enableDepthTest();
             if (tag.representativeFluid != null) {
-                renderFluid(guiGraphics, tag.representativeFluid, leftPos + 12, rowY + 2, 16, 16);
+                renderFluid(guiGraphics, tag.representativeFluid, leftPos + 12, rowY + 2);
             } else {
                 guiGraphics.renderItem(tag.representativeItem, leftPos + 12, rowY + 2);
             }
@@ -555,7 +555,7 @@ public class TagSelectorScreen extends Screen {
     }
     
     @SuppressWarnings("null")
-    private void renderFluid(GuiGraphics guiGraphics, Fluid fluid, int x, int y, int width, int height) {
+    private void renderFluid(GuiGraphics guiGraphics, Fluid fluid, int x, int y) {
         if (fluid == null) return;
         
         FluidStack fluidStack = new FluidStack(fluid, 1000);
@@ -588,11 +588,11 @@ public class TagSelectorScreen extends Screen {
             int textureWidth = 16;
             int textureHeight = 16;
             
-            int xTileCount = width / textureWidth;
-            int xRemainder = width - (xTileCount * textureWidth);
-            int yTileCount = height / textureHeight;
-            int yRemainder = height - (yTileCount * textureHeight);
-            int yStart = y + height;
+            int xTileCount = 16 / textureWidth;
+            int xRemainder = 0;
+            int yTileCount = 16 / textureHeight;
+            int yRemainder = 0;
+            int yStart = y + 16;
             
             float uMin = sprite.getU0();
             float uMax = sprite.getU1();
@@ -613,7 +613,7 @@ public class TagSelectorScreen extends Screen {
                     break;
                 }
                 int tileX = x + (xTile * textureWidth);
-                int maskRight = textureWidth - tileWidth;
+                int maskRight = 0;
                 int shiftedX = tileX + textureWidth - maskRight;
                 float uLocalDif = uDif * maskRight / textureWidth;
                 float uLocalMin = uMin;
@@ -625,7 +625,7 @@ public class TagSelectorScreen extends Screen {
                         break;
                     }
                     int tileY = yStart - ((yTile + 1) * textureHeight);
-                    int maskTop = textureHeight - tileHeight;
+                    int maskTop = 0;
                     float vLocalDif = vDif * maskTop / textureHeight;
                     float vLocalMin = vMin + vLocalDif;
                     float vLocalMax = vMax;
@@ -642,7 +642,7 @@ public class TagSelectorScreen extends Screen {
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         } else {
             RenderSystem.setShaderColor(r, g, b, 1.0f);
-            guiGraphics.fill(x, y, x + width, y + height, 0xFFFFFFFF);
+            guiGraphics.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
     }
@@ -711,7 +711,7 @@ public class TagSelectorScreen extends Screen {
                             minecraft.setScreen(new TagPreviewScreen(this, tag.tagId, tag.tagType));
                         }
                         return true;
-                    } else if (button == 1) {
+                    } else {
                         // 右键：选择并返回（通过回调通知）
                         if (onTagSelected != null) {
                             try {

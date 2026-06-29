@@ -7,6 +7,7 @@ import dev.whisperlyric.ingamerecipeeditor.workspace.RecipeWorkspaceScreen;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.NotNull;
 
 //JEI插件 - 注册工作区界面的JEI支持
 @mezz.jei.api.JeiPlugin
@@ -15,7 +16,7 @@ public class JeiPlugin implements IModPlugin {
     private static final ResourceLocation PLUGIN_ID = ResourceLocation.parse("ingamerecipeeditor:jei_plugin");
     
     @Override
-    public ResourceLocation getPluginUid() {
+    public @NotNull ResourceLocation getPluginUid() {
         return PLUGIN_ID;
     }
     

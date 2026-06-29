@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.TagEntry;
 import net.minecraft.tags.TagLoader;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,7 +34,7 @@ public class TagLoaderMixin {
     @Unique
     private static final Gson ingamerecipeeditor$GSON = new Gson();
     @Unique
-    private static final String ingamerecipeeditor$CUSTOM_TAGS_DIR = getCustomTagsDir();
+    private static final String ingamerecipeeditor$CUSTOM_TAGS_DIR = registerhelper$getCustomTagsDir();
 
     @Inject(
             method = "load",
@@ -66,7 +67,7 @@ public class TagLoaderMixin {
     }
 
     @Unique
-    private String ingamerecipeeditor$extractTagType() {
+    private @Nullable String ingamerecipeeditor$extractTagType() {
         if (directory == null || !directory.startsWith("tags/")) return null;
         return directory.substring("tags/".length());
     }
@@ -121,7 +122,7 @@ public class TagLoaderMixin {
                 }
 
             } catch (Exception e) {
-                ingamerecipeeditor$LOGGER.error("加载标签文件失败: " + tagFile.getPath(), e);
+                ingamerecipeeditor$LOGGER.error("加载标签文件失败: {}", tagFile.getPath(), e);
             }
         }
     }
@@ -139,12 +140,11 @@ public class TagLoaderMixin {
                 } else if (element.isJsonObject()) {
                     JsonObject entryObj = element.getAsJsonObject();
                     String value = entryObj.get("id").getAsString();
-                    boolean required = entryObj.has("required") ?
-                            entryObj.get("required").getAsBoolean() : false;
+                    boolean required = entryObj.has("required") && entryObj.get("required").getAsBoolean();
                     entries.add(ingamerecipeeditor$createTagEntry(value, source, required));
                 }
             } catch (Exception e) {
-                ingamerecipeeditor$LOGGER.error("解析标签条目失败: " + element, e);
+                ingamerecipeeditor$LOGGER.error("解析标签条目失败: {}", element, e);
             }
         }
 
@@ -167,7 +167,7 @@ public class TagLoaderMixin {
     }
 
     @Unique
-    private static String getCustomTagsDir() {
+    private static String registerhelper$getCustomTagsDir() {
         return net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                 .resolve("ingamerecipeeditor/custom_tags")
                 .toAbsolutePath()

@@ -114,9 +114,9 @@ public class PropertyDefinition {
         private String jsonField;
         private PropertyType type;
         private Object defaultValue;
-        private boolean required = false;
+        private boolean required;
         private String displayName;
-        private int min = 0;
+        private int min;
         private int max = Integer.MAX_VALUE;
         
         public Builder id(String id) { this.id = id; return this; }

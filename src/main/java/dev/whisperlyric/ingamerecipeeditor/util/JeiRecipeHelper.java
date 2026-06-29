@@ -10,6 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -31,14 +32,14 @@ public class JeiRecipeHelper {
      * 对于其他类型，使用getRegistryName
      */
     @SuppressWarnings("unchecked")
-    public static String getRecipeId(IRecipeLayoutDrawable<?> recipeLayout) {
+    public static @Nullable String getRecipeId(IRecipeLayoutDrawable<?> recipeLayout) {
         Object recipe = recipeLayout.getRecipe();
         IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
 
         // 如果是Minecraft Recipe，使用recipe.getId()
         if (recipe instanceof Recipe<?> mcRecipe) {
             ResourceLocation id = mcRecipe.getId();
-            return id != null ? id.toString() : null;
+            return id.toString();
         }
 
         // 其他类型使用JEI的getRegistryName
@@ -74,7 +75,7 @@ public class JeiRecipeHelper {
         // 其他类型使用JEI的RecipeType UID
         IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
         ResourceLocation uid = category.getRecipeType().getUid();
-        return uid != null ? uid.toString() : null;
+        return uid.toString();
     }
 
     /**
@@ -145,7 +146,7 @@ public class JeiRecipeHelper {
     /**
      * 在目录中查找配方文件
      */
-    private static Path findRecipeFile(Path basePath, String namespace, String recipePath) {
+    private static @Nullable Path findRecipeFile(Path basePath, String namespace, String recipePath) {
         // 尝试namespace目录
         Path namespaceDir = basePath.resolve(namespace);
         if (Files.exists(namespaceDir)) {
@@ -165,13 +166,13 @@ public class JeiRecipeHelper {
     /**
      * 递归搜索配方文件
      */
-    private static Path searchRecursively(Path dir, String targetPath) {
+    private static @Nullable Path searchRecursively(Path dir, String targetPath) {
         if (!Files.isDirectory(dir)) {
             return null;
         }
 
-        try {
-            for (Path file : Files.list(dir).toList()) {
+        try (var stream = Files.list(dir)) {
+            for (Path file : stream.toList()) {
                 if (Files.isDirectory(file)) {
                     Path found = searchRecursively(file, targetPath);
                     if (found != null) {

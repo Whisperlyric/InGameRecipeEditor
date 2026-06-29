@@ -25,7 +25,6 @@ public class RecipeWorkspaceGuiProperties implements IGuiProperties {
         this.guiTop = screen.getLayoutY() - 10;
         
         // 获取配方布局的大小
-        @SuppressWarnings("removal")
         var layoutRect = screen.getRecipeLayout().getRect();
         this.guiXSize = layoutRect.getWidth() + 20;
         this.guiYSize = layoutRect.getHeight() + 20 + 20 + 10;

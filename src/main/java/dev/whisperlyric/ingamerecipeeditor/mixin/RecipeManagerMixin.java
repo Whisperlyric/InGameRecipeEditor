@@ -11,6 +11,7 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.item.crafting.RecipeManager;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -44,16 +45,16 @@ public class RecipeManagerMixin {
             GeneratedRecipesManager.serverInit();
             
             // 缓存所有配方JSON（与JEIRecipeManager参考项目一致）
-            cacheAllRecipeJson(originalRecipes);
+            registerhelper$cacheAllRecipeJson(originalRecipes);
             
             // 1. 从 config 目录加载自定义配方并注入
-            loadAndInjectCustomRecipes(originalRecipes);
+            registerhelper$loadAndInjectCustomRecipes(originalRecipes);
             
             // 2. 移除被禁用的配方
-            applyRecipeDeletions(originalRecipes);
+            registerhelper$applyRecipeDeletions(originalRecipes);
             
             // 3. 处理待删除的生成配方
-            applyPendingGeneratedRecipeDeletes(originalRecipes);
+            registerhelper$applyPendingGeneratedRecipeDeletes(originalRecipes);
             
         } catch (Exception e) {
             InGameRecipeEditor.LOGGER.error("应用配方规则失败", e);
@@ -65,7 +66,8 @@ public class RecipeManagerMixin {
      * 与JEIRecipeManager参考项目一致，在RecipeManager.apply()时缓存所有配方原始JSON
      * 这样编辑任意配方时都能获取到原始JSON
      */
-    private void cacheAllRecipeJson(Map<ResourceLocation, JsonElement> originalRecipes) {
+    @Unique
+    private void registerhelper$cacheAllRecipeJson(Map<ResourceLocation, JsonElement> originalRecipes) {
         Map<String, String> allRecipeJsonMap = new HashMap<>();
         for (var entry : originalRecipes.entrySet()) {
             allRecipeJsonMap.put(entry.getKey().toString(), entry.getValue().toString());
@@ -76,7 +78,8 @@ public class RecipeManagerMixin {
     /**
      * 从 config 目录加载自定义配方并注入到配方映射中
      */
-    private void loadAndInjectCustomRecipes(Map<ResourceLocation, JsonElement> originalRecipes) {
+    @Unique
+    private void registerhelper$loadAndInjectCustomRecipes(Map<ResourceLocation, JsonElement> originalRecipes) {
         Map<ResourceLocation, JsonElement> customRecipes = CustomRecipesManager.loadCustomRecipes();
         
         if (customRecipes.isEmpty()) {
@@ -116,7 +119,8 @@ public class RecipeManagerMixin {
     /**
      * 移除被禁用的配方
      */
-    private void applyRecipeDeletions(Map<ResourceLocation, JsonElement> originalRecipes) {
+    @Unique
+    private void registerhelper$applyRecipeDeletions(Map<ResourceLocation, JsonElement> originalRecipes) {
         Set<String> disabledRecipeIds = DisabledRecipesManager.getDisabledRecipes();
         
         if (disabledRecipeIds.isEmpty()) {
@@ -151,7 +155,8 @@ public class RecipeManagerMixin {
     /**
      * 处理待删除的生成配方
      */
-    private void applyPendingGeneratedRecipeDeletes(Map<ResourceLocation, JsonElement> originalRecipes) {
+    @Unique
+    private void registerhelper$applyPendingGeneratedRecipeDeletes(Map<ResourceLocation, JsonElement> originalRecipes) {
         Set<String> pendingDeletes = GeneratedRecipesManager.getPendingGeneratedRecipeDeletes();
         
         if (pendingDeletes.isEmpty()) {

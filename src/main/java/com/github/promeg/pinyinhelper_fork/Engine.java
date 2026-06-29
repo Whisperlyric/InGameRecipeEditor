@@ -24,7 +24,7 @@ final class Engine {
 
     static String toPinyin(final String inputStr, final Trie trie, final  List<PinyinDict> pinyinDictList,
             final String separator, final SegmentationSelector selector) {
-        if (inputStr == null || inputStr.length() == 0) {
+        if (inputStr == null || inputStr.isEmpty()) {
             return inputStr;
         }
 

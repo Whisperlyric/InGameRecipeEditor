@@ -16,30 +16,30 @@ import mekanism.api.chemical.slurry.Slurry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraftforge.fml.ModList;
-import org.jetbrains.annotations.NotNull;
+import net.minecraftforge.registries.IForgeRegistry;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
- * 化学品选择界面 - 用于选择 Mekanism 化学品（气体/浆液/颜料/浸染类型）
- * 移植自 src-old 的 ChemicalGridSelectionScreen，并适配当前模组的视觉风格
+ * 化学品选择界面 - 用于选择 Mekanism 化学品（气体/浆液/颜料/灌注类型）
+ * 继承 AbstractGridSelectorScreen，复用网格渲染和分页逻辑
  */
-@OnlyIn(Dist.CLIENT)
-public class ChemicalSelectorScreen extends Screen {
+public class ChemicalSelectorScreen extends AbstractGridSelectorScreen<ChemicalSelectorScreen.ChemicalEntry> {
+
+    // 化学品特定颜色
+    private static final int C_CHEM_SLOT_HOVER = 0xFF351D55;
+    private static final int C_CHEM_HOVER_OVERLAY = 0x30AA88FF;
 
     /**
      * 化学品类型枚举，对应 Mekanism 的化学品注册表
@@ -48,7 +48,7 @@ public class ChemicalSelectorScreen extends Screen {
         GAS("气体"),
         SLURRY("浆液"),
         PIGMENT("颜料"),
-        INFUSE_TYPE("浸染类型"),
+        INFUSE_TYPE("灌注类型"),
         ANY("所有化学品");
 
         private final String displayName;
@@ -61,39 +61,6 @@ public class ChemicalSelectorScreen extends Screen {
             return displayName;
         }
     }
-
-    private static final int SLOT_SIZE = 18;
-    private static final int HEADER_HEIGHT = 96;
-    private static final int FOOTER_HEIGHT = 28;
-
-    private int guiWidth, guiHeight;
-    private int chemicalsPerRow, chemicalsPerPage;
-
-    private final Screen parentScreen;
-    private final Consumer<String> onChemicalSelected;
-    private final ChemicalType chemicalType;
-
-    private EditBox searchBox;
-    private Button prevPageButton, nextPageButton, cancelButton;
-
-    private final List<ChemicalEntry> allChemicals = new ArrayList<>();
-    private final List<ChemicalEntry> filteredChemicals = new ArrayList<>();
-    private final PinyinSearchHelper<ChemicalEntry> searchHelper;
-
-    private int currentPage = 0;
-    private int maxPage = 0;
-    private int leftPos, topPos;
-
-    private static final int C_BG_OUTER    = 0xFF0F0F0F;
-    private static final int C_BG_MAIN     = 0xFF252525;
-    private static final int C_TITLE_BAR   = 0xFF3A1A6A;
-    private static final int C_PANEL       = 0xFF1A1A1A;
-    private static final int C_SLOT_EMPTY  = 0xFF141414;
-    private static final int C_SLOT_HOVER  = 0xFF351D55;
-    private static final int C_DIVIDER     = 0xFF333333;
-    private static final int C_FOOTER      = 0xFF1E1E1E;
-    private static final int C_TEXT        = 0xFFE0E0E0;
-    private static final int C_TEXT_DIM    = 0xFF888888;
 
     /**
      * 化学品条目
@@ -122,238 +89,109 @@ public class ChemicalSelectorScreen extends Screen {
         }
     }
 
-    public ChemicalSelectorScreen(Screen parentScreen, Consumer<String> onChemicalSelected, ChemicalType chemicalType) {
-        super(Component.literal(chemicalType.getDisplayName() + "选择"));
-        this.parentScreen = parentScreen;
-        this.onChemicalSelected = onChemicalSelected;
+    private final List<ChemicalEntry> allChemicals = new ArrayList<>();
+    private final ChemicalType chemicalType;
+    private final PinyinSearchHelper<ChemicalEntry> searchHelper;
+    private final Consumer<String> onChemicalIdSelected;
+
+    public ChemicalSelectorScreen(net.minecraft.client.gui.screens.Screen parentScreen, Consumer<String> onChemicalSelected, ChemicalType chemicalType) {
+        super(parentScreen, entry -> onChemicalSelected.accept(entry.id.toString()), Component.literal(chemicalType.getDisplayName() + "选择"));
         this.chemicalType = chemicalType;
-        this.searchHelper = new PinyinSearchHelper<>(
-                ChemicalEntry::getDisplayName,
-                ChemicalEntry::getIdString
-        );
-        this.chemicalsPerRow = 9;
-        this.chemicalsPerPage = 54;
-        collectAllChemicals();
+        this.onChemicalIdSelected = onChemicalSelected;
+        this.searchHelper = new PinyinSearchHelper<>(ChemicalEntry::getDisplayName, ChemicalEntry::getIdString);
+        collectAllItems();
         searchHelper.buildCache(allChemicals);
-        updateFilteredChemicals("");
+        updateFilteredItems("");
     }
 
-    private void collectAllChemicals() {
+    public Button getCancelButton() {
+        return cancelButton;
+    }
+
+    // ========== 抽象方法实现 ==========
+
+    @Override
+    protected String getSearchHint() {
+        return "输入化学品名或ID...";
+    }
+
+    @Override
+    protected void collectAllItems() {
         allChemicals.clear();
         if (!ModList.get().isLoaded("mekanism")) {
             return;
         }
         try {
             switch (chemicalType) {
-                case GAS -> loadGases();
-                case SLURRY -> loadSlurries();
-                case PIGMENT -> loadPigments();
-                case INFUSE_TYPE -> loadInfuseTypes();
-                case ANY -> loadAllChemicals();
+                case GAS -> loadChemicals(MekanismAPI.gasRegistry(), ChemicalType.GAS, Gas::getTint, Gas::getIcon);
+                case SLURRY -> loadChemicals(MekanismAPI.slurryRegistry(), ChemicalType.SLURRY, Slurry::getTint, Slurry::getIcon);
+                case PIGMENT -> loadChemicals(MekanismAPI.pigmentRegistry(), ChemicalType.PIGMENT, Pigment::getTint, Pigment::getIcon);
+                case INFUSE_TYPE -> loadChemicals(MekanismAPI.infuseTypeRegistry(), ChemicalType.INFUSE_TYPE, InfuseType::getTint, InfuseType::getIcon);
+                case ANY -> {
+                    loadChemicals(MekanismAPI.gasRegistry(), ChemicalType.GAS, Gas::getTint, Gas::getIcon);
+                    loadChemicals(MekanismAPI.slurryRegistry(), ChemicalType.SLURRY, Slurry::getTint, Slurry::getIcon);
+                    loadChemicals(MekanismAPI.pigmentRegistry(), ChemicalType.PIGMENT, Pigment::getTint, Pigment::getIcon);
+                    loadChemicals(MekanismAPI.infuseTypeRegistry(), ChemicalType.INFUSE_TYPE, InfuseType::getTint, InfuseType::getIcon);
+                }
             }
         } catch (Exception ignored) {
-            // 加载失败时保持空列表
         }
-        allChemicals.sort((a, b) -> a.getIdString().compareTo(b.getIdString()));
+        allChemicals.sort(Comparator.comparing(ChemicalEntry::getIdString));
     }
 
-    private void loadGases() {
-        for (Gas gas : MekanismAPI.gasRegistry().getValues()) {
-            if (!gas.isEmptyType()) {
-                ResourceLocation id = MekanismAPI.gasRegistry().getKey(gas);
+    private <CHEM extends Chemical<CHEM>> void loadChemicals(
+            IForgeRegistry<CHEM> registry,
+            ChemicalType type,
+            Function<CHEM, Integer> tintGetter,
+            Function<CHEM, ResourceLocation> iconGetter) {
+        for (CHEM chemical : registry.getValues()) {
+            if (!chemical.isEmptyType()) {
+                ResourceLocation id = registry.getKey(chemical);
                 if (id != null) {
-                    String name = safeGetTextComponent(gas);
-                    allChemicals.add(new ChemicalEntry(id, ChemicalType.GAS, gas.getTint(), gas.getIcon(), name));
+                    String name = safeGetTextComponent(chemical);
+                    allChemicals.add(new ChemicalEntry(id, type, tintGetter.apply(chemical), iconGetter.apply(chemical), name));
                 }
             }
         }
-    }
-
-    private void loadSlurries() {
-        for (Slurry slurry : MekanismAPI.slurryRegistry().getValues()) {
-            if (!slurry.isEmptyType()) {
-                ResourceLocation id = MekanismAPI.slurryRegistry().getKey(slurry);
-                if (id != null) {
-                    String name = safeGetTextComponent(slurry);
-                    allChemicals.add(new ChemicalEntry(id, ChemicalType.SLURRY, slurry.getTint(), slurry.getIcon(), name));
-                }
-            }
-        }
-    }
-
-    private void loadPigments() {
-        for (Pigment pigment : MekanismAPI.pigmentRegistry().getValues()) {
-            if (!pigment.isEmptyType()) {
-                ResourceLocation id = MekanismAPI.pigmentRegistry().getKey(pigment);
-                if (id != null) {
-                    String name = safeGetTextComponent(pigment);
-                    allChemicals.add(new ChemicalEntry(id, ChemicalType.PIGMENT, pigment.getTint(), pigment.getIcon(), name));
-                }
-            }
-        }
-    }
-
-    private void loadInfuseTypes() {
-        for (InfuseType infuseType : MekanismAPI.infuseTypeRegistry().getValues()) {
-            if (!infuseType.isEmptyType()) {
-                ResourceLocation id = MekanismAPI.infuseTypeRegistry().getKey(infuseType);
-                if (id != null) {
-                    String name = safeGetTextComponent(infuseType);
-                    allChemicals.add(new ChemicalEntry(id, ChemicalType.INFUSE_TYPE, infuseType.getTint(), infuseType.getIcon(), name));
-                }
-            }
-        }
-    }
-
-    private void loadAllChemicals() {
-        loadGases();
-        loadSlurries();
-        loadPigments();
-        loadInfuseTypes();
     }
 
     private String safeGetTextComponent(Chemical<?> chemical) {
         try {
             Component c = chemical.getTextComponent();
-            if (c != null) {
-                return c.getString();
-            }
+            return c.getString();
         } catch (Exception ignored) {
         }
         ResourceLocation rl = chemical.getRegistryName();
-        return rl != null ? rl.getPath() : "unknown";
+        return rl.getPath();
     }
 
-    private void updateFilteredChemicals(String text) {
-        filteredChemicals.clear();
-        if (text.isEmpty()) {
-            filteredChemicals.addAll(allChemicals);
+    @Override
+    protected void updateFilteredItems(String searchText) {
+        filteredItems.clear();
+        if (searchText.isEmpty()) {
+            filteredItems.addAll(allChemicals);
         } else {
-            String lowerSearch = text.toLowerCase();
+            String lowerSearch = searchText.toLowerCase();
             for (ChemicalEntry entry : allChemicals) {
                 if (entry.getIdString().toLowerCase().contains(lowerSearch)) {
-                    filteredChemicals.add(entry);
+                    filteredItems.add(entry);
                     continue;
                 }
                 if (entry.getDisplayName().toLowerCase().contains(lowerSearch)) {
-                    filteredChemicals.add(entry);
+                    filteredItems.add(entry);
                     continue;
                 }
-                if (searchHelper.matches(entry, text)) {
-                    filteredChemicals.add(entry);
+                if (searchHelper.matches(entry, searchText)) {
+                    filteredItems.add(entry);
                 }
             }
         }
-        maxPage = chemicalsPerPage > 0 ? Math.max(0, (filteredChemicals.size() - 1) / chemicalsPerPage) : 0;
-        currentPage = Math.min(currentPage, maxPage);
+        calculateMaxPage();
         updateButtons();
     }
 
     @Override
-    protected void init() {
-        int maxW = Math.min(this.width - 30, 400);
-        int maxH = Math.min(this.height - 50, 400);
-        maxW = Math.max(maxW, 200);
-        maxH = Math.max(maxH, 200);
-
-        this.chemicalsPerRow  = Math.max(4, (maxW - 20) / SLOT_SIZE);
-        int gridRows      = Math.max(3, (maxH - HEADER_HEIGHT - FOOTER_HEIGHT) / SLOT_SIZE);
-        this.chemicalsPerPage = this.chemicalsPerRow * gridRows;
-        this.guiWidth     = 20 + this.chemicalsPerRow * SLOT_SIZE;
-        this.guiHeight    = HEADER_HEIGHT + gridRows * SLOT_SIZE + FOOTER_HEIGHT;
-
-        this.leftPos = (this.width  - guiWidth)  / 2;
-        this.topPos  = (this.height - guiHeight) / 2;
-
-        updateFilteredChemicals(searchBox != null ? searchBox.getValue() : "");
-
-        searchBox = new EditBox(this.font, leftPos + 10, topPos + 6, guiWidth - 20, 18, Component.literal("搜索"));
-        searchBox.setHint(Component.literal("输入化学品名或ID..."));
-        searchBox.setResponder(this::updateFilteredChemicals);
-        addWidget(searchBox);
-
-        prevPageButton = addRenderableWidget(Button.builder(Component.literal("◀"), b -> previousPage())
-                .bounds(leftPos + 4, topPos + guiHeight - 22, 24, 18).build());
-        nextPageButton = addRenderableWidget(Button.builder(Component.literal("▶"), b -> nextPage())
-                .bounds(leftPos + guiWidth - 28, topPos + guiHeight - 22, 24, 18).build());
-        cancelButton = addRenderableWidget(Button.builder(Component.literal("取消"), b -> onClose())
-                .bounds(leftPos + (guiWidth - 50) / 2, topPos + guiHeight - 22, 50, 18).build());
-
-        updateButtons();
-    }
-
-    private void updateButtons() {
-        if (prevPageButton != null) prevPageButton.active = currentPage > 0;
-        if (nextPageButton != null) nextPageButton.active = currentPage < maxPage;
-    }
-
-    private void previousPage() { if (currentPage > 0) { currentPage--; updateButtons(); } }
-    private void nextPage()     { if (currentPage < maxPage) { currentPage++; updateButtons(); } }
-
-    @Override
-    public void render(@NotNull GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
-
-        g.fill(leftPos - 1, topPos - 1, leftPos + guiWidth + 1, topPos + guiHeight + 1, C_BG_OUTER);
-        g.fill(leftPos, topPos, leftPos + guiWidth, topPos + guiHeight, C_BG_MAIN);
-
-        g.fill(leftPos, topPos, leftPos + guiWidth, topPos + HEADER_HEIGHT - 2, 0xFF1E1E1E);
-        g.fill(leftPos + 5, topPos + HEADER_HEIGHT - 3, leftPos + guiWidth - 5, topPos + HEADER_HEIGHT - 2, C_DIVIDER);
-
-        int gridTop = topPos + HEADER_HEIGHT;
-        int gridBot = topPos + guiHeight - FOOTER_HEIGHT;
-        g.fill(leftPos, gridTop, leftPos + guiWidth, gridBot, C_PANEL);
-
-        g.fill(leftPos, gridBot, leftPos + guiWidth, topPos + guiHeight, C_FOOTER);
-        g.fill(leftPos + 5, gridBot, leftPos + guiWidth - 5, gridBot + 1, C_DIVIDER);
-
-        renderChemicalGrid(g, mouseX, mouseY);
-        searchBox.render(g, mouseX, mouseY, partialTick);
-        super.render(g, mouseX, mouseY, partialTick);
-
-        String pageInfo = String.format("§7第 %d / %d 页  (%d 个)", currentPage + 1, maxPage + 1, filteredChemicals.size());
-        g.drawCenteredString(this.font, pageInfo, leftPos + guiWidth / 2, topPos + HEADER_HEIGHT - 14, C_TEXT_DIM);
-
-        renderChemicalTooltip(g, mouseX, mouseY);
-    }
-
-    private void renderChemicalGrid(GuiGraphics g, int mouseX, int mouseY) {
-        int startIdx    = currentPage * chemicalsPerPage;
-        int endIdx      = Math.min(startIdx + chemicalsPerPage, filteredChemicals.size());
-        int gridStartX  = leftPos + 10;
-        int gridStartY  = topPos + HEADER_HEIGHT + 1;
-        int totalSlots  = chemicalsPerPage;
-
-        for (int i = 0; i < totalSlots; i++) {
-            int sx = gridStartX + (i % chemicalsPerRow) * SLOT_SIZE;
-            int sy = gridStartY + (i / chemicalsPerRow) * SLOT_SIZE;
-            g.fill(sx, sy, sx + SLOT_SIZE, sy + SLOT_SIZE, C_SLOT_EMPTY);
-            g.fill(sx, sy, sx + SLOT_SIZE, sy + 1, 0xFF0A0A0A);
-            g.fill(sx, sy, sx + 1, sy + SLOT_SIZE, 0xFF0A0A0A);
-            g.fill(sx, sy + SLOT_SIZE - 1, sx + SLOT_SIZE, sy + SLOT_SIZE, 0xFF3A3A3A);
-            g.fill(sx + SLOT_SIZE - 1, sy, sx + SLOT_SIZE, sy + SLOT_SIZE, 0xFF3A3A3A);
-        }
-
-        for (int i = startIdx; i < endIdx; i++) {
-            int rel = i - startIdx;
-            int sx  = gridStartX + (rel % chemicalsPerRow) * SLOT_SIZE;
-            int sy  = gridStartY + (rel / chemicalsPerRow) * SLOT_SIZE;
-            boolean hover = mouseX >= sx && mouseX < sx + SLOT_SIZE && mouseY >= sy && mouseY < sy + SLOT_SIZE;
-
-            if (hover) {
-                g.fill(sx + 1, sy + 1, sx + SLOT_SIZE - 1, sy + SLOT_SIZE - 1, C_SLOT_HOVER);
-                g.fill(sx + 1, sy + 1, sx + SLOT_SIZE - 1, sy + SLOT_SIZE - 1, 0x30AA88FF);
-            }
-
-            ChemicalEntry entry = filteredChemicals.get(i);
-            renderChemicalSlot(g, entry, sx + 1, sy + 1, 16, 16);
-        }
-    }
-
-    /**
-     * 渲染单个化学品槽位（颜色 + 纹理）
-     */
-    private void renderChemicalSlot(GuiGraphics g, ChemicalEntry entry, int x, int y, int width, int height) {
+    protected void renderItem(GuiGraphics g, ChemicalEntry entry, int x, int y) {
         int color = entry.color;
         if (color == -1) {
             color = switch (entry.type) {
@@ -373,41 +211,64 @@ public class ChemicalSelectorScreen extends Screen {
             try {
                 RenderSystem.setShaderColor(r, gr, b, 1.0f);
                 RenderSystem.setShader(GameRenderer::getPositionTexShader);
-                TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(entry.icon);
+                TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(entry.icon);
                 if (sprite != null && !sprite.contents().name().toString().contains("missingno")) {
                     RenderSystem.setShaderTexture(0, sprite.atlasLocation());
-                    renderTiledSprite(g, x, y, width, height, sprite);
+                    renderTiledSprite(g, x, y, sprite);
                     RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
                     return;
                 }
             } catch (Exception ignored) {
-                // 纹理渲染失败，回退到颜色填充
             }
         }
 
-        // 无纹理或纹理缺失：使用颜色填充
         RenderSystem.setShaderColor(r, gr, b, 1.0f);
-        g.fill(x, y, x + width, y + height, 0xFFFFFFFF);
+        g.fill(x, y, x + 16, y + 16, 0xFFFFFFFF);
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    /**
-     * 平铺渲染纹理精灵（与 ChemicalSlotRenderer 一致的实现）
-     */
-    private void renderTiledSprite(GuiGraphics guiGraphics, int xPosition, int yPosition, int desiredWidth, int desiredHeight, TextureAtlasSprite sprite) {
-        int textureSize = 16;
-        int xTileCount = desiredWidth / textureSize;
-        int xRemainder = desiredWidth - (xTileCount * textureSize);
-        int yTileCount = desiredHeight / textureSize;
-        int yRemainder = desiredHeight - (yTileCount * textureSize);
-        int yStart = yPosition + desiredHeight;
+    @Override
+    protected List<Component> getItemTooltip(ChemicalEntry entry) {
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(Component.literal(entry.getDisplayName()));
+        tooltip.add(Component.literal("§7" + entry.id));
+        tooltip.add(Component.literal("§8类型: " + entry.type.getDisplayName()));
+        return tooltip;
+    }
 
-        float uMin = sprite.getU0();
+    @Override
+    protected void onItemSelected(ChemicalEntry entry) {
+        onChemicalIdSelected.accept(entry.id.toString());
+    }
+
+    // ========== 覆盖的颜色方法 ==========
+
+    @Override
+    protected int getSlotHoverColor() {
+        return C_CHEM_SLOT_HOVER;
+    }
+
+    @Override
+    protected int getSlotHoverOverlayColor() {
+        return C_CHEM_HOVER_OVERLAY;
+    }
+
+    // ========== 私有辅助方法 ==========
+
+    private void renderTiledSprite(GuiGraphics guiGraphics, int xPosition, int yPosition, TextureAtlasSprite sprite) {
+        int textureSize = 16;
+        int xTileCount = 16 / textureSize;
+        int xRemainder = 0;
+        int yTileCount = 16 / textureSize;
+        int yRemainder = 0;
+        int yStart = yPosition + 16;
+
+        float uLocalMin = sprite.getU0();
         float uMax = sprite.getU1();
         float vMin = sprite.getV0();
-        float vMax = sprite.getV1();
-        float uDif = uMax - uMin;
-        float vDif = vMax - vMin;
+        float vLocalMax = sprite.getV1();
+        float uDif = uMax - uLocalMin;
+        float vDif = vLocalMax - vMin;
 
         RenderSystem.enableBlend();
         BufferBuilder vertexBuffer = Tesselator.getInstance().getBuilder();
@@ -418,20 +279,18 @@ public class ChemicalSelectorScreen extends Screen {
             int tileWidth = (xTile == xTileCount) ? xRemainder : textureSize;
             if (tileWidth == 0) break;
             int tileX = xPosition + (xTile * textureSize);
-            int maskRight = textureSize - tileWidth;
+            int maskRight = 0;
             int shiftedX = tileX + textureSize - maskRight;
             float uLocalDif = uDif * maskRight / textureSize;
-            float uLocalMin = uMin;
             float uLocalMax = uMax - uLocalDif;
 
             for (int yTile = 0; yTile <= yTileCount; yTile++) {
                 int tileHeight = (yTile == yTileCount) ? yRemainder : textureSize;
                 if (tileHeight == 0) break;
                 int tileY = yStart - ((yTile + 1) * textureSize);
-                int maskTop = textureSize - tileHeight;
+                int maskTop = 0;
                 float vLocalDif = vDif * maskTop / textureSize;
                 float vLocalMin = vMin + vLocalDif;
-                float vLocalMax = vMax;
 
                 vertexBuffer.vertex(matrix4f, tileX, tileY + textureSize, 0).uv(uLocalMin, vLocalMax).endVertex();
                 vertexBuffer.vertex(matrix4f, shiftedX, tileY + textureSize, 0).uv(uLocalMax, vLocalMax).endVertex();
@@ -442,65 +301,5 @@ public class ChemicalSelectorScreen extends Screen {
 
         BufferUploader.drawWithShader(vertexBuffer.end());
         RenderSystem.disableBlend();
-    }
-
-    private void renderChemicalTooltip(GuiGraphics g, int mouseX, int mouseY) {
-        int startIdx   = currentPage * chemicalsPerPage;
-        int endIdx     = Math.min(startIdx + chemicalsPerPage, filteredChemicals.size());
-        int gridStartX = leftPos + 10;
-        int gridStartY = topPos + HEADER_HEIGHT + 1;
-
-        for (int i = startIdx; i < endIdx; i++) {
-            int rel = i - startIdx;
-            int sx  = gridStartX + (rel % chemicalsPerRow) * SLOT_SIZE;
-            int sy  = gridStartY + (rel / chemicalsPerRow) * SLOT_SIZE;
-
-            if (mouseX >= sx && mouseX < sx + SLOT_SIZE && mouseY >= sy && mouseY < sy + SLOT_SIZE) {
-                ChemicalEntry entry = filteredChemicals.get(i);
-                List<Component> tt = new ArrayList<>();
-                tt.add(Component.literal(entry.getDisplayName()));
-                tt.add(Component.literal("§7" + entry.id));
-                tt.add(Component.literal("§8类型: " + entry.type.getDisplayName()));
-                g.renderTooltip(this.font, tt, Optional.empty(), mouseX, mouseY);
-                break;
-            }
-        }
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            int startIdx   = currentPage * chemicalsPerPage;
-            int endIdx     = Math.min(startIdx + chemicalsPerPage, filteredChemicals.size());
-            int gridStartX = leftPos + 10;
-            int gridStartY = topPos + HEADER_HEIGHT + 1;
-            for (int i = startIdx; i < endIdx; i++) {
-                int rel = i - startIdx;
-                int sx  = gridStartX + (rel % chemicalsPerRow) * SLOT_SIZE;
-                int sy  = gridStartY + (rel / chemicalsPerRow) * SLOT_SIZE;
-                if (mouseX >= sx && mouseX < sx + SLOT_SIZE && mouseY >= sy && mouseY < sy + SLOT_SIZE) {
-                    onChemicalSelected.accept(filteredChemicals.get(i).id.toString());
-                    onClose();
-                    return true;
-                }
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (delta > 0) previousPage(); else nextPage();
-        return true;
-    }
-
-    @Override
-    public void onClose() {
-        if (minecraft != null) minecraft.setScreen(parentScreen);
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }
