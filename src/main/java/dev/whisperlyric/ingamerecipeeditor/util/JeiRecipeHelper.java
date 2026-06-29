@@ -221,4 +221,96 @@ public class JeiRecipeHelper {
     public static boolean isCraftingRecipe(String recipeType) {
         return isShapedCrafting(recipeType) || isShapelessCrafting(recipeType);
     }
+
+    /**
+     * 从配方JSON中提取真正的配方类型
+     * 处理条件配方（如 forge:conditional）的情况
+     * 
+     * 条件配方格式：
+     * {
+     *   "type": "forge:conditional",
+     *   "recipes": [
+     *     {
+     *       "conditions": [...],
+     *       "recipe": {
+     *         "type": "avaritia:shaped_table",  // 这是真正的配方类型
+     *         ...
+     *       }
+     *     }
+     *   ]
+     * }
+     * 
+     * @param recipeJson 配方JSON对象
+     * @return 真正的配方类型，如果不是条件配方则返回顶层type
+     */
+    public static @Nullable String extractRealRecipeType(JsonObject recipeJson) {
+        if (recipeJson == null) return null;
+        
+        String topLevelType = recipeJson.has("type") ? recipeJson.get("type").getAsString() : null;
+        
+        // 检查是否为条件配方
+        if (topLevelType != null && isConditionalRecipe(topLevelType)) {
+            // 从 recipes[0].recipe.type 获取真正的配方类型
+            if (recipeJson.has("recipes") && recipeJson.get("recipes").isJsonArray()) {
+                var recipesArray = recipeJson.getAsJsonArray("recipes");
+                if (recipesArray.size() > 0) {
+                    var firstRecipe = recipesArray.get(0);
+                    if (firstRecipe.isJsonObject()) {
+                        var recipeWrapper = firstRecipe.getAsJsonObject();
+                        if (recipeWrapper.has("recipe") && recipeWrapper.get("recipe").isJsonObject()) {
+                            var innerRecipe = recipeWrapper.getAsJsonObject("recipe");
+                            if (innerRecipe.has("type")) {
+                                return innerRecipe.get("type").getAsString();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 不是条件配方，返回顶层type
+        return topLevelType;
+    }
+    
+    /**
+     * 检查是否为条件配方类型
+     */
+    public static boolean isConditionalRecipe(String type) {
+        if (type == null) return false;
+        return type.equals("forge:conditional") ||
+               type.equals("forge:conditional_recipe") ||
+               type.endsWith(":conditional");
+    }
+    
+    /**
+     * 从条件配方中提取真正的配方JSON
+     * 如果不是条件配方，返回原始JSON
+     * 
+     * @param recipeJson 配方JSON对象
+     * @return 真正的配方JSON内容
+     */
+    public static JsonObject extractRealRecipeJson(JsonObject recipeJson) {
+        if (recipeJson == null) return null;
+        
+        String topLevelType = recipeJson.has("type") ? recipeJson.get("type").getAsString() : null;
+        
+        // 检查是否为条件配方
+        if (topLevelType != null && isConditionalRecipe(topLevelType)) {
+            if (recipeJson.has("recipes") && recipeJson.get("recipes").isJsonArray()) {
+                var recipesArray = recipeJson.getAsJsonArray("recipes");
+                if (recipesArray.size() > 0) {
+                    var firstRecipe = recipesArray.get(0);
+                    if (firstRecipe.isJsonObject()) {
+                        var recipeWrapper = firstRecipe.getAsJsonObject();
+                        if (recipeWrapper.has("recipe") && recipeWrapper.get("recipe").isJsonObject()) {
+                            return recipeWrapper.getAsJsonObject("recipe");
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 不是条件配方，返回原始JSON
+        return recipeJson;
+    }
 }

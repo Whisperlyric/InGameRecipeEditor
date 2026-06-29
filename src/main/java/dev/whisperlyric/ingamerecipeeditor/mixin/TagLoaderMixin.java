@@ -168,8 +168,8 @@ public class TagLoaderMixin {
 
     @Unique
     private static String registerhelper$getCustomTagsDir() {
-        return net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
-                .resolve("ingamerecipeeditor/custom_tags")
+        return net.minecraftforge.fml.loading.FMLPaths.GAMEDIR.get()
+                .resolve("igredata/custom_tags")
                 .toAbsolutePath()
                 .toString();
     }

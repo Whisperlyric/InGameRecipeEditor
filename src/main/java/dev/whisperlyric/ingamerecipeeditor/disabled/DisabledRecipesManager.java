@@ -46,8 +46,8 @@ public class DisabledRecipesManager {
      */
     public static void serverInit() {
         if (!serverInitialized) {
-            configPath = FMLPaths.GAMEDIR.get().resolve("config")
-                .resolve("ingamerecipeeditor")
+            configPath = FMLPaths.GAMEDIR.get()
+                .resolve("igredata")
                 .resolve("disabled_recipes.json");
             load();
             serverInitialized = true;

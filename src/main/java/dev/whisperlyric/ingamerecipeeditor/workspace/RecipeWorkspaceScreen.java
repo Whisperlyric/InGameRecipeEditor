@@ -121,6 +121,154 @@ public class RecipeWorkspaceScreen extends Screen {
             
             RecipeEditManager.startEdit(recipeId, recipeLayout);
         }
+
+        // 导出Schema文件（如果开启）
+        if (DebugSettings.isSchemaExportEnabled()) {
+            exportSchemaFile();
+        }
+    }
+
+    /**
+     * 导出当前配方的Schema文件到igredata目录
+     * 用于调试和模组适配开发
+     */
+    private void exportSchemaFile() {
+        if (recipeId == null || recipeId.isEmpty()) return;
+
+        String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+        if (recipeType.isEmpty()) return;
+
+        try {
+            // 构建Schema JSON
+            JsonObject schemaJson = buildSchemaJson(recipeType);
+
+            // 写入文件
+            java.nio.file.Path exportDir = net.minecraftforge.fml.loading.FMLPaths.GAMEDIR.get()
+                .resolve("igredata/schema_export");
+
+            java.nio.file.Files.createDirectories(exportDir);
+
+            // 文件名：modid_recipe_type.json
+            String fileName = recipeType.replace(":", "_") + ".json";
+            java.nio.file.Path exportFile = exportDir.resolve(fileName);
+
+            String jsonStr = new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(schemaJson);
+            java.nio.file.Files.writeString(exportFile, jsonStr);
+
+            InGameRecipeEditor.LOGGER.info("导出Schema文件: {}", exportFile);
+            DebugSettings.sendChat("Schema已导出到: igredata/schema_export/" + fileName);
+        } catch (Exception e) {
+            InGameRecipeEditor.LOGGER.warn("导出Schema文件失败: {}", e.getMessage());
+            DebugSettings.sendChat("导出Schema失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 构建Schema JSON对象
+     */
+    @SuppressWarnings("removal")
+    private JsonObject buildSchemaJson(String recipeType) {
+        JsonObject schemaJson = new JsonObject();
+        schemaJson.addProperty("recipe_type", recipeType);
+
+        // 添加槽位信息
+        com.google.gson.JsonArray slotsArray = new com.google.gson.JsonArray();
+
+        Rect2i layoutRect = recipeLayout.getRect();
+
+        for (IRecipeSlotView slotView : slots) {
+            if (!(slotView instanceof mezz.jei.api.gui.ingredient.IRecipeSlotDrawable slot)) {
+                continue;
+            }
+
+            mezz.jei.api.recipe.RecipeIngredientRole role = slot.getRole();
+            if (role != mezz.jei.api.recipe.RecipeIngredientRole.INPUT &&
+                role != mezz.jei.api.recipe.RecipeIngredientRole.OUTPUT) {
+                continue;
+            }
+
+            Rect2i slotRect = slot.getRect();
+            // 槽位相对于配方布局的左上角坐标
+            int x = slotRect.getX();
+            int y = slotRect.getY();
+
+            JsonObject slotJson = new JsonObject();
+            slotJson.addProperty("role", role.name());
+            slotJson.addProperty("index", getSlotIndex(slot));
+            slotJson.addProperty("x", x);
+            slotJson.addProperty("y", y);
+
+            // 检测槽位内容类型
+            String valueKind = detectSlotValueKind(slot);
+            slotJson.addProperty("value_kind", valueKind);
+
+            slotsArray.add(slotJson);
+        }
+
+        schemaJson.add("slots", slotsArray);
+
+        // 添加配方布局尺寸
+        JsonObject sizeJson = new JsonObject();
+        sizeJson.addProperty("width", layoutRect.getWidth());
+        sizeJson.addProperty("height", layoutRect.getHeight());
+        schemaJson.add("layout_size", sizeJson);
+
+        return schemaJson;
+    }
+
+    /**
+     * 获取槽位索引（在相同role的槽位中的顺序）
+     */
+    private int getSlotIndex(mezz.jei.api.gui.ingredient.IRecipeSlotDrawable slot) {
+        mezz.jei.api.recipe.RecipeIngredientRole role = slot.getRole();
+        int index = 0;
+        for (IRecipeSlotView slotView : slots) {
+            if (!(slotView instanceof mezz.jei.api.gui.ingredient.IRecipeSlotDrawable s)) {
+                continue;
+            }
+            if (s == slot) {
+                return index;
+            }
+            if (s.getRole() == role) {
+                index++;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 检测槽位内容类型
+     */
+    private String detectSlotValueKind(mezz.jei.api.gui.ingredient.IRecipeSlotDrawable slot) {
+        // 尝试检测槽位内容类型
+        try {
+            var ingredients = slot.getAllIngredients();
+            var first = ingredients.findFirst();
+            if (first.isPresent()) {
+                mezz.jei.api.ingredients.ITypedIngredient<?> ing = first.get();
+                var type = ing.getType();
+                String typeUid = type.getUid();
+                
+                // 根据JEI ingredient类型UID判断
+                if (typeUid.contains("item") || typeUid.equals("minecraft:item")) {
+                    return "item_stack";
+                }
+                if (typeUid.contains("fluid") || typeUid.equals("minecraft:fluid") || typeUid.equals("forge:fluid")) {
+                    return "fluid_stack";
+                }
+                // 检查是否是Mekanism化学品类型
+                if (typeUid.contains("gas") || typeUid.contains("slurry") ||
+                    typeUid.contains("pigment") || typeUid.contains("infuse_type") ||
+                    typeUid.contains("mekanism")) {
+                    return "chemical_stack";
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 默认返回item_ingredient（用于输入槽位）
+        return slot.getRole() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT
+            ? "item_ingredient" : "item_stack";
     }
 
     @Override

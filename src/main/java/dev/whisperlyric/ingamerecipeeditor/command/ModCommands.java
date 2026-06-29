@@ -39,6 +39,12 @@ public class ModCommands {
                         .executes(ModCommands::setDebugDump)
                     )
                 )
+                .then(Commands.literal("SchemaExport")
+                    .executes(ModCommands::querySchemaExport)
+                    .then(Commands.argument("value", BoolArgumentType.bool())
+                        .executes(ModCommands::setSchemaExport)
+                    )
+                )
         );
 
         // /igre DisabledRecipesJEIVisibility [true|false]
@@ -55,6 +61,12 @@ public class ModCommands {
                     .executes(ModCommands::queryDebugDump)
                     .then(Commands.argument("value", BoolArgumentType.bool())
                         .executes(ModCommands::setDebugDump)
+                    )
+                )
+                .then(Commands.literal("SchemaExport")
+                    .executes(ModCommands::querySchemaExport)
+                    .then(Commands.argument("value", BoolArgumentType.bool())
+                        .executes(ModCommands::setSchemaExport)
                     )
                 )
         );
@@ -105,6 +117,29 @@ public class ModCommands {
         CommandSourceStack source = context.getSource();
         boolean current = DebugSettings.isEnabled();
         source.sendSuccess(() -> Component.translatable("ingamerecipeeditor.command.debug_dump_query", current), false);
+        return 1;
+    }
+
+    private static int setSchemaExport(CommandContext<CommandSourceStack> context) {
+        boolean value = BoolArgumentType.getBool(context, "value");
+        CommandSourceStack source = context.getSource();
+
+        if (source.getEntity() instanceof ServerPlayer player) {
+            NetworkHandler.sendSchemaExportMode(player, value);
+        }
+
+        if (value) {
+            source.sendSuccess(() -> Component.translatable("ingamerecipeeditor.command.schema_export_true"), true);
+        } else {
+            source.sendSuccess(() -> Component.translatable("ingamerecipeeditor.command.schema_export_false"), true);
+        }
+        return 1;
+    }
+
+    private static int querySchemaExport(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        boolean current = DebugSettings.isSchemaExportEnabled();
+        source.sendSuccess(() -> Component.translatable("ingamerecipeeditor.command.schema_export_query", current), false);
         return 1;
     }
 }

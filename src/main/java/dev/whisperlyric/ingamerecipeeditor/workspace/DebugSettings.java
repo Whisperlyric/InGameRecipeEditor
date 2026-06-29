@@ -9,6 +9,7 @@ import net.minecraft.network.chat.Component;
  */
 public class DebugSettings {
     private static boolean debugDumpEnabled;
+    private static boolean schemaExportEnabled;
 
     public static boolean isEnabled() {
         return debugDumpEnabled;
@@ -16,6 +17,14 @@ public class DebugSettings {
 
     public static void setEnabled(boolean enabled) {
         debugDumpEnabled = enabled;
+    }
+
+    public static boolean isSchemaExportEnabled() {
+        return schemaExportEnabled;
+    }
+
+    public static void setSchemaExportEnabled(boolean enabled) {
+        schemaExportEnabled = enabled;
     }
 
     /**

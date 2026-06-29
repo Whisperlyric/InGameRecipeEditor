@@ -169,8 +169,8 @@ public class RecipeEditManager {
         }
 
         try {
-            // 获取配方类型
-            String recipeType = recipeJson.has("type") ? recipeJson.get("type").getAsString() : null;
+            // 获取配方类型（处理条件配方）
+            String recipeType = dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper.extractRealRecipeType(recipeJson);
             if (recipeType == null) {
                 return null;
             }

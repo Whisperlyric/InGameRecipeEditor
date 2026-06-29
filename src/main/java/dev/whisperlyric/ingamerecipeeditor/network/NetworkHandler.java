@@ -89,6 +89,13 @@ public class NetworkHandler {
             .consumerMainThread(SetDebugModePacket::handle)
             .add();
 
+        // 注册Schema导出模式同步网络包
+        network.messageBuilder(SetSchemaExportPacket.class, nextId(), NetworkDirection.PLAY_TO_CLIENT)
+            .encoder(SetSchemaExportPacket::encode)
+            .decoder(SetSchemaExportPacket::decode)
+            .consumerMainThread(SetSchemaExportPacket::handle)
+            .add();
+
         InGameRecipeEditor.LOGGER.info("网络处理器初始化完成，共 {} 种网络包", packetId);
     }
 
@@ -190,6 +197,15 @@ public class NetworkHandler {
     public static void sendDebugMode(ServerPlayer player, boolean enabled) {
         if (network != null) {
             network.sendTo(new SetDebugModePacket(enabled), player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
+        }
+    }
+
+    /**
+     * 发送Schema导出模式设置到客户端
+     */
+    public static void sendSchemaExportMode(ServerPlayer player, boolean enabled) {
+        if (network != null) {
+            network.sendTo(new SetSchemaExportPacket(enabled), player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
         }
     }
 }

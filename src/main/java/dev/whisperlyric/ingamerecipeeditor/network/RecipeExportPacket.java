@@ -69,9 +69,9 @@ public class RecipeExportPacket {
 
                 Path savedPath = saveRecipeFile(recipeIdLoc, recipeObj, packet.isNewRecipe);
                 if (savedPath != null) {
-                    // 显示相对配置目录的路径
-                    Path configDir = FMLPaths.CONFIGDIR.get().resolve("ingamerecipeeditor/recipes");
-                    String relativePath = configDir.relativize(savedPath).toString();
+                    // 显示相对igredata目录的路径
+                    Path igreDataDir = FMLPaths.GAMEDIR.get().resolve("igredata/recipes");
+                    String relativePath = igreDataDir.relativize(savedPath).toString();
                     player.sendSystemMessage(Component.translatable(
                         "ingamerecipeeditor.message.recipe_export_success", relativePath));
                 } else {
@@ -99,15 +99,16 @@ public class RecipeExportPacket {
             String recipePath = recipeId.getPath();
             String recipeNamespace = recipeId.getNamespace();
 
-            String type = recipeJson.has("type") ? recipeJson.get("type").getAsString() : null;
+            // 使用 JeiRecipeHelper 处理条件配方，提取真正的配方类型
+            String realType = dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper.extractRealRecipeType(recipeJson);
 
-            if (type != null) {
+            if (realType != null) {
                 // 有 type：按 type 组织目录
-                ResourceLocation typeLoc = ResourceLocation.tryParse(type);
-                String typePath = typeLoc != null ? typeLoc.getPath() : type.replace(':', '_');
+                ResourceLocation typeLoc = ResourceLocation.tryParse(realType);
+                String typePath = typeLoc != null ? typeLoc.getPath() : realType.replace(':', '_');
 
-                Path baseDir = FMLPaths.CONFIGDIR.get()
-                    .resolve("ingamerecipeeditor/recipes")
+                Path baseDir = FMLPaths.GAMEDIR.get()
+                    .resolve("igredata/recipes")
                     .resolve(recipeNamespace)
                     .resolve(typePath);
 
@@ -136,8 +137,8 @@ public class RecipeExportPacket {
 
             } else {
                 // 无 type：扁平目录
-                Path baseDir = FMLPaths.CONFIGDIR.get()
-                    .resolve("ingamerecipeeditor/recipes")
+                Path baseDir = FMLPaths.GAMEDIR.get()
+                    .resolve("igredata/recipes")
                     .resolve(recipeNamespace);
                 Files.createDirectories(baseDir);
 
