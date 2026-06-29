@@ -23,8 +23,16 @@ public class ModKeyMappings {
             "key.categories." + InGameRecipeEditor.MOD_ID
     );
 
+    public static final KeyMapping OPEN_CONFIG = new KeyMapping(
+            "key." + InGameRecipeEditor.MOD_ID + ".open_config",
+            KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_BACKSLASH),
+            "key.categories." + InGameRecipeEditor.MOD_ID
+    );
+
     public static void register(RegisterKeyMappingsEvent event) {
         event.register(OPEN_DISABLED_RECIPES_LIST);
         event.register(OPEN_TAGS_OVERVIEW);
+        event.register(OPEN_CONFIG);
     }
 }

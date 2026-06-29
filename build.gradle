@@ -49,6 +49,12 @@ repositories {
             includeGroup "mekanism"
         }
     }
+    maven {
+        url "https://maven.shedaniel.me/"
+        content {
+            includeGroup "me.shedaniel.cloth"
+        }
+    }
     mavenCentral()
 }
 
@@ -62,6 +68,7 @@ dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     implementation fg.deobf("curse.maven:jei-238222:7391695")
     compileOnly fg.deobf("mekanism:Mekanism:${minecraft_version}-10.4.16.80:api")
+    implementation fg.deobf("me.shedaniel.cloth:cloth-config-forge:11.1.118")
 }
 
 tasks.named('processResources', ProcessResources).configure {
