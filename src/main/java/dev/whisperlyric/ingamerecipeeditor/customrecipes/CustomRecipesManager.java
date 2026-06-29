@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.whisperlyric.ingamerecipeeditor.InGameRecipeEditor;
+import dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.fml.loading.FMLPaths;
 
@@ -15,17 +16,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 自定义配方管理器 - 从 config 目录加载自定义配方
- * 配方保存路径: config/ingamerecipeeditor/recipes/<namespace>/<recipe_path>.json
+ * 自定义配方管理器 - 从 igredata 目录加载自定义配方
+ * 配方保存路径: igredata/recipes/<namespace>/<recipe_path>.json
  */
 public class CustomRecipesManager {
     private static final Gson GSON = new Gson();
-    private static final Path RECIPES_DIR = FMLPaths.CONFIGDIR.get()
-        .resolve("ingamerecipeeditor")
+    private static final Path RECIPES_DIR = FMLPaths.GAMEDIR.get()
+        .resolve("igredata")
         .resolve("recipes");
 
     /**
-     * 从 config 目录加载所有自定义配方
+     * 从 igredata 目录加载所有自定义配方
      * @return 配方ID -> 配方JSON 的映射
      */
     public static Map<ResourceLocation, JsonElement> loadCustomRecipes() {
@@ -77,14 +78,17 @@ public class CustomRecipesManager {
                     if (jsonElement != null && jsonElement.isJsonObject()) {
                         JsonObject recipeJson = jsonElement.getAsJsonObject();
                         
+                        // 使用 JeiRecipeHelper 提取真正的配方类型（处理条件配方）
+                        String realType = JeiRecipeHelper.extractRealRecipeType(recipeJson);
+                        
                         // 确保 JSON 中有 type 字段
-                        if (!recipeJson.has("type")) {
+                        if (realType == null || realType.isEmpty()) {
                             InGameRecipeEditor.LOGGER.warn("配方缺少 type 字段: {}", recipeId);
                             continue;
                         }
 
                         recipes.put(recipeId, jsonElement);
-                        InGameRecipeEditor.LOGGER.debug("加载自定义配方: {}", recipeId);
+                        InGameRecipeEditor.LOGGER.debug("加载自定义配方: {} (type: {})", recipeId, realType);
                     } else {
                         InGameRecipeEditor.LOGGER.warn("无效的配方 JSON: {}", recipeFile.getPath());
                     }
@@ -146,8 +150,9 @@ public class CustomRecipesManager {
                 JsonElement element = GSON.fromJson(reader, JsonElement.class);
                 if (element != null && element.isJsonObject()) {
                     JsonObject json = element.getAsJsonObject();
-                    if (json.has("type")) {
-                        String type = json.get("type").getAsString();
+                    // 使用 JeiRecipeHelper 提取真正的配方类型（处理条件配方）
+                    String type = JeiRecipeHelper.extractRealRecipeType(json);
+                    if (type != null) {
                         String typePath = type.contains(":") ? type.substring(type.indexOf(':') + 1) : type;
                         String dirName = relativePath.substring(0, sepIndex);
                         if (dirName.equals(typePath)) {

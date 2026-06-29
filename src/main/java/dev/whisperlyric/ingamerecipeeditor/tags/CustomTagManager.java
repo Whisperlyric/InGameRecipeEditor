@@ -29,8 +29,8 @@ import java.util.stream.Collectors;
 public class CustomTagManager {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path TAGS_DIR = FMLPaths.CONFIGDIR.get()
-            .resolve("ingamerecipeeditor/custom_tags");
+    private static final Path TAGS_DIR = FMLPaths.GAMEDIR.get()
+            .resolve("igredata/custom_tags");
 
     static {
         try {

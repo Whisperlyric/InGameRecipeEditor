@@ -32,28 +32,34 @@ public class RecipeAddButton extends AbstractRecipeButton {
         this.recipeId = JeiRecipeHelper.getRecipeId(recipeLayout);
         this.supportedRecipe = recipeLayout.getRecipe() instanceof Recipe<?>;
 
-        // 检测：非 minecraft 命名空间、recipeId == 结果物品 ID、有 pattern+key → 禁止新建
-        // 此类配方的 ID 由模组按结果物品自动分配，新建会导致 ID 冲突或结构不兼容
-        boolean isThirdPartyShaped = false;
+        boolean canCreateNewFlag = true;
         if (this.recipeId != null) {
             ResourceLocation recipeIdLoc = ResourceLocation.tryParse(this.recipeId);
-            if (recipeIdLoc != null && !recipeIdLoc.getNamespace().equals("minecraft")) {
-                String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
-                var json = JeiRecipeHelper.loadRecipeJson(this.recipeId, recipeType).orElse(null);
-                if (json != null && json.has("pattern") && json.has("key")) {
-                    // 检查 recipeId.path == result.item 的路径部分
-                    String resultId = extractResultItemId(json);
-                    if (resultId != null) {
-                        ResourceLocation resultLoc = ResourceLocation.tryParse(resultId);
-                        if (resultLoc != null && recipeIdLoc.getPath().equals(resultLoc.getPath())
-                                && recipeIdLoc.getNamespace().equals(resultLoc.getNamespace())) {
-                            isThirdPartyShaped = true;
-                        }
-                    }
+            // if (recipeIdLoc != null && !recipeIdLoc.getNamespace().equals("minecraft")) {
+            //     String recipeType = JeiRecipeHelper.getRecipeType(recipeLayout);
+            //     var json = JeiRecipeHelper.loadRecipeJson(this.recipeId, recipeType).orElse(null);
+            //     if (json != null && json.has("pattern") && json.has("key")) {
+            //         String resultId = extractResultItemId(json);
+            //         if (resultId != null) {
+            //             ResourceLocation resultLoc = ResourceLocation.tryParse(resultId);
+            //             if (resultLoc != null && recipeIdLoc.getPath().equals(resultLoc.getPath())
+            //                     && recipeIdLoc.getNamespace().equals(resultLoc.getNamespace())) {
+            //                 canCreateNewFlag = false;
+            //             }
+            //         }
+            //     }
+            // }
+
+            if (recipeIdLoc != null) {
+                String namespace = recipeIdLoc.getNamespace();
+                String path = recipeIdLoc.getPath();
+                if (namespace.equals("sophisticatedbackpacks") || namespace.equals("sophisticatedstorage")
+                        || path.startsWith("sophisticated")) {
+                    canCreateNewFlag = false;
                 }
             }
         }
-        this.canCreateNew = !isThirdPartyShaped;
+        this.canCreateNew = canCreateNewFlag;
 
         if (!this.canCreateNew) {
             this.active = false;

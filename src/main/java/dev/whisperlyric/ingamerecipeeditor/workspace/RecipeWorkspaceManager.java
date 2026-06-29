@@ -240,10 +240,8 @@ public class RecipeWorkspaceManager {
      * 从配方JSON获取配方类型
      */
     private @Nullable String getRecipeTypeFromJson(JsonObject recipeJson) {
-        if (recipeJson != null && recipeJson.has("type")) {
-            return recipeJson.get("type").getAsString();
-        }
-        return null;
+        // 使用 JeiRecipeHelper 提取真正的配方类型（处理条件配方）
+        return dev.whisperlyric.ingamerecipeeditor.util.JeiRecipeHelper.extractRealRecipeType(recipeJson);
     }
     
     /**
